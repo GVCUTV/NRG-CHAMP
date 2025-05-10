@@ -41,7 +41,7 @@ func (s *Simulator) Start() {
 			case <-s.quit:
 				return
 			case t := <-s.ticker.C:
-				reading := SensorReading{
+				reading := SensorReading{ //TODO aggiornare alla scelta dell'uso di uno step system (vedi generator.co)
 					SensorID:  s.sensorID,
 					Timestamp: t,
 					TempC:     18 + rand.Float64()*10, // Random temperature (18–28°C)
