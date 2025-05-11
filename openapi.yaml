@@ -1,0 +1,301 @@
+openapi: 3.0.3
+info:
+  title: NRG CHAMP REST API
+  version: 1.0.0
+  description: |
+    Detailed REST API for NRG CHAMP blockchain archiving, data retrieval, and MAPE control.
+servers:
+  - url: https://api.nrgchamp.example.com/v1
+    description: Production server
+  - url: http://localhost:8080/v1
+    description: Local development
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    page:
+      name: page
+      in: query
+      description: Page number (default 1)
+      schema:
+        type: integer
+        default: 1
+    pageSize:
+      name: pageSize
+      in: query
+      description: Items per page (max 100)
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+    start:
+      name: start
+      in: query
+      description: ISO 8601 start timestamp (inclusive)
+      schema:
+        type: string
+        format: date-time
+    end:
+      name: end
+      in: query
+      description: ISO 8601 end timestamp (inclusive)
+      schema:
+        type: string
+        format: date-time
+    zoneId:
+      name: zoneId
+      in: query
+      description: Filter by zone or sensor ID
+      schema:
+        type: string
+
+  schemas:
+    SensorReading:
+      type: object
+      required:
+        - sensorId
+        - timestamp
+        - temperatureC
+        - humidityPct
+      properties:
+        sensorId:
+          type: string
+          description: Unique sensor identifier
+        timestamp:
+          type: string
+          format: date-time
+        temperatureC:
+          type: number
+          format: float
+        humidityPct:
+          type: number
+          format: float
+
+    SensorHistoryResponse:
+      type: object
+      properties:
+        sensorId:
+          type: string
+        readings:
+          type: array
+          items:
+            $ref: '#/components/schemas/SensorReading'
+
+    HVACCommandRequest:
+      type: object
+      required: [ zoneId, action, value ]
+      properties:
+        zoneId:
+          type: string
+          description: Target zone identifier
+        action:
+          type: string
+          enum: [ setPoint, fanSpeed ]
+        value:
+          type: integer
+          description: Desired value (°C for setPoint, 1–3 for fanSpeed)
+
+    HVACStatusResponse:
+      type: object
+      required: [ zoneId, currentSetPoint, currentTemp, fanSpeed, lastUpdate ]
+      properties:
+        zoneId:
+          type: string
+        currentSetPoint:
+          type: integer
+        currentTemp:
+          type: number
+          format: float
+        fanSpeed:
+          type: integer
+          description: 1=low, 2=medium, 3=high
+        lastUpdate:
+          type: string
+          format: date-time
+
+    Transaction:
+      type: object
+      required: [ txId, zoneId, timestamp, type, payload, status ]
+      properties:
+        txId:
+          type: string
+          description: Blockchain transaction ID
+        zoneId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum: [ sensor, command ]
+        payload:
+          type: object
+          description: Raw data or command details
+        status:
+          type: string
+          enum: [ pending, committed, failed ]
+
+    PaginatedTransactions:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
+
+security:
+  - BearerAuth: []
+
+paths:
+
+  /sensors/{sensorId}/latest:
+    get:
+      summary: Get latest sensor reading
+      tags: [ Data Retrieval ]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: sensorId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Latest reading for the given sensor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorReading'
+        '404':
+          description: Sensor not found
+
+  /sensors/{sensorId}/history:
+    get:
+      summary: Get sensor reading history
+      tags: [ Data Retrieval ]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: sensorId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/start'
+        - $ref: '#/components/parameters/end'
+        - $ref: '#/components/parameters/zoneId'
+      responses:
+        '200':
+          description: Series of readings over the specified interval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorHistoryResponse'
+        '404':
+          description: Sensor not found
+
+  /hvac/commands:
+    post:
+      summary: Submit a control command to HVAC system
+      tags: [ MAPE Control ]
+      security:
+        - BearerAuth: []
+      requestBody:
+        description: Command parameters
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HVACCommandRequest'
+      responses:
+        '202':
+          description: Command accepted for processing
+        '400':
+          description: Invalid command parameters
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal error
+
+  /hvac/status:
+    get:
+      summary: Retrieve current HVAC status for a zone
+      tags: [ MAPE Control ]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: zoneId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current status of HVAC in the specified zone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HVACStatusResponse'
+        '404':
+          description: Zone not found
+
+  /ledger/transactions:
+    get:
+      summary: List blockchain transactions
+      tags: [ Blockchain ]
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/start'
+        - $ref: '#/components/parameters/end'
+        - $ref: '#/components/parameters/zoneId'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: Paginated list of blockchain transactions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTransactions'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal error
+
+  /ledger/transactions/{txId}:
+    get:
+      summary: Retrieve a single blockchain transaction
+      tags: [ Blockchain ]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: txId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Details of the requested transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '404':
+          description: Transaction not found
+        '401':
+          description: Unauthorized
+
