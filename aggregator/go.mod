@@ -1,3 +1,6 @@
+// v0
+// aggregator/go.mod
+
 module it.uniroma2.dicii/nrg-champ/aggregator
 
 go 1.23.0
