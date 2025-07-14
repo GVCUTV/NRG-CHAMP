@@ -1,3 +1,6 @@
+// v0
+// aggregator/main.go
+
 package main
 
 import (

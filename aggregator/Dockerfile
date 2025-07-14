@@ -1,3 +1,6 @@
+#v0
+# aggregator/Dockerfile
+
 # Stage 1: Build the Go binary
 FROM golang:1.21-alpine AS builder
 
