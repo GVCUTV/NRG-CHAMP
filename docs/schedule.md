@@ -3,11 +3,11 @@
 
 ---
 
-## Today – 21/8 (1h30)
+## 20/8 (1h30)
 **Focus: Alignment on Re-Onboarding Findings**
 - [J] Review repo status vs. re-onboarding doc, confirm gaps.
 - [G] Summarize blockchain/ledger state & missing integrations.
-- [A] Summarize infra (Docker/K8s), API spec, and gamification skeleton status.
+- [A] Summarize infrastructure (Docker/K8s), API spec, and gamification skeleton status.
 - Decide priorities: service integration first, then missing modules, then dashboards.  
   **Output:** Short plan doc in repo (`NEXT_STEPS.md`) + updated GitHub Project board.
 
