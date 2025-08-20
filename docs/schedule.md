@@ -1,119 +1,99 @@
-## NRG CHAMP Project Schedule
-## Detailed 6-Week, 12-Session Schedule
 
-**Notation:**
-- [A] = Andrea
-- [G] = Giuseppe
-- [J] = Joint (both together, strongly paired)
+# NRG CHAMP – Re-Onboarding Schedule (Aug–Sep)
 
 ---
 
-### WEEK 1
-
-#### Session 1 (28/7/2025, 2h, Joint): Project Recap, Audit & Planning
-- [G & A] Recap what is done:
-    - Audit the repo: List all working, stub, unfinished, and outdated parts (backend, API, blockchain, analytics, CI/CD, Docker, UI).
-    - Review existing docs: Mark what can be reused, what needs rewriting.
-    - Recap external system contract (API/payload, endpoints): ensure up-to-date.
-- **Output:**
-    - Shared doc: "NRG CHAMP Current Status & Gaps" (list of modules/files, status, todos).
-    - Updated task board for next sessions.
-
-#### Session 2 (30/7/2025, 3h, Joint): Architecture & Codebase Re-alignment
-- [A] Begin updating Docker-compose and environment config to match actual modules/structure.
-- [G] Start updating/re-drafting the architecture diagrams (module, data flow, API, blockchain, UI).
-- [J] Both review and decide which code/modules need rewriting, which just cleanup, and which are fine.
-- **Output:**
-    - Cleaned-up repo structure.
-    - Updated high-level architecture diagram and technical debt list.
+## Today – 21/8 (1h30)
+**Focus: Alignment on Re-Onboarding Findings**
+- [J] Review repo status vs. re-onboarding doc, confirm gaps.
+- [G] Summarize blockchain/ledger state & missing integrations.
+- [A] Summarize infra (Docker/K8s), API spec, and gamification skeleton status.
+- Decide priorities: service integration first, then missing modules, then dashboards.  
+  **Output:** Short plan doc in repo (`NEXT_STEPS.md`) + updated GitHub Project board.
 
 ---
 
-### WEEK 2
-
-#### Session 3 (4/8/2025, 2h, Joint): Documentation and Module Specification Refresh
-- [G] Update/refresh module specs and API contracts (focus: blockchain, data aggregator, MAPE).
-- [A] Update/refresh specs for front-end/CLI, analytics, gamification.
-- [J] Both update the documentation index, plan for live collaborative docs.
-- **Output:**
-    - Current, synced specs for each major module.
-    - Doc index (what's needed, what's reusable).
-
-#### Session 4 (6/8/2025, 3h): Refactor & Re-implement (Backend)
-- [G] Focus: Data Aggregator, MAPE (monitor/analyze), ensure up-to-date with external system interface.
-- [A] Focus: Analytics/gamification backend, align with latest APIs; stub out/test endpoints if needed.
-- **Joint last hour:**
-    - Quick demo/test: Data flow from ingestion → MAPE → analytics.
-- **Output:**
-    - Cleaned and working backend pipeline for sensor → MAPE → analytics.
+## 24/8 (4h)
+**Goal: Backend Integration Sprint 1**
+- [G] Wire Device → Aggregator → MAPE Monitor/Analyze.
+- [A] Ensure Docker-compose for local dev runs Aggregator + MAPE services; validate ingestion.
+- [J] End-to-end test with simulated sensor data flowing into MAPE Monitor.  
+  **Output:** First integrated pipeline Device → Aggregator → MAPE Monitor/Analyze.
 
 ---
 
-### WEEK 3
-
-#### Session 5 (11/8/2025, 2h): Blockchain & Control Path Refactor
-- [G] Refactor blockchain transaction archiving and local ledger if needed; update/expand API tests.
-- [A] Review/update actuator control path (MAPE Execute), ensure API matches new contract, basic unit tests.
-- **Output:**
-    - Blockchain archiving and control APIs working/up-to-date.
-
-#### Session 6 (13/8/2025, 3h, Joint): Front-End/CLI Integration & Testing
-- [A] Update and connect front-end (React) or CLI (if you go CLI route) to current APIs; quick UI improvements.
-- [G] Update API mocks/docs for front-end testing; verify end-to-end flow for key use cases.
-- **Joint:**
-    - Live test: sensor data → backend → UI/CLI; check for bugs/data mismatches.
-- **Output:**
-    - End-to-end “happy path” working; UI or CLI presents real (not just stubbed) data.
+## 25/8 (2h)
+**Goal: Backend Integration Sprint 2**
+- [G] Extend MAPE Plan/Execute with actuator stubs.
+- [A] Expose aggregator + MAPE APIs in OpenAPI; check CORS/routing.  
+  **Output:** Functional MAPE loop up to Execute, ready for connection to Ledger.
 
 ---
 
-### WEEK 4
-
-#### Session 7 (20/8/2025, 2h): CI/CD & Environment Hardening
-- [A] Refactor and harden Docker-compose/dev scripts for full local environment, validate with new codebase.
-- [G] Update CI/CD config (test, lint, deploy stages); add missing test automation as possible.
-- **Joint:**
-    - Test deploy from scratch; doc any friction or issues for final doc.
-- **Output:**
-    - Fully working dev env, reproducible builds, CI/CD tested at least locally.
-
-#### Session 8 (20/8/2025, 3h, Joint): Error Paths & Edge Cases
-- [G] Test edge cases: network loss, actuator NACK, blockchain unavailability; expand logging, monitoring.
-- [A] UI/CLI: error feedback, loading states, missing data cases.
-- **Joint:**
-    - Log and triage new bugs; assign fixes.
-- **Output:**
-    - System resilient to failures; bugs and fixes tracked.
+## 30/8 (4h)
+**Goal: Ledger Service Integration**
+- [G] Connect MAPE Execute outputs → Ledger service (transaction builder + retry).
+- [A] Implement Ledger query API (`/transactions`, `/tx/{id}`), update OpenAPI.
+- [J] Test flow Device → Aggregator → MAPE → Ledger (append-only store).  
+  **Output:** Control commands and sensor data stored in ledger, retrievable via API.
 
 ---
 
-### WEEK 5
-
-#### Session 9 (25/8/2025, 2h): Analytics & Gamification Polish
-- [G] KPI/calculation checks, scoring logic tuning, edge cases (e.g. missing data).
-- [A] UI/CLI: polish leaderboard display, gamification feedback, and data fetch.
-- **Output:**
-    - Analytics/gamification features ready for MVP.
-
-#### Session 10 (27/8/2025, 3h, Joint): Documentation & Review
-- [J] Write/review all user, deployment, developer, and API documentation.
-- [G] Focus: blockchain, backend, API docs, security.
-- [A] Focus: UI/CLI, deployment, Docker, test/usage guide.
-- **Output:**
-    - All documentation for demo, hand-in, or deploy.
+## 31/8 (4h)
+**Goal: Analytics & Gamification Sprint 1**
+- [G] Implement Analytics KPIs: basic energy metrics (mocked calc).
+- [A] Implement Gamification scaffolding: scoring rules, leaderboard DB schema.
+- [J] Integrate ledger queries → analytics pipeline.  
+  **Output:** Analytics & gamification back-end foundations in place.
 
 ---
 
-### WEEK 6
+## 6/9 (4h)
+**Goal: Analytics & Gamification Sprint 2**
+- [G] Extend Analytics: KPIs to scores. Wire into Gamification.
+- [A] Implement leaderboard endpoints (`/leaderboard/public`, `/leaderboard/private`).
+- [J] End-to-end test: simulated data → KPI → scores → leaderboard.  
+  **Output:** Fully functional analytics + gamification APIs.
 
-#### Session 11 (1/9/2025, 2h, Joint): Final Integration, Testing, & Fixes
-- [J] Complete integration test of the whole system; live demo run-through; last bug-fixes as needed.
-- **Output:**
-    - All modules connected, system works as a whole.
+---
 
-#### Session 12 (3/9/2025, 3h, Joint): Demo & Delivery Prep
-- [G] Prepare technical presentation, demo script.
-- [A] Polish UI/CLI for demo, create user walk-through.
-- [J] Run final dry-run of demo; record (if needed); Q&A prep.
-- **Output:**
-    - Demo-ready system, slides, walkthrough video/script, all code and docs ready for submission/delivery.
+## 7/9 (4h)
+**Goal: API Gateway & Docs**
+- [G] Finalize OpenAPI spec across services; document blockchain + analytics.
+- [A] Build API Gateway service (reverse proxy / central entrypoint).
+- [J] Validate gateway routing; run Postman collection tests.  
+  **Output:** Single entrypoint API Gateway + complete OpenAPI.
+
+---
+
+## 13/9 (4h)
+**Goal: Frontend/Dashboard Sprint 1**
+- [A] Scaffold React dashboard (Vite); basic layout + routes.
+- [G] Provide API mocks and backend support (CORS/WebSocket if needed).
+- [J] Connect dashboard to API Gateway for sensor data & leaderboards.  
+  **Output:** Running frontend showing live data (charts + leaderboard placeholder).
+
+---
+
+## 14/9 (4h)
+**Goal: Final Integration, QA & Demo Prep**
+- [J] Full pipeline test: Device → Aggregator → MAPE → Ledger → Analytics → Gamification → API Gateway → Dashboard.
+- [G] Write technical docs (ledger, MAPE, APIs, deployment).
+- [A] Polish UI + Docker-compose/K8s manifests.  
+  **Output:** End-to-end demo-ready MVP + docs + slides.
+
+---
+
+## Backup (5h, only if needed between 15/9–20/9)
+**Use if major blockers appear in integration or front-end:**
+- Debug broken flows (MAPE ↔ Ledger ↔ Analytics).
+- Polish docs & CI/CD pipeline.
+- Record demo video as fallback.
+
+---
+
+## Deliverables by 14/9
+1. **Functional MVP**: Full data flow Device → Aggregator → MAPE → Ledger → Analytics/Gamification → Dashboard.
+2. **Documentation**: Updated API specs, architecture diagrams, user + developer guides.
+3. **Demo Materials**: Live dashboard or CLI, slides, demo script.
+4. **Deployment Package**: Docker-compose/K8s manifests tested locally.
