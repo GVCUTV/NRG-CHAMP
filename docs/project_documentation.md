@@ -1,2327 +1,1468 @@
-1. Description 
+# **NRG CHAMP**
 
-NRG CHAMP 
+## Responsive Goal-driven Cooling and Heating Automated Monitoring Platform
 
-Responsive Goal-driven Cooling and Heating Automated Monitoring 
-Platform 
+Cantarini Andrea, Cantone Giuseppe Valerio
 
-Cantarini Andrea, Cantone Giuseppe Valerio 
+---
 
-1. Description 
+1. # **Description**
 
-NRG  CHAMP  is  an  advanced  system  designed  for  the  efficient  management  of  HVAC 
-systems  in  large  corporate  and  public  buildings,  with  the  primary  goal  of  reducing  energy 
-consumption and promoting sustainable behaviors. 
+NRG CHAMP is an advanced system designed for the efficient management of HVAC systems in large corporate and public buildings, with the primary goal of reducing energy consumption and promoting sustainable behaviors.
 
-1.1. Key Features 
+## **1.1. Key Features**
 
-●  Data Collection and Environmental Monitoring: 
+* **Data Collection and Environmental Monitoring:**  
+  A dense network of IoT sensors continuously gathers essential parameters such as temperature and humidity, providing a precise and constant overview of both indoor and outdoor conditions.
 
-A  dense  network  of IoT sensors continuously gathers essential parameters such as 
-temperature  and  humidity, providing a precise and constant overview of both indoor 
-and outdoor conditions. 
+* **Dynamic Control via the MAPE Cycle:**  
+  Utilizing the Monitor, Analyze, Plan, Execute (MAPE) framework, the system adjusts the operation of HVAC units in real time, ensuring optimized performance and reduced energy use.
 
-●  Dynamic Control via the MAPE Cycle: 
+* **Blockchain-Enabled Traceability and Transparency:**  
+  All collected data is securely recorded on a blockchain. This immutable ledger not only enables external regulatory bodies to verify the energy footprint of the building but also ensures transparency in reporting and compliance.
 
-Utilizing the Monitor, Analyze, Plan, Execute (MAPE) framework, the system adjusts 
-the  operation  of  HVAC  units  in  real  time,  ensuring  optimized  performance  and 
-reduced energy use. 
+* **Data Analysis and Gamification:**  
+  The platform processes the blockchain-stored data to generate performance scores. These scores power a gamification mechanism that incentivizes users to achieve energy-conscious targets. Competitions can be structured hierarchically — for instance, comparing different offices within the same building, floors, or even among various organizations — ensuring that every participant has the opportunity to excel, regardless of their initial ranking.
 
-●  Blockchain-Enabled Traceability and Transparency: 
+## **1.2. Scalability and Adaptability**
 
-All  collected  data  is  securely  recorded  on  a  blockchain.  This  immutable  ledger  not 
-only  enables  external  regulatory  bodies  to verify the energy footprint of the building 
-but also ensures transparency in reporting and compliance. 
+While the solution is primarily developed for large-scale, B2B deployments, its design is inherently scalable. With appropriate modifications, NRG CHAMP can be adapted to smaller settings such as apartment complexes or individual residences.
 
-●  Data Analysis and Gamification: 
+## **1.3. Summary**
 
-The platform processes the blockchain-stored data to generate performance scores. 
-These  scores  power  a  gamification  mechanism  that  incentivizes  users  to  achieve 
-energy-conscious  targets.  Competitions  can  be  structured  hierarchically  —  for 
-instance, comparing different offices within the same building, floors, or even among 
-various organizations — ensuring that every participant has the opportunity to excel, 
-regardless of their initial ranking. 
+In summary, NRG CHAMP provides a holistic and innovative approach to energy management in buildings, combining real-time monitoring, intelligent control, blockchain traceability, and gamification to drive sustainable energy practices.
 
- 
- 
- 
- 
- 
- 
- 
-1.2. Scalability and Adaptability 
+---
 
-While  the  solution  is  primarily  developed  for  large-scale,  B2B  deployments,  its  design  is 
-inherently scalable. With appropriate modifications, NRG CHAMP can be adapted to smaller 
-settings such as apartment complexes or individual residences. 
+# **2\. Software Requirements**
 
-1.3. Summary 
+## **2.1 Functional Requirements**
 
-In  summary,  NRG  CHAMP  provides  a  holistic  and  innovative  approach  to  energy 
-management  in  buildings,  combining  real-time  monitoring,  intelligent  control,  blockchain 
-traceability, and gamification to drive sustainable energy practices. 
+### **2.1.1. Data Collection and Environmental Monitoring**
 
- 
- 
-2. Software Requirements 
+* **Sensor Integration:**
+  * Support for a wide range of IoT sensors to monitor temperature, humidity, energy consumption, and other relevant environmental parameters (e.g., CO₂ levels, occupancy).
+  * Real-time data acquisition from indoor and outdoor sensor networks.
+* **Data Aggregation:**
+  * Collection and aggregation of sensor data for further analysis.
+  * Support for data buffering and recovery in case of temporary network failures.
 
- 
-2. Software Requirements 
+### **2.1.2. Dynamic HVAC Control via MAPE Cycle**
 
-2.1 Functional Requirements 
+* **Monitoring Module:**
+  * Continuously monitor real-time sensor data and energy consumption metrics.
+* **Analysis Module:**
+  * Process and analyze collected data to detect anomalies or inefficiencies.
+  * Generate insights regarding energy consumption patterns.
+* **Planning Module:**
+  * Formulate optimization strategies to adjust HVAC operations based on current conditions.
+* **Execution Module:**
+  * Send control commands to the HVAC systems to dynamically adjust operation parameters.
+  * Provide feedback loops to refine the control strategy continuously.
 
-2.1.1. Data Collection and Environmental Monitoring 
+### **2.1.3. Blockchain Integration for Traceability**
 
-●  Sensor Integration: 
+* **Data Recording:**
+  * Store collected sensor data and control actions in an immutable blockchain ledger.
+  * Ensure data is timestamped and cryptographically secured.
+* **Access and Verification:**
+  * Provide APIs for external regulators and stakeholders to query the blockchain.
+  * Implement access control to manage different user roles (e.g., administrators, auditors).
 
-○  Support  for  a  wide  range  of  IoT  sensors  to  monitor  temperature,  humidity, 
-energy consumption, and other relevant environmental parameters (e.g., CO₂ 
-levels, occupancy). 
+###    **2.1.4. Data Analysis and Gamification**
 
-○  Real-time data acquisition from indoor and outdoor sensor networks. 
+* **Analytics Engine:**
+  * Process historical and real-time data to compute performance metrics and energy consumption scores.
+* **Gamification Module:**
+  * Define scoring algorithms and leaderboards for various competitive categories (e.g., different floors, offices, or entire buildings).
+  * Enable both centralized and decentralized ranking systems to support intra- and inter-organizational competitions.
+* **User Interface (future development):**
+  * Develop dashboards and visualizations to display performance scores, trends, gamification leaderboards, and real-time system status.
+  * Support for multi-platform access (web, mobile).
 
-●  Data Aggregation: 
+### **2.1.5. Scalability and Adaptability**
 
-○  Collection and aggregation of sensor data for further analysis. 
-○  Support for data buffering and recovery in case of temporary network failures. 
+* **Modular Design:**
+  * Design the system architecture to allow scaling from large corporate/public buildings down to smaller units like apartment complexes.
+* **Configuration Management:**
+  * Provide mechanisms for system configuration and parameter adjustments tailored to different building types.
 
-2.1.2. Dynamic HVAC Control via MAPE Cycle 
+### **2.1.6. Interoperability and Integration**
 
-●  Monitoring Module: 
+* **API Services:**
+  * Expose RESTful APIs for data access, control commands, and integration with third-party systems.
+* **External System Integration:**
+  * Support integration with existing building management systems and external monitoring services.
 
-○  Continuously monitor real-time sensor data and energy consumption metrics. 
+---
 
-●  Analysis Module: 
+## 
 
-○  Process and analyze collected data to detect anomalies or inefficiencies. 
-○  Generate insights regarding energy consumption patterns. 
+## **2.2. Non-Functional Requirements**
 
-●  Planning Module: 
+### **2.2.1. Performance**
 
-○  Formulate optimization strategies to adjust HVAC operations based on current 
+* **Real-Time Response:**
+  * Ensure that sensor data processing and HVAC control commands are executed with minimal latency.
+* **Scalability:**
+  * The system must support the addition of millions of sensors and devices and thousands of organizations without performance degradation.
 
-conditions. 
+### **2.2.2. Reliability and Availability**
 
-●  Execution Module: 
+* **Fault Tolerance:**
+  * Implement distributed architectures and redundancy strategies (e.g., Circuit Breaker pattern) to ensure high availability.
+* **Data Integrity:**
+  * Guarantee that data recorded on the blockchain remains secure and tamper-proof.
 
-○  Send control commands to the HVAC systems to dynamically adjust operation 
+### **2.2.3. Security**
 
-parameters. 
+* **Data Security:**
+  * Encrypt data in transit and at rest, ensuring secure communication between sensors, control systems, and the blockchain.
+* **Access Control:**
+  * Implement role-based access control (RBAC) for all modules, especially for blockchain data queries and control operations.
 
-○  Provide feedback loops to refine the control strategy continuously. 
+### **2.2.4. Maintainability and Extensibility**
 
-2.1.3. Blockchain Integration for Traceability 
+* **Modular Architecture:**
+  * Use microservices architecture patterns (e.g., Database per Service, Saga) to support independent development and maintenance of components.
+* **Logging and Monitoring:**
+  * Incorporate comprehensive logging and monitoring mechanisms for both system performance and security audits.
 
-●  Data Recording: 
+### **2.2.5. Usability**
 
-○  Store  collected  sensor  data  and  control  actions  in  an  immutable  blockchain 
+* **User-Friendly Interface:**
+  * Design intuitive dashboards and control panels for both administrators and end-users.
+* **Customization:**
+  * Allow customization of views and reports to cater to different user roles and building configurations.
 
-ledger. 
+### **2.2.6. Compliance**
 
-○  Ensure data is timestamped and cryptographically secured. 
+* **Regulatory Compliance:**
+  * Ensure the system adheres to relevant energy efficiency and data protection regulations.
+* **Auditability:**
+  * Provide audit trails through blockchain records for external verification and regulatory reviews.
 
-●  Access and Verification: 
+---
 
-for  external  regulators  and  stakeholders  to  query  the 
+## **2.3. Technical Requirements**
 
-○  Provide  APIs 
-blockchain. 
-Implement access control to manage different user roles (e.g., administrators, 
-auditors). 
+### **2.3.1. Technology Stack**
 
-○ 
+* **Programming Language:**
+  * The system is implemented in Go for performance and concurrency.
+* **Communication Protocols:**
+  * Utilize MQTT, HTTP/HTTPS for device communication and RESTful APIs for data access, control commands, and integration with third-party systems.
+* **Blockchain Framework:**
+  * Integrate with an appropriate blockchain platform that supports immutable data storage and smart contracts.
+* **Database Systems:**
+  * Use distributed databases where needed to manage sensor data and system logs.
 
- 
- 
- 
-2.1.4. Data Analysis and Gamification 
+### **2.3.2. Architectural Patterns**
 
-●  Analytics Engine: 
+* **Distributed System Patterns:**
+  * Implement patterns like Circuit Breaker for fault tolerance, Database per Service for data isolation, and Saga for managing distributed transactions.
 
-○  Process  historical  and  real-time  data  to  compute  performance  metrics  and 
+### **2.3.3. Deployment and Operations**
 
-energy consumption scores. 
+* **Cloud-Native Deployment:**
+  * Design for deployment on cloud platforms using containerization (e.g., Docker) and orchestration (e.g., Kubernetes).
+* **CI/CD Pipelines:**
+  * Establish continuous integration and deployment pipelines for regular updates and maintenance.
+* **Monitoring Tools:**
+  * Deploy monitoring and alerting systems to track system health and performance metrics.
 
-●  Gamification Module: 
+---
 
-○  Define  scoring  algorithms  and 
+# **3\. Blockchain Requirements**
 
-leaderboards 
+## **3.1. Functional Requirements for Blockchain Archiviation**
 
-for  various  competitive 
+### **3.1.1. Data Packaging and Preparation**
 
-categories (e.g., different floors, offices, or entire buildings). 
+* **F3.1.1.1 Data Aggregation:**  
+  The system shall collect and aggregate sensor and control data, including timestamps and relevant metadata, from the data collection modules.
 
-○  Enable  both  centralized  and  decentralized  ranking  systems  to support intra- 
+* **F3.1.1.2 Data Validation:**  
+  The system shall validate the integrity and completeness of the aggregated data before it is packaged for blockchain storage.
 
-and inter-organizational competitions. 
+### **3.1.2. Blockchain Transaction Management**
 
-●  User Interface (future development): 
+* **F3.1.2.1 Transaction Creation:**  
+  The system shall create a new blockchain transaction that encapsulates the packaged data, including all necessary metadata (e.g., sensor ID, timestamp, data type).
 
-○  Develop  dashboards  and  visualizations  to  display  performance  scores, 
+* **F3.1.2.2 Transaction Submission:**  
+  The system shall submit the created transaction to the designated blockchain network for validation and inclusion in a block.
 
-trends, gamification leaderboards, and real-time system status. 
+* **F3.1.2.3 Transaction Retry Mechanism:**  
+  In the event of blockchain network unavailability or transaction failure, the system shall cache the transaction and automatically retry submission at regular intervals.
 
-○  Support for multi-platform access (web, mobile). 
+### **3.1.3. Data Retrieval and API Integration**
 
-2.1.5. Scalability and Adaptability 
+* **F3.1.3.1 API for Data Query:**  
+  The system shall expose a RESTful API that allows authorized external users (e.g., regulators, auditors) to query and retrieve recorded blockchain data.
 
-●  Modular Design: 
+* **F3.1.3.2 Access Control:**  
+  The system shall implement role-based access control (RBAC) for the API, ensuring that only authenticated and authorized users can access blockchain records.
 
-○  Design  the  system  architecture  to  allow  scaling  from  large  corporate/public 
+* **F3.1.3.3 Data Formatting and Presentation:**  
+  The system shall format and present queried blockchain data in a user-friendly format, supporting filters such as date range, sensor type, and building identifier.
 
-buildings down to smaller units like apartment complexes. 
+### **3.1.4. Audit and Logging**
 
-●  Configuration Management: 
+* **F3.1.4.1 Transaction Logging:**  
+  The system shall log every transaction submission, confirmation, and any error events associated with blockchain operations.
 
-○  Provide  mechanisms  for  system  configuration  and  parameter  adjustments 
+* **F3.1.4.2 Audit Trail:**  
+  The system shall maintain an immutable audit trail of all blockchain interactions to support regulatory reviews and forensic analysis.
 
-tailored to different building types. 
+---
 
-2.1.6. Interoperability and Integration 
+## **3.2. Non-Functional Requirements for Blockchain Archiviation**
 
-●  API Services: 
+### **3.2.1. Performance**
 
-○  Expose  RESTful  APIs  for  data  access,  control  commands,  and  integration 
+* **NF3.2.1.1 Transaction Throughput:**  
+  The blockchain archiviation component shall support a transaction throughput that meets or exceeds the expected data submission rate from the sensor network.
 
-with third-party systems. 
-●  External System Integration: 
+* **NF3.2.1.2 Latency:**  
+  The time between data packaging and blockchain confirmation should be minimized to support near-real-time transparency. Specific latency targets should be defined based on network performance benchmarks.
 
-○  Support  integration  with  existing building management systems and external 
+### **3.2.2. Scalability**
 
-monitoring services. 
+* **NF3.2.2.1 Horizontal Scalability:**  
+  The system shall be capable of handling an increasing number of transactions by scaling horizontally (e.g., distributed nodes or services).
 
- 
- 
- 
- 
-2.2. Non-Functional Requirements 
+* **NF3.2.2.2 Future Blockchain Integration:**  
+  The design should allow integration with alternative or additional blockchain networks as system demands evolve.
 
-2.2.1. Performance 
+### **3.2.3. Security**
 
-●  Real-Time Response: 
+* **NF3.2.3.1 Data Integrity:**  
+  All data stored on the blockchain shall be tamper-proof and cryptographically secured to prevent unauthorized modifications.
 
-○  Ensure  that  sensor  data  processing  and  HVAC  control  commands  are 
+* **NF3.2.3.2 Authentication and Authorization:**  
+  The system shall enforce strict authentication and authorization mechanisms for all API interactions and blockchain transactions.
 
-executed with minimal latency. 
+* **NF3.2.3.3 Encryption:**  
+  Data in transit between the system and the blockchain, as well as sensitive data at rest, shall be encrypted using industry-standard cryptographic protocols.
 
-●  Scalability: 
+### **3.2.4. Reliability and Fault Tolerance**
 
-○  The system must support the addition of millions of sensors and devices and 
+* **NF3.2.4.1 Redundancy:**  
+  The blockchain component shall include redundancy measures to ensure continued operation in case of node failures or network issues.
 
-thousands of organizations without performance degradation. 
+* **NF3.2.4.2 Error Handling:**  
+  The system shall implement robust error handling and recovery strategies for blockchain submission failures, including automatic retries and fallbacks.
 
-2.2.2. Reliability and Availability 
+### **3.2.5. Maintainability and Extensibility**
 
-●  Fault Tolerance: 
+* **NF3.2.5.1 Modular Architecture:**  
+  The blockchain module shall be designed in a modular manner, allowing independent updates and easy integration of new blockchain features.
 
-○ 
+* **NF3.2.5.2 Documentation:**  
+  Comprehensive documentation must be provided for all blockchain-related processes, including API endpoints, transaction formats, and error handling procedures.
 
-Implement  distributed  architectures  and  redundancy  strategies  (e.g.,  Circuit 
-Breaker pattern) to ensure high availability. 
+### **3.2.6. Compliance and Auditability**
 
-●  Data Integrity: 
+* **NF3.2.6.1 Regulatory Compliance:**  
+  The system shall comply with relevant industry standards and regulatory requirements concerning data transparency, privacy, and energy efficiency reporting.
 
-○  Guarantee  that  data  recorded  on  the  blockchain  remains  secure  and 
+* **NF3.2.6.2 Audit Readiness:**  
+  The blockchain archiviation component shall be designed to support periodic audits, providing verifiable, immutable records to external regulators.
 
-tamper-proof. 
+---
 
-2.2.3. Security 
+# **4\. Software Use Case Document**
 
-●  Data Security: 
+## **4.1. Use Case: Data Collection and Environmental Monitoring**
 
-○  Encrypt  data  in  transit  and  at  rest, ensuring secure communication between 
+**Actors:**
 
-sensors, control systems, and the blockchain. 
+* IoT Sensors
+* Data Aggregator Service
+* Building Management System (BMS)
 
-●  Access Control: 
+**Description:**  
+This use case describes the process of continuously acquiring and aggregating environmental data (e.g., temperature, humidity) from a distributed network of IoT sensors installed throughout a building.
 
-○ 
+**Preconditions:**
 
-Implement  role-based  access  control  (RBAC)  for  all  modules,  especially  for 
-blockchain data queries and control operations. 
+* IoT sensors are installed and configured.
+* A reliable network connection exists between sensors and the central Data Aggregator Service.
 
-2.2.4. Maintainability and Extensibility 
+**Basic Flow:**
 
-●  Modular Architecture: 
+1. **Sensor Activation:** IoT sensors are activated and begin collecting environmental data continuously.
+2. **Data Transmission:** Each sensor transmits real-time measurements (temperature, humidity, etc.) to the Data Aggregator Service.
+3. **Data Aggregation:** The Data Aggregator Service receives, timestamps, and consolidates the data from all sensors.
+4. **Data Storage:** Aggregated data is temporarily stored in a local cache or directly forwarded to the central database for processing by other modules.
 
-○  Use microservices architecture patterns (e.g., Database per Service, Saga) to 
+**Alternative Flows:**
 
-support independent development and maintenance of components. 
+* **AF1 – Network Interruption:**
+  * **Step 2A:** If the sensor loses network connectivity, it buffers data locally.
+  * **Step 2B:** Once the connection is re-established, the buffered data is transmitted to the aggregator.
+* **AF2 – Sensor Failure:**
+  * **Step 1A:** If a sensor malfunctions, the BMS detects the failure and generates an alert for maintenance.
 
-●  Logging and Monitoring: 
+**Extension Points:**
 
-○ 
+* **EP1:** Data Validation – Before storage, data can be validated for accuracy and consistency.
+* **EP2:** Pre-Processing – Data can be pre-processed (e.g., filtered or aggregated) if required by the Analytics Engine.
 
-Incorporate  comprehensive  logging  and  monitoring  mechanisms  for  both 
-system performance and security audits. 
+**Inclusions:**
 
-2.2.5. Usability 
+* **I1:** Operations Logging – In all flows, operations are logged and reported to the system monitoring service.
 
-●  User-Friendly Interface: 
+---
 
-○  Design  intuitive  dashboards  and  control  panels  for  both  administrators  and 
+## **4.2. Use Case: Dynamic HVAC Control via MAPE Cycle**
 
-end-users. 
+**Actors:**
 
-●  Customization: 
+* MAPE Engine (comprising Monitor, Analyze, Plan, Execute modules)
+* HVAC Systems
 
-○  Allow  customization  of  views  and  reports  to cater to different user roles and 
+**Description:**  
+This use case explains how the system employs the MAPE (Monitor, Analyze, Plan, Execute) cycle to dynamically adjust HVAC operations in response to real-time sensor data, optimizing energy consumption.
 
-building configurations. 
+**Preconditions:**
 
- 
-2.2.6. Compliance 
+* Up-to-date sensor data is available.
+* HVAC systems are connected and responsive to control commands.
 
-●  Regulatory Compliance: 
+**Basic Flow:**
 
-○  Ensure  the system adheres to relevant energy efficiency and data protection 
+1. **Monitor:** The MAPE Engine continuously monitors environmental conditions and energy consumption metrics received from the Data Aggregator Service.
+2. **Analyze:** The Analysis Module processes the monitored data to identify inefficiencies or anomalies in the current HVAC operation.
+3. **Plan:** Based on the analysis, the Planning Module develops an optimization strategy (e.g., adjusting temperature setpoints or fan speeds).
+4. **Execute:** The Execution Module sends control commands to the HVAC systems to implement the planned adjustments.
+5. **Feedback Loop:** Updated environmental conditions are re-monitored, and the cycle repeats to ensure continuous optimization.
 
-regulations. 
+**Alternative Flows:**
 
-●  Auditability: 
+* **AF1 – No Optimization Needed:**
+  * **Step 3A:** If the analysis finds no actionable inefficiencies, the system continues operating under the current settings.
+* **AF2 – Control Command Failure:**
+  * **Step 4A:** If an HVAC unit does not acknowledge a command, the system retries the command or issues an alert for manual intervention.
 
-○  Provide  audit  trails  through  blockchain  records  for  external  verification  and 
+**Extension Points:**
 
-regulatory reviews. 
+* **EP1:** Manual Override – Allows facility managers to override automated control during maintenance or emergency situations.
+* **EP2:** Integration with External Weather Data – Optionally incorporate external weather forecasts into the planning process.
 
-2.3. Technical Requirements 
+**Inclusions:**
 
-2.3.1. Technology Stack 
+* **I1:** Logging and Audit – Every cycle iteration and decision is logged for future auditing and performance analysis.
 
-●  Programming Language: 
+---
 
-○  The system is implemented in Go for performance and concurrency. 
+## **4.3. Use Case: Blockchain-Enabled Data Recording and Transparency**
 
-●  Communication Protocols: 
+**Actors:**
 
-○  Utilize MQTT, HTTP/HTTPS for device communication and RESTful APIs for 
-data access, control commands, and integration with third-party systems. 
+* Data Recording Service
+* Blockchain Network
+* External Regulators / Auditors
 
-●  Blockchain Framework: 
+**Description:**  
+This use case details the process of securely recording sensor and control data on an immutable blockchain ledger to ensure transparency and traceability.
 
-○ 
+**Preconditions:**
 
-Integrate  with  an  appropriate  blockchain  platform  that  supports  immutable 
-data storage and smart contracts. 
+* Sensor and control data have been aggregated by the system.
+* A blockchain network is set up and connected to the Data Recording Service.
 
-●  Database Systems: 
+**Basic Flow:**
 
-○  Use distributed databases where needed to manage sensor data and system 
+1. **Data Packaging:** The Data Recording Service collects the latest sensor data and control actions, packaging them with timestamps.
+2. **Blockchain Transaction Creation:** A new transaction is created containing the packaged data.
+3. **Transaction Submission:** The transaction is submitted to the blockchain network for validation.
+4. **Confirmation and Recording:** Once validated, the transaction is immutably recorded on the blockchain.
+5. **API Notification:** The system updates an API endpoint to signal that new data is available for external queries.
 
-logs. 
+**Alternative Flows:**
 
-2.3.2. Architectural Patterns 
+* **AF1 – Blockchain Network Delay:**
+  * **Step 3A:** If the blockchain network is temporarily unresponsive, the Data Recording Service caches the transaction and retries submission.
+* **AF2 – Data Integrity Issue:**
+  * **Step 1A:** If the data package fails integrity checks, it is flagged for review and not sent to the blockchain.
 
-●  Distributed System Patterns: 
+**Extension Points:**
 
-○ 
+* **EP1:** Smart Contract Execution – Automatically trigger rewards or notifications based on the recorded data.
+* **EP2:** Data Encryption – Optionally encrypt sensitive data before packaging.
 
-Implement  patterns  like  Circuit  Breaker  for  fault  tolerance,  Database  per 
-Service for data isolation, and Saga for managing distributed transactions. 
+**Inclusions:**
 
-2.3.3. Deployment and Operations 
+* **I1:** Audit Logging – All steps, including alternative flows, are logged to ensure a complete audit trail.
 
-●  Cloud-Native Deployment: 
+---
 
-○  Design  for  deployment  on  cloud  platforms  using  containerization  (e.g., 
+## **4.4. Use Case: Data Analysis and Gamification**
 
-Docker) and orchestration (e.g., Kubernetes). 
+**Actors:**
 
-●  CI/CD Pipelines: 
+* Analytics Engine
+* Gamification Module
+* End Users (e.g., facility managers, building occupants)
 
-○  Establish continuous integration and deployment pipelines for regular updates 
+**Description:**  
+This use case covers the analysis of collected data to compute energy consumption scores and the use of gamification elements to motivate energy-efficient behaviors.
 
-and maintenance. 
+**Preconditions:**
 
-●  Monitoring Tools: 
+* Sufficient historical and real-time data is available (stored in the blockchain and/or central database).
+* Gamification rules and scoring algorithms are defined and configured.
 
-○  Deploy  monitoring  and  alerting  systems  to  track  system  health  and 
+**Basic Flow:**
 
-performance metrics. 
+1. **Data Retrieval:** The Analytics Engine retrieves historical and current sensor and control data.
+2. **Metric Calculation:** The Analytics Engine calculates energy consumption metrics and performance scores.
+3. **Score Generation:** The Gamification Module applies predefined algorithms to generate scores and ranks.
+4. **Leaderboard Update:** The system updates public and/or private leaderboards to reflect the latest scores.
+5. **User Notification:** End users receive notifications and visual feedback (via dashboards) regarding their performance.
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-3. Blockchain Requirements 
+**Alternative Flows:**
 
- 
-3. Blockchain Requirements 
+* **AF1 – Insufficient Data:**
+  * **Step 1A:** If the Analytics Engine detects insufficient data for analysis, it triggers a data collection alert and uses fallback estimates.
+* **AF2 – Gamification Rule Exception:**
+  * **Step 3A:** If a gamification rule fails (e.g., due to data inconsistencies), a default scoring mechanism is applied, and an error is logged for review.
 
-Functional  Requirements 
+**Extension Points:**
 
-3.1. 
-Archiviation 
+* **EP1:** Customizable Leaderboards – Facility managers can customize leaderboard views (e.g., by floor, department, or building).
+* **EP2:** Reward System – Integration with external reward systems to provide tangible incentives based on scores.
 
-for  Blockchain 
+**Inclusions:**
 
-3.1.1. Data Packaging and Preparation 
+* **I1:** Reporting Service – Includes generation of detailed reports for internal review and compliance purposes.
 
-●  F3.1.1.1 Data Aggregation: 
+---
 
- The system shall collect and aggregate sensor and control data, including 
-timestamps and relevant metadata, from the data collection modules. 
+## 
 
-●  F3.1.1.2 Data Validation: 
+## **4.5. Use Case: External Transparency and Regulatory Query**
 
- The system shall validate the integrity and completeness of the aggregated data 
-before it is packaged for blockchain storage. 
+**Actors:**
 
-3.1.2. Blockchain Transaction Management 
+* External Regulators / Auditors
+* API Gateway
+* Blockchain Query Service
 
-●  F3.1.2.1 Transaction Creation: 
+**Description:**  
+This use case defines how external stakeholders (e.g., regulators, auditors) can access immutable system data via secure APIs to verify compliance with energy standards and monitor sustainability efforts.
 
- The system shall create a new blockchain transaction that encapsulates the 
-packaged data, including all necessary metadata (e.g., sensor ID, timestamp, data 
-type). 
+**Preconditions:**
 
-●  F3.1.2.2 Transaction Submission: 
+* The blockchain ledger contains the latest recorded data.
+* Authentication and access controls are in place for external API usage.
 
- The system shall submit the created transaction to the designated blockchain 
-network for validation and inclusion in a block. 
+**Basic Flow:**
 
-●  F3.1.2.3 Transaction Retry Mechanism: 
+1. **Query Submission:** An external auditor submits a data query through the API Gateway.
+2. **Authentication and Authorization:** The system validates the auditor’s credentials and verifies their authorization.
+3. **Data Retrieval:** The Blockchain Query Service retrieves the requested data from the blockchain.
+4. **Response Delivery:** The data is formatted and returned via the API to the external auditor.
+5. **Audit Logging:** The query and the response are logged for audit purposes.
 
- In the event of blockchain network unavailability or transaction failure, the system 
-shall cache the transaction and automatically retry submission at regular intervals. 
+**Alternative Flows:**
 
-3.1.3. Data Retrieval and API Integration 
+* **AF1 – Invalid Credentials:**
+  * **Step 2A:** If authentication fails, the API Gateway returns an error message and logs the failed attempt.
+* **AF2 – Data Unavailability:**
+  * **Step 3A:** If the requested data is not available (e.g., due to network delays), the system returns a “data temporarily unavailable” notice and schedules a retry.
 
-●  F3.1.3.1 API for Data Query: 
+**Extension Points:**
 
- The system shall expose a RESTful API that allows authorized external users (e.g., 
-regulators, auditors) to query and retrieve recorded blockchain data. 
+* **EP1:** Data Filtering – Allow auditors to filter data by date range, building, or sensor type.
+* **EP2:** Notification Service – Trigger notifications to administrators when external queries exceed a defined threshold.
 
-●  F3.1.3.2 Access Control: 
+**Inclusions:**
 
- The system shall implement role-based access control (RBAC) for the API, ensuring 
-that only authenticated and authorized users can access blockchain records. 
+* **I1:** Security Logging – Every access attempt is logged to ensure traceability and support forensic analysis.
 
-●  F3.1.3.3 Data Formatting and Presentation: 
+---
 
- The system shall format and present queried blockchain data in a user-friendly 
+## **4.6. Use Case: System Scalability and Adaptability Management**
 
- 
- 
- 
- 
- 
- 
- 
- 
-format, supporting filters such as date range, sensor type, and building identifier. 
+**Actors:**
 
-3.1.4. Audit and Logging 
+* System Administrators
+* Configuration Management Service
+* Microservices (various)
 
-●  F3.1.4.1 Transaction Logging: 
+**Description:**  
+This use case describes how system administrators configure and manage the platform to adapt to different building sizes and operational loads, ensuring that the solution remains performant and scalable.
 
- The system shall log every transaction submission, confirmation, and any error 
-events associated with blockchain operations. 
+**Preconditions:**
 
-●  F3.1.4.2 Audit Trail: 
+* The system is deployed in a cloud-native environment with container orchestration.
+* Initial configuration settings are defined.
 
- The system shall maintain an immutable audit trail of all blockchain interactions to 
-support regulatory reviews and forensic analysis. 
+**Basic Flow:**
 
-3.2.  Non-Functional  Requirements 
-Archiviation 
+1. **Configuration Input:** Administrators access the Configuration Management Service to input or adjust system parameters tailored to a specific building or deployment scenario.
+2. **Service Deployment:** The system dynamically deploys and scales microservices based on the configuration settings.
+3. **Monitoring and Feedback:** The system continuously monitors performance metrics and resource utilization.
+4. **Auto-Scaling:** Based on defined thresholds, additional microservices are deployed or scaled down automatically.
+5. **Reporting:** Administrators receive periodic reports detailing the system performance and scaling actions.
 
-for  Blockchain 
+**Alternative Flows:**
 
-3.2.1. Performance 
+* **AF1 – Manual Override:**
+  * **Step 2A:** If auto-scaling fails or is inappropriate (e.g., during maintenance), administrators can manually override scaling actions.
+* **AF2 – Configuration Error:**
+  * **Step 1A:** If an invalid configuration is detected, the system rejects the changes and provides diagnostic feedback for correction.
 
-●  NF3.2.1.1 Transaction Throughput: 
+**Extension Points:**
 
- The blockchain archiviation component shall support a transaction throughput that 
-meets or exceeds the expected data submission rate from the sensor network. 
+* **EP1:** Integration with Third-Party Monitoring Tools – Optionally connect external monitoring and alerting systems for enhanced oversight.
+* **EP2:** Historical Analytics – Use historical scaling data to forecast future capacity requirements.
 
-●  NF3.2.1.2 Latency: 
+**Inclusions:**
 
- The time between data packaging and blockchain confirmation should be minimized 
-to support near-real-time transparency. Specific latency targets should be defined 
-based on network performance benchmarks. 
+* **I1:** Audit and Change Logging – All configuration changes and scaling events are logged to support compliance and troubleshooting.
 
-3.2.2. Scalability 
+---
 
-●  NF3.2.2.1 Horizontal Scalability: 
+# **5\. System Architecture**
 
- The system shall be capable of handling an increasing number of transactions by 
-scaling horizontally (e.g., distributed nodes or services). 
+## **5.1. Back-end Architecture**
 
-●  NF3.2.2.2 Future Blockchain Integration: 
+### **Components:**
 
- The design should allow integration with alternative or additional blockchain 
-networks as system demands evolve. 
+* **IoT Sensor Layer:**
 
-3.2.3. Security 
+  * Devices deployed throughout the building capture environmental data.
 
-●  NF3.2.3.1 Data Integrity: 
+  * Data is transmitted over secure protocols (e.g., MQTT over TLS).
 
- All data stored on the blockchain shall be tamper-proof and cryptographically 
+* **Data Ingestion Service:**
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-secured to prevent unauthorized modifications. 
+  * Receives sensor data in real time.
 
-●  NF3.2.3.2 Authentication and Authorization: 
+  * Performs initial buffering, validation, and formatting.
 
- The system shall enforce strict authentication and authorization mechanisms for all 
-API interactions and blockchain transactions. 
+  * Uses a message queue (e.g., Kafka, RabbitMQ) to decouple data ingestion from processing.
 
-●  NF3.2.3.3 Encryption: 
+* **Data Aggregator and Pre-Processing Module:**
 
- Data in transit between the system and the blockchain, as well as sensitive data at 
-rest, shall be encrypted using industry-standard cryptographic protocols. 
+  * Consolidates sensor data.
 
-3.2.4. Reliability and Fault Tolerance 
+  * Applies basic data cleansing and pre-processing.
 
-●  NF3.2.4.1 Redundancy: 
+  * Sends data to both the MAPE Engine and the Blockchain Archiviation module.
 
- The blockchain component shall include redundancy measures to ensure continued 
-operation in case of node failures or network issues. 
+* **MAPE Engine (Dynamic HVAC Control Module):**
 
-●  NF3.2.4.2 Error Handling: 
+  * **Monitor:** Continuously receives environmental data.
 
- The system shall implement robust error handling and recovery strategies for 
-blockchain submission failures, including automatic retries and fallbacks. 
+  * **Analyze:** Evaluates sensor readings against thresholds and historical data.
 
-3.2.5. Maintainability and Extensibility 
+  * **Plan:** Generates optimized control commands.
 
-●  NF3.2.5.1 Modular Architecture: 
+  * **Execute:** Communicates with the HVAC control systems.
 
- The blockchain module shall be designed in a modular manner, allowing 
-independent updates and easy integration of new blockchain features. 
+  * Uses microservices architecture for each MAPE stage (or a unified service with modular design).
 
-●  NF3.2.5.2 Documentation: 
+* **Blockchain Archiviation Module:**
 
- Comprehensive documentation must be provided for all blockchain-related 
-processes, including API endpoints, transaction formats, and error handling 
-procedures. 
+  * Packages aggregate data and control actions.
 
-3.2.6. Compliance and Auditability 
+  * Creates blockchain transactions and handles submission.
 
-●  NF3.2.6.1 Regulatory Compliance: 
+  * Manages a local cache/retry mechanism for failed transactions.
 
- The system shall comply with relevant industry standards and regulatory 
-requirements concerning data transparency, privacy, and energy efficiency reporting. 
+  * Provides interfaces for audit logging and data integrity checks.
 
-●  NF3.2.6.2 Audit Readiness: 
+* **Analytics and Gamification Engine:**
 
- The blockchain archiviation component shall be designed to support periodic audits, 
-providing verifiable, immutable records to external regulators. 
+  * Processes historical and real-time data to compute energy efficiency metrics.
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-4. Use Case Document 
+  * Generates gamification scores and updates leaderboards.
 
- 
-4. Software Use Case Document 
+  * Stores analytical results in a centralized database for dashboard access.
 
-4.1. Use Case: Data Collection and Environmental 
-Monitoring 
+* **Databases and Storage:**
 
-Actors: 
+  * **Time-Series Database:** Stores raw sensor data and operational metrics.
 
-IoT Sensors 
+  * **Relational/NoSQL Database:** Stores processed data, user profiles, and gamification results.
 
-● 
-●  Data Aggregator Service 
-●  Building Management System (BMS) 
+  * **Blockchain Ledger:** Provides immutable storage for critical transactions.
 
-Description: 
-This  use  case  describes 
-the  process  of  continuously  acquiring  and  aggregating 
-environmental  data  (e.g.,  temperature,  humidity)  from  a  distributed  network of IoT sensors 
-installed throughout a building. 
+  * **Audit Logs:** Centralized logging for debugging, compliance, and auditing.
 
-Preconditions: 
+### **Infrastructure:**
 
-IoT sensors are installed and configured. 
+* **Containerization:**
 
-● 
-●  A  reliable  network  connection  exists  between  sensors  and  the  central  Data 
+  * All services are containerized using Docker.
 
-Aggregator Service. 
+* **Orchestration:**
 
-Basic Flow: 
+  * Kubernetes (or an equivalent) manages scaling, load balancing, and service health.
 
-1.  Sensor  Activation:  IoT  sensors  are  activated  and  begin  collecting  environmental 
+* **CI/CD Pipeline:**
 
-data continuously. 
+  * Automated pipelines ensure smooth development, testing, and deployment.
 
-2.  Data  Transmission:  Each  sensor  transmits  real-time  measurements  (temperature, 
+---
 
-humidity, etc.) to the Data Aggregator Service. 
+## **5.1. API Layers**
 
-3.  Data  Aggregation:  The  Data  Aggregator  Service  receives,  timestamps,  and 
+### **API Gateway:**
 
-consolidates the data from all sensors. 
+* **Function:**
 
-4.  Data  Storage:  Aggregated  data  is  temporarily  stored  in  a  local  cache  or  directly 
+  * Acts as a single entry point for all external requests.
 
-forwarded to the central database for processing by other modules. 
+  * Routes incoming requests to appropriate microservices (e.g., data retrieval, control commands, blockchain queries).
 
-Alternative Flows: 
+  * Implements authentication, authorization (using RBAC), and rate limiting.
 
-●  AF1 – Network Interruption: 
+### **RESTful API Services:**
 
-○  Step 2A: If the sensor loses network connectivity, it buffers data locally. 
-○  Step  2B:  Once  the  connection  is  re-established,  the  buffered  data  is 
+* **Data Query API:**
 
-transmitted to the aggregator. 
+  * Provides endpoints for retrieving sensor data, aggregated metrics, and analytics results.
 
-●  AF2 – Sensor Failure: 
+  * Supports filters (date range, sensor type, building identifier).
 
-○  Step 1A: If a sensor malfunctions, the BMS detects the failure and generates 
+* **HVAC Control API:**
 
-an alert for maintenance. 
+  * Accepts control commands from the MAPE Engine.
 
- 
- 
-Extension Points: 
+  * Allows manual overrides and status updates.
 
-●  EP1:  Data  Validation  –  Before  storage,  data  can  be  validated  for  accuracy  and 
+* **Blockchain Query API:**
 
-consistency. 
+  * Exposes endpoints for external regulators and auditors.
 
-●  EP2:  Pre-Processing  –  Data  can  be  pre-processed  (e.g.,  filtered  or  aggregated)  if 
+  * Returns immutable records from the blockchain ledger.
 
-required by the Analytics Engine. 
+* **Gamification API:**
 
-Inclusions: 
+  * Serves endpoints to fetch performance scores, leaderboards, and user profiles.
 
-● 
+  * Supports notifications and score updates.
 
-I1:  Operations  Logging  –  In  all  flows,  operations  are  logged  and  reported  to  the 
-system monitoring service. 
+### 
 
-4.2. Use Case: Dynamic HVAC Control via MAPE Cycle 
+### 
 
-Actors: 
+### **Communication and Security:**
 
-●  MAPE Engine (comprising Monitor, Analyze, Plan, Execute modules) 
-●  HVAC Systems 
+* **Protocols:**
 
-Description: 
-This  use  case  explains  how  the  system  employs  the  MAPE  (Monitor,  Analyze,  Plan, 
-Execute) cycle to dynamically adjust HVAC operations in response to real-time sensor data, 
-optimizing energy consumption. 
+  * All API communications use HTTPS to ensure data security.
 
-Preconditions: 
+* **Documentation:**
 
-●  Up-to-date sensor data is available. 
-●  HVAC systems are connected and responsive to control commands. 
+  * API endpoints are documented using OpenAPI/Swagger for ease of integration and testing.
 
-Basic Flow: 
+---
 
-1.  Monitor:  The  MAPE  Engine  continuously  monitors  environmental  conditions  and 
+## **3\. Distributed Data Flow**
 
-energy consumption metrics received from the Data Aggregator Service. 
+### **Data Flow Overview:**
 
-2.  Analyze: The Analysis Module processes the monitored data to identify inefficiencies 
+1. **Data Acquisition:**
 
-or anomalies in the current HVAC operation. 
+  * **Sensors → Data Ingestion Service:**  
+    Sensors capture environmental parameters and send data via secure protocols.
 
-3.  Plan: Based on the analysis, the Planning Module develops an optimization strategy 
+2. **Data Processing:**
 
-(e.g., adjusting temperature setpoints or fan speeds). 
+  * **Data Ingestion → Message Queue:**  
+    Ingested data is pushed into a message queue, decoupling ingestion from processing.
 
-4.  Execute:  The  Execution  Module  sends  control  commands to the HVAC systems to 
+  * **Message Queue → Data Aggregator:**  
+    The aggregator retrieves messages, validates and pre-processes data, then forwards it.
 
-implement the planned adjustments. 
+3. **MAPE Cycle and Control:**
 
-5.  Feedback Loop: Updated environmental conditions are re-monitored, and the cycle 
+  * **Data Aggregator → MAPE Engine:**  
+    Pre-processed data feeds into the MAPE Engine.
 
-repeats to ensure continuous optimization. 
+  * **MAPE Engine → HVAC Systems:**  
+    Optimized control commands are sent to HVAC units, and feedback is received.
 
-Alternative Flows: 
+4. **Blockchain Archiviation:**
 
-●  AF1 – No Optimization Needed: 
+  * **Data Aggregator → Blockchain Module:**  
+    Aggregated data and control logs are packaged into transactions.
 
-○  Step  3A:  If  the  analysis  finds  no  actionable  inefficiencies,  the  system 
+  * **Blockchain Module → Blockchain Network:**  
+    Transactions are submitted; failed transactions are retried and logged.
 
-continues operating under the current settings. 
+5. **Analytics and Gamification:**
 
- 
- 
-●  AF2 – Control Command Failure: 
+  * **Data Aggregator / MAPE Feedback → Analytics Engine:**  
+    Collected data, performance metrics, and control feedback are analyzed.
 
-○  Step  4A:  If  an  HVAC  unit  does  not  acknowledge  a  command,  the  system 
+  * **Analytics Engine → Gamification Module:**  
+    Results are processed into scores and updated in leaderboards.
 
-retries the command or issues an alert for manual intervention. 
+6. **API and External Access:**
 
-Extension Points: 
+  * **Internal Databases → API Gateway:**  
+    Processed data, analytics, and blockchain records are accessible via RESTful APIs.
 
-●  EP1:  Manual  Override  –  Allows  facility  managers  to  override  automated  control 
+  * **API Gateway → External Stakeholders:**  
+    External systems and users can query data securely.
 
-during maintenance or emergency situations. 
+### **Diagram (Conceptual Representation):**
 
-●  EP2:  Integration  with  External  Weather  Data  –  Optionally  incorporate  external 
+\[Sensors\]   
+↓ (MQTT/TLS)  
+\[Data Ingestion Service\]   
+↓ (Message Queue)  
+\[Data Aggregator\] \----------------------------  
+↓                         ↓  
+\[MAPE Engine\] → \[HVAC Control Systems\]   \[Blockchain Archiviation Module\] → \[Blockchain Network\]  
+↓                         ↓  
+\[Analytics & Gamification Engine\]   
+↓  
+\[Databases & Storage\]   
+↓  
+\[API Gateway\] → \[External Applications / Regulators / Dashboards\]
 
-weather forecasts into the planning process. 
+---
 
-Inclusions: 
+## 
 
-● 
+## 
 
-I1:  Logging  and  Audit  –  Every  cycle  iteration  and  decision  is  logged  for  future 
-auditing and performance analysis. 
+## **Next Steps**
 
-4.3. Use Case: Blockchain-Enabled Data Recording and 
-Transparency 
+* **Refinement:**
 
-Actors: 
+  * Collaborate with development teams to refine component boundaries and protocols.
 
-●  Data Recording Service 
-●  Blockchain Network 
-●  External Regulators / Auditors 
+* **Prototyping:**
 
-Description: 
-This  use  case  details  the  process  of  securely  recording  sensor  and  control  data  on  an 
-immutable blockchain ledger to ensure transparency and traceability. 
+  * Develop low-fidelity prototypes for critical modules (e.g., data ingestion, MAPE engine, blockchain integration).
 
-Preconditions: 
+* **Validation:**
 
-●  Sensor and control data have been aggregated by the system. 
-●  A blockchain network is set up and connected to the Data Recording Service. 
+  * Validate data flow and integration points through iterative testing in a simulated environment.
 
-Basic Flow: 
+* **Documentation:**
 
-1.  Data  Packaging:  The  Data  Recording  Service  collects  the  latest  sensor  data  and 
+  * Update architectural documents as design details solidify.
 
-control actions, packaging them with timestamps. 
+---
 
-2.  Blockchain  Transaction  Creation:  A  new  transaction  is  created  containing  the 
+# **6\. Core Modules**
 
-packaged data. 
+## **6.1. Ingestion Service & Data Aggregation**
 
-3.  Transaction Submission: The transaction is submitted to the blockchain network for 
+## **6.1.1. Ingestion Service**
 
-validation. 
+* **Protocols Supported:**
 
-4.  Confirmation  and  Recording:  Once  validated,  the  transaction  is  immutably 
+  * MQTT over TLS for high‑frequency streams.
 
-recorded on the blockchain. 
+  * HTTP/HTTPS POST for lower‑volume ingestion or testing.
 
-5.  API  Notification:  The  system  updates  an  API  endpoint  to  signal  that  new  data  is 
+* **Message Validation:**
 
-available for external queries. 
+  * JSON schema enforcement: required fields (sensorId, timestamp, readings).
 
- 
- 
-Alternative Flows: 
+  * Reject or flag out‑of‑range values (e.g. temperature \< –10 °C or \> 50 °C).
 
-●  AF1 – Blockchain Network Delay: 
+* **Buffering & Retry:**
 
-○  Step  3A:  If  the  blockchain  network  is  temporarily  unresponsive,  the  Data 
+  * Local in‑memory buffer with back‑off retry on broker/HTTP endpoint failures.
 
-Recording Service caches the transaction and retries submission. 
+* **Metrics & Monitoring:**
 
-●  AF2 – Data Integrity Issue: 
+  * Expose ingestion rate, error rate, and buffer size via Prometheus metrics.
 
-○  Step 1A: If the data package fails integrity checks, it is flagged for review and 
+### **6.1.2. Data Aggregator**
 
-not sent to the blockchain. 
+* **Batching & Windowing:**
 
-Extension Points: 
+  * Group incoming messages into fixed-length time windows (e.g. 1 minute) for downstream consumption.
 
-●  EP1: Smart Contract Execution – Automatically trigger rewards or notifications based 
+* **Pre‑Processing:**
 
-on the recorded data. 
+  * Outlier detection (e.g. spikes/drops) and simple smoothing filters.
 
-●  EP2: Data Encryption – Optionally encrypt sensitive data before packaging. 
+* **Fan‑out:**
 
-Inclusions: 
+  * Publish cleaned batches to:
 
-● 
+    1. Time‑Series Database (InfluxDB/Prometheus)
 
-I1:  Audit  Logging  –  All  steps,  including  alternative  flows,  are  logged  to  ensure  a 
-complete audit trail. 
+    2. Internal Message Queue (Kafka/RabbitMQ) for MAPE & Blockchain modules
 
-4.4. Use Case: Data Analysis and Gamification 
+* **Health Checks:**
 
-Actors: 
+  * HTTP health endpoint, self‑test on startup (DB connectivity, queue reachability).
 
-●  Analytics Engine 
-●  Gamification Module 
-●  End Users (e.g., facility managers, building occupants) 
+---
 
-Description: 
-This use case covers the analysis of collected data to compute energy consumption scores 
-and the use of gamification elements to motivate energy-efficient behaviors. 
+## **6.2. MAPE Engine**
 
-Preconditions: 
+### **6.2.1. Monitor Module**
 
-●  Sufficient  historical  and  real-time  data  is  available  (stored  in  the  blockchain  and/or 
+* **Subscription:**
 
-central database). 
+  * Consume cleaned data batches from the message queue.
 
-●  Gamification rules and scoring algorithms are defined and configured. 
+* **State Management:**
 
-Basic Flow: 
+  * Maintain a sliding window of recent readings per zone.
 
-1.  Data  Retrieval:  The  Analytics  Engine  retrieves  historical  and  current  sensor  and 
+* **Metrics Collection:**
 
-control data. 
+  * Publish real‑time KPI metrics (average temp/humidity, energy usage) for Prometheus.
 
-2.  Metric  Calculation:  The  Analytics  Engine  calculates  energy  consumption  metrics 
+### **6.2.2. Analyze Module**
 
-and performance scores. 
+* **Rule-Based Analysis:**
 
-3.  Score  Generation:  The  Gamification  Module  applies  predefined  algorithms  to 
+  * Compare current readings against static thresholds or simple moving averages.
 
-generate scores and ranks. 
+* **Anomaly Detection:**
 
- 
- 
-4.  Leaderboard  Update:  The  system  updates  public  and/or  private  leaderboards  to 
+  * Flag deviations \> X % from baseline; generate anomaly events.
 
-reflect the latest scores. 
+* **Historical Baseline:**
 
-5.  User  Notification:  End  users  receive  notifications  and  visual  feedback  (via 
+  * Optionally retrieve historical data for same time of day to refine analysis.
 
-dashboards) regarding their performance. 
+### 
 
-Alternative Flows: 
+### **6.2.3. Plan Module**
 
-●  AF1 – Insufficient Data: 
+* **Optimization Strategies:**
 
-○  Step  1A:  If  the  Analytics  Engine  detects  insufficient  data  for  analysis,  it 
+  * Define rule set: e.g. “If temp \> 25 °C, plan setpoint \= 22 °C.”
 
-triggers a data collection alert and uses fallback estimates. 
+* **Multi‑Zone Coordination:**
 
-●  AF2 – Gamification Rule Exception: 
+  * For groups of zones: balance comfort vs. energy (e.g. share cooling resources).
 
-○  Step  3A:  If  a  gamification  rule  fails  (e.g.,  due  to  data  inconsistencies),  a 
+* **Plan Packaging:**
 
-default scoring mechanism is applied, and an error is logged for review. 
+  * Create “plan packets” containing zone ID, target setpoint, fan speed.
 
-Extension Points: 
+### **6.2.4. Execute Module**
 
-●  EP1:  Customizable  Leaderboards  –  Facility  managers  can  customize  leaderboard 
+* **Command Dispatch:**
 
-views (e.g., by floor, department, or building). 
+  * Send plan packets as commands to HVAC actuator simulators via REST or MQTT.
 
-●  EP2: Reward System – Integration with external reward systems to provide tangible 
+* **Acknowledgement Handling:**
 
-incentives based on scores. 
+  * Wait for ACK/NACK; retry up to N times; on repeated failure generate alert.
 
-Inclusions: 
+* **Feedback Loop:**
 
-● 
+  * Report actual achieved setpoint and energy delta back into the Monitor for continuous adjustment.
 
-I1: Reporting Service – Includes generation of detailed reports for internal review and 
-compliance purposes. 
+---
 
-4.5.  Use  Case:  External  Transparency  and  Regulatory 
-Query 
+## **6.3. Blockchain Simulation**
 
-Actors: 
+### **6.3.1. Transaction Builder**
 
-●  External Regulators / Auditors 
-●  API Gateway 
-●  Blockchain Query Service 
+* **Data Composition:**
 
-Description: 
-This  use  case  defines  how  external  stakeholders  (e.g.,  regulators,  auditors)  can  access 
-immutable  system  data  via  secure  APIs  to  verify  compliance  with  energy  standards  and 
-monitor sustainability efforts. 
+  * Combine sensor batch summary \+ executed commands \+ zone metadata \+ timestamp.
 
-Preconditions: 
+* **Serialization:**
 
-●  The blockchain ledger contains the latest recorded data. 
-●  Authentication and access controls are in place for external API usage. 
+  * Encode transactions as compact JSON or Protobuf messages.
 
- 
- 
- 
-Basic Flow: 
+### **6.3.2. Local Ledger**
 
-1.  Query  Submission:  An  external  auditor  submits  a  data  query  through  the  API 
+* **Append‑Only Store:**
 
-Gateway. 
+  * Use embedded LevelDB or simple JSON append file with CRC checks.
 
-2.  Authentication  and  Authorization:  The  system  validates  the  auditor’s  credentials 
+* **Block Emulation (Optional):**
 
-and verifies their authorization. 
+  * Group transactions into “blocks” at fixed intervals, compute hash chain.
 
-3.  Data Retrieval: The Blockchain Query Service retrieves the requested data from the 
+### **6.3.3. Retry & Cache Mechanism**
 
-blockchain. 
+* **Failure Simulation:**
 
-4.  Response  Delivery:  The  data is formatted and returned via the API to the external 
+  * Introduce artificial “network down” flags to test cache logic.
 
-auditor. 
+* **Retry Scheduler:**
 
-5.  Audit Logging: The query and the response are logged for audit purposes. 
+  * Exponential back‑off retry; configurable max attempts before dead‑letter queue.
 
-Alternative Flows: 
+### **6.3.4. Query Interface**
 
-●  AF1 – Invalid Credentials: 
+* **REST API Endpoints:**
 
-○  Step  2A:  If  authentication  fails,  the  API  Gateway  returns  an  error message 
+  * `GET /ledger/transactions?start=&end=&zoneId=`
 
-and logs the failed attempt. 
+  * `GET /ledger/transaction/{txId}`
 
-●  AF2 – Data Unavailability: 
+* **Pagination & Filtering:**
 
-○  Step 3A: If the requested data is not available (e.g., due to network delays), 
-the  system  returns  a  “data  temporarily  unavailable”  notice  and  schedules  a 
-retry. 
+  * Support page size, sort order, and filter by transaction type (sensor vs. command).
 
-Extension Points: 
+---
 
-●  EP1:  Data  Filtering  –  Allow  auditors  to filter data by date range, building, or sensor 
+## 
 
-type. 
+## 
 
-●  EP2:  Notification  Service  –  Trigger  notifications  to  administrators  when  external 
+## **6.4. Analytics & Gamification**
 
-queries exceed a defined threshold. 
+### **6.4.1. Analytics Engine**
 
-Inclusions: 
+* **Data Sources:**
 
-● 
+  * Time‑series DB for raw metrics; Ledger for immutable records.
 
-I1:  Security  Logging  –  Every  access  attempt  is  logged  to  ensure  traceability  and 
-support forensic analysis. 
+* **KPI Calculations:**
 
-4.6.  Use  Case:  System  Scalability  and  Adaptability 
-Management 
+  * Energy per m², % uptime within optimal temperature band, anomaly count.
 
-Actors: 
+* **Batch vs. Stream:**
 
-●  System Administrators 
-●  Configuration Management Service 
-●  Microservices (various) 
+  * Initial MVP: scheduled batch jobs (e.g. every hour).
 
-Description: 
-  This  use case describes how system administrators configure and manage the platform to 
+  * Future: consider real‑time stream processing (Kafka Streams/Flink).
 
- 
- 
-adapt  to  different  building  sizes  and  operational  loads,  ensuring  that  the  solution  remains 
-performant and scalable. 
+### **6.4.2. Scoring Module**
 
-Preconditions: 
+* **Scoring Rules:**
 
-●  The system is deployed in a cloud-native environment with container orchestration. 
-● 
+  * Lower energy → higher base score; penalties for anomalies.
 
-Initial configuration settings are defined. 
+* **Groupings:**
 
-Basic Flow: 
+  * Support multiple organizational hierarchies: zone, floor, building.
 
-1.  Configuration Input: Administrators access the Configuration Management Service 
-to  input  or  adjust  system  parameters  tailored  to  a  specific  building  or  deployment 
-scenario. 
+* **Weighting & Normalization:**
 
-2.  Service  Deployment:  The  system  dynamically  deploys  and  scales  microservices 
+  * Normalize scores to account for zone size or baseline consumption.
 
-based on the configuration settings. 
+### **6.4.3. Leaderboard Manager**
 
-3.  Monitoring and Feedback: The system continuously monitors performance metrics 
+* **Public vs. Private:**
 
-and resource utilization. 
+  * Public: compare all zones; Private: restricted to specific group IDs.
 
-4.  Auto-Scaling:  Based  on  defined  thresholds,  additional  microservices  are deployed 
+* **Ranking Algorithms:**
 
-or scaled down automatically. 
+  * Sort by descending score; ties broken by fewer anomalies.
 
-5.  Reporting: Administrators receive periodic reports detailing the system performance 
+* **Historical Trends:**
 
-and scaling actions. 
+  * Show score evolution over time (sparkline charts).
 
-Alternative Flows: 
+---
 
-●  AF1 – Manual Override: 
+## **6.5. API Endpoints**
 
-○  Step  2A:  If  auto-scaling  fails  or  is  inappropriate  (e.g.,  during  maintenance), 
+### **6.5.1. Authentication & Authorization**
 
-administrators can manually override scaling actions. 
+* **JWT Tokens:**
 
-●  AF2 – Configuration Error: 
+  * Issued by Auth Service; contain roles (admin, auditor, occupant).
 
-○  Step  1A:  If  an  invalid  configuration  is  detected,  the  system  rejects  the 
+* **RBAC Enforcement:**
 
-changes and provides diagnostic feedback for correction. 
+  * Admins can Override HVAC; Auditors can query Ledger; Occupants see only their zone.
 
-Extension Points: 
+### **6.5.2. Sensor Data APIs**
 
-●  EP1:  Integration  with  Third-Party  Monitoring  Tools  –  Optionally  connect  external 
+* `GET /api/v1/sensors/{sensorId}/latest`
 
-monitoring and alerting systems for enhanced oversight. 
+* `GET /api/v1/sensors/{sensorId}/history?from=&to=&interval=`
 
-●  EP2:  Historical  Analytics  –  Use  historical  scaling  data  to  forecast  future  capacity 
+### **6.5.3. Control APIs**
 
-requirements. 
+`POST /api/v1/hvac/commands`
 
-Inclusions: 
+{ "zoneId": "...", "action": "setPoint", "value": 22 }
 
-● 
+*
+* `GET /api/v1/hvac/status?zoneId=`
 
-I1:  Audit  and  Change  Logging  –  All  configuration  changes  and  scaling  events  are 
-logged to support compliance and troubleshooting. 
+* `POST /api/v1/hvac/override` (admin only)
 
- 
- 
-5. System Architecture 
+### **6.5.4. Blockchain APIs**
 
- 
-5. System Architecture 
+* `GET /api/v1/ledger/transactions` (with filter params)
 
-5.1. Back-end Architecture 
+* `GET /api/v1/ledger/transaction/{txId}`
 
-Components: 
+### **6.5.5. Gamification APIs**
 
-● 
+* `GET /api/v1/leaderboards/{groupId}`
 
-IoT Sensor Layer: 
+* `GET /api/v1/scores/{zoneId}`
 
-○  Devices deployed throughout the building capture environmental data. 
+* `GET /api/v1/trends/{zoneId}`
 
-○  Data is transmitted over secure protocols (e.g., MQTT over TLS). 
+---
 
-●  Data Ingestion Service: 
+## **6.6. Initial Dashboard Requirements**
 
-○  Receives sensor data in real time. 
+### **6.6.1. Real‑Time Sensor Dashboard**
 
-○  Performs initial buffering, validation, and formatting. 
+* **Widgets:**
 
-○  Uses a message queue (e.g., Kafka, RabbitMQ) to decouple data ingestion 
+  * Line charts for each zone, selectable via dropdown.
 
-from processing. 
+  * Connectivity status icons (green/yellow/red).
 
-●  Data Aggregator and Pre-Processing Module: 
+* **Data Feed:**
 
-○  Consolidates sensor data. 
+  * Live via WebSockets; fallback to polling every 5 s.
 
-○  Applies basic data cleansing and pre-processing. 
+### **6.6.2. HVAC Control Panel**
 
-○  Sends data to both the MAPE Engine and the Blockchain Archiviation 
+* **Display:**
 
-module. 
+  * Current setpoint, actual temperature, fan speed.
 
-●  MAPE Engine (Dynamic HVAC Control Module): 
+* **Controls:**
 
-○  Monitor: Continuously receives environmental data. 
+  * Buttons: \+/– 1 °C, set fan to low/medium/high.
 
-○  Analyze: Evaluates sensor readings against thresholds and historical data. 
+* **Logs:**
 
-○  Plan: Generates optimized control commands. 
+  * Latest 10 commands with timestamps and ACK status.
 
-○  Execute: Communicates with the HVAC control systems. 
+### **6.6.3. Blockchain Audit Viewer**
 
-○  Uses microservices architecture for each MAPE stage (or a unified service 
+* **Table View:**
 
-with modular design). 
+  * Columns: TxID, zoneId, type (sensor/command), timestamp, status.
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-●  Blockchain Archiviation Module: 
+* **Filters:**
 
-○  Packages aggregate data and control actions. 
+  * Date range picker, zone selector, transaction type.
 
-○  Creates blockchain transactions and handles submission. 
+### **6.6.4. Gamification Leaderboard**
 
-○  Manages a local cache/retry mechanism for failed transactions. 
+* **Ranking Table:**
 
-○  Provides interfaces for audit logging and data integrity checks. 
+  * Rank, zone/floor name, score, anomaly count.
 
-●  Analytics and Gamification Engine: 
+* **Personal Highlight:**
 
-○  Processes historical and real-time data to compute energy efficiency metrics. 
+  * Highlight the currently viewed zone’s position.
 
-○  Generates gamification scores and updates leaderboards. 
+### **6.6.5. Notifications & Alerts**
 
-○  Stores analytical results in a centralized database for dashboard access. 
+* **Banner Alerts:**
 
-●  Databases and Storage: 
+  * Sensor offline, repeated command failures, ledger retry backlog.
 
-○  Time-Series Database: Stores raw sensor data and operational metrics. 
+* **Drill‑down Links:**
 
-○  Relational/NoSQL Database: Stores processed data, user profiles, and 
+  * Click alert to view detailed logs or corrective actions.
 
-gamification results. 
+---
 
-○  Blockchain Ledger: Provides immutable storage for critical transactions. 
+# **7\. Blockchain Integration**
 
-○  Audit Logs: Centralized logging for debugging, compliance, and auditing. 
+### **7.1. Overview**
 
-Infrastructure: 
+The blockchain integration ensures immutable, verifiable storage of both raw sensor data and control actions. It comprises three main sub‑systems:
 
-●  Containerization: 
+1. **Transaction Builder** – Packages incoming data into blockchain‐ready transactions.
 
-○  All services are containerized using Docker. 
+2. **Local Ledger & Submission Engine** – Maintains an append‑only store, handles retries, and submits to the external blockchain network.
 
-●  Orchestration: 
+3. **Ledger Query API** – Exposes stored transactions to authorized external consumers (e.g., regulators, dashboards).
 
-○  Kubernetes (or an equivalent) manages scaling, load balancing, and service 
+   ---
 
-health. 
+   ### **7.2. Component Diagram**
 
-●  CI/CD Pipeline: 
+*(See Figure 1 above TODO DA FILLARE CON DIAGRAMMA SU DRAW.IO)*
 
-○  Automated pipelines ensure smooth development, testing, and deployment. 
+#### **7.2.1. Data Flow**
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-5.1. API Layers 
+1. **Data Aggregator → Transaction Builder**
 
-API Gateway: 
+  * **Responsibility:** Receives cleaned, batched sensor readings and MAPE control events.
 
-●  Function: 
+  * **Interface:** In‐memory queue (Kafka/RabbitMQ).
 
-○  Acts as a single entry point for all external requests. 
+2. **Transaction Builder → Blockchain Module**
 
-○  Routes incoming requests to appropriate microservices (e.g., data retrieval, 
+  * **Responsibility:** Serializes data into a compact transaction format, appends metadata (zoneId, timestamp, type).
 
-control commands, blockchain queries). 
+3. **Blockchain Module → Blockchain Network**
 
-○ 
+  * **Responsibility:** Submits transactions to the chosen blockchain node; on failure, caches locally and retries.
 
-Implements authentication, authorization (using RBAC), and rate limiting. 
+4. **API Gateway ↔ Ledger Query API**
 
-RESTful API Services: 
+  * **Responsibility:** Routes incoming REST calls to the Ledger Query API; enforces JWT/RBAC.
 
-●  Data Query API: 
+5. **Ledger Query API → External Auditors / Dashboards**
 
-○  Provides endpoints for retrieving sensor data, aggregated metrics, and 
+  * **Responsibility:** Returns paginated, filterable transaction data for audit and display.
 
-analytics results. 
+   ---
 
-○  Supports filters (date range, sensor type, building identifier). 
+   ### **7.3. Sequence Diagram: Transaction Flow**
 
-●  HVAC Control API: 
+*(See Figure 2 above TODO FARE DIAGRAMMA CON DRAW.IO)*
 
-○  Accepts control commands from the MAPE Engine. 
+#### **7.3.1. Basic Flow**
 
-○  Allows manual overrides and status updates. 
+1. **sendBatch(data)** from Data Aggregator to Transaction Builder
 
-●  Blockchain Query API: 
+2. **buildTransaction()** within Transaction Builder
 
-○  Exposes endpoints for external regulators and auditors. 
+3. **submit(tx)** from Blockchain Module to Blockchain Node
 
-○  Returns immutable records from the blockchain ledger. 
+4. **ack/receipt(txId)** from Blockchain Node back to Blockchain Module
 
-●  Gamification API: 
+5. **store locally & update status** in the local ledger
 
-○  Serves endpoints to fetch performance scores, leaderboards, and user 
+   #### **7.3.2. Alternative & Error Flows**
 
-profiles. 
+* **Network Unavailable:**
 
-○  Supports notifications and score updates. 
+  * After step 3, if submission fails, the module caches the transaction and schedules retries (exponential back‑off).
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-Communication and Security: 
+* **Data Integrity Failure:**
 
-●  Protocols: 
+  * During `buildTransaction()`, if validation fails (e.g. missing fields), the transaction is rejected and an error log is emitted.
 
-○  All API communications use HTTPS to ensure data security. 
+* **Timeout on Receipt:**
 
-●  Documentation: 
+  * If no `ack` within T seconds, the module flags the transaction as “pending” and re‑issues up to N times before marking it “failed.”
 
-○  API endpoints are documented using OpenAPI/Swagger for ease of 
+  ---
 
-integration and testing. 
+  ### **7.4. REST API Specification**
 
-3. Distributed Data Flow 
+  #### **7.4.1. Security**
 
-Data Flow Overview: 
+* **Scheme:** BearerAuth (JWT)
 
-1.  Data Acquisition: 
+* **Roles:**
 
-○  Sensors → Data Ingestion Service: 
+  * `auditor`: read‐only access to `/ledger/*`
 
- Sensors capture environmental parameters and send data via secure 
-protocols. 
+  * `admin`: full access including transaction submission stats
 
-2.  Data Processing: 
+  #### **7.4.2. Endpoints**
 
-○  Data Ingestion → Message Queue: 
+| Path | Method | Description | Auth |
+| :---: | :---: | :---: | :---: |
+| `/v1/ledger/transactions` | GET | List all transactions with filtering & pagination | auditor |
+| `/v1/ledger/transactions/{txId}` | GET | Retrieve a single transaction by ID | auditor |
 
- Ingested data is pushed into a message queue, decoupling ingestion from 
-processing. 
+##### **7.4.2.1. Query Parameters for `/transactions`**
 
-○  Message Queue → Data Aggregator: 
+* `start` (string, date-time, optional) – ISO 8601 start timestamp
 
- The aggregator retrieves messages, validates and pre-processes data, then 
-forwards it. 
+* `end` (string, date-time, optional) – ISO 8601 end timestamp
 
-3.  MAPE Cycle and Control: 
+* `zoneId` (string, optional) – Filter by sensor/zone ID
 
-○  Data Aggregator → MAPE Engine: 
+* `page` (integer, default 1\) – Page number
 
- Pre-processed data feeds into the MAPE Engine. 
+* `pageSize` (integer, default 20, max 100\) – Items per page
 
-○  MAPE Engine → HVAC Systems: 
+  ##### **7.4.2.2. Responses**
 
- Optimized control commands are sent to HVAC units, and feedback is 
-received. 
+**(TODO SISTEMARE VISUALIZZAZIONE FILE JSON)**  
+**200 OK** –
 
-4.  Blockchain Archiviation: 
+openapi: 3.0.3
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-○  Data Aggregator → Blockchain Module: 
+info:
 
- Aggregated data and control logs are packaged into transactions. 
+title: NRG CHAMP Ledger API
 
-○  Blockchain Module → Blockchain Network: 
+version: 1.0.0
 
- Transactions are submitted; failed transactions are retried and logged. 
+servers:
 
-5.  Analytics and Gamification: 
+\- url: https://api.nrgchamp.example.com/v1
 
-○  Data Aggregator / MAPE Feedback → Analytics Engine: 
+components:
 
- Collected data, performance metrics, and control feedback are analyzed. 
+securitySchemes:
 
-○  Analytics Engine → Gamification Module: 
+    BearerAuth:
 
- Results are processed into scores and updated in leaderboards. 
+      type: http
 
-6.  API and External Access: 
+      scheme: bearer
 
-○ 
+      bearerFormat: JWT
 
-Internal Databases → API Gateway: 
- Processed data, analytics, and blockchain records are accessible via 
-RESTful APIs. 
+parameters:
 
-○  API Gateway → External Stakeholders: 
+    startDate:
 
- External systems and users can query data securely. 
+      name: start
 
-Diagram (Conceptual Representation): 
+      in: query
 
-[Sensors]  
-    ↓ (MQTT/TLS) 
-[Data Ingestion Service]  
-    ↓ (Message Queue) 
-[Data Aggregator] ---------------------------- 
-    ↓                         ↓ 
-[MAPE Engine] → [HVAC Control Systems]   [Blockchain Archiviation Module] → 
-[Blockchain Network] 
-    ↓                         ↓ 
-[Analytics & Gamification Engine]  
-    ↓ 
-[Databases & Storage]  
-    ↓ 
-[API Gateway] → [External Applications / Regulators / Dashboards] 
+      description: ISO8601 start timestamp (inclusive)
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-Next Steps 
+      required: false
 
-●  Refinement: 
+      schema:
 
-○  Collaborate with development teams to refine component boundaries and 
+        type: string
 
-protocols. 
+        format: date-time
 
-●  Prototyping: 
+    endDate:
 
-○  Develop low-fidelity prototypes for critical modules (e.g., data ingestion, 
+      name: end
 
-MAPE engine, blockchain integration). 
+      in: query
 
-●  Validation: 
+      description: ISO8601 end timestamp (inclusive)
 
-○  Validate data flow and integration points through iterative testing in a 
+      required: false
 
-simulated environment. 
+      schema:
 
-●  Documentation: 
+        type: string
 
-○  Update architectural documents as design details solidify. 
+        format: date-time
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-6. Core Modules 
+    zoneId:
 
- 
-6. Core Modules 
+      name: zoneId
 
-6.1. Ingestion Service & Data Aggregation 
+      in: query
 
-6.1.1. Ingestion Service 
+      description: Filter by sensor/zone identifier
 
-●  Protocols Supported: 
+      required: false
 
-○  MQTT over TLS for high‑frequency streams. 
+      schema:
 
-○  HTTP/HTTPS POST for lower‑volume ingestion or testing. 
+        type: string
 
-●  Message Validation: 
+paths:
 
-○  JSON schema enforcement: required fields (sensorId, timestamp, readings). 
+/ledger/transactions:
 
-○  Reject or flag out‑of‑range values (e.g. temperature < –10 °C or > 50 °C). 
+    get:
 
-●  Buffering & Retry: 
+      summary: List blockchain transactions
 
-○  Local in‑memory buffer with back‑off retry on broker/HTTP endpoint failures. 
+      security:
 
-●  Metrics & Monitoring: 
+        \- BearerAuth: \[\]
 
-○  Expose ingestion rate, error rate, and buffer size via Prometheus metrics. 
+      parameters:
 
-6.1.2. Data Aggregator 
+        \- $ref: '\#/components/parameters/startDate'
 
-●  Batching & Windowing: 
+        \- $ref: '\#/components/parameters/endDate'
 
-○  Group incoming messages into fixed-length time windows (e.g. 1 minute) for 
+        \- $ref: '\#/components/parameters/zoneId'
 
-downstream consumption. 
+        \- name: page
 
-●  Pre‑Processing: 
+          in: query
 
-○  Outlier detection (e.g. spikes/drops) and simple smoothing filters. 
+          description: Page number (default 1\)
 
-●  Fan‑out: 
+          schema:
 
-○  Publish cleaned batches to: 
+            type: integer
 
-1.  Time‑Series Database (InfluxDB/Prometheus) 
+            example: 1
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-2.  Internal Message Queue (Kafka/RabbitMQ) for MAPE & Blockchain 
+        \- name: pageSize
 
-modules 
+          in: query
 
-●  Health Checks: 
+          description: Items per page (max 100\)
 
-○  HTTP health endpoint, self‑test on startup (DB connectivity, queue 
+          schema:
 
-reachability). 
+            type: integer
 
-6.2. MAPE Engine 
+            example: 20
 
-6.2.1. Monitor Module 
+      responses:
 
-●  Subscription: 
+        '200':
 
-○  Consume cleaned data batches from the message queue. 
+          description: A paginated list of transactions
 
-●  State Management: 
+          content:
 
-○  Maintain a sliding window of recent readings per zone. 
+            application/json:
 
-●  Metrics Collection: 
+              schema:
 
-○  Publish real‑time KPI metrics (average temp/humidity, energy usage) for 
+                type: object
 
-Prometheus. 
+                properties:
 
-6.2.2. Analyze Module 
+                  total:
 
-●  Rule-Based Analysis: 
+                    type: integer
 
-○  Compare current readings against static thresholds or simple moving 
+                  page:
 
-averages. 
+                    type: integer
 
-●  Anomaly Detection: 
+                  pageSize:
 
-○  Flag deviations > X % from baseline; generate anomaly events. 
+                    type: integer
 
-●  Historical Baseline: 
+                  transactions:
 
-○  Optionally retrieve historical data for same time of day to refine analysis. 
+                    type: array
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-6.2.3. Plan Module 
+                    items:
 
-●  Optimization Strategies: 
+                      $ref: '\#/components/schemas/Transaction'
 
-○  Define rule set: e.g. “If temp > 25 °C, plan setpoint = 22 °C.” 
+/ledger/transaction/{txId}:
 
-●  Multi‑Zone Coordination: 
+    get:
 
-○  For groups of zones: balance comfort vs. energy (e.g. share cooling 
+      summary: Get a single transaction by ID
 
-resources). 
+      security:
 
-●  Plan Packaging: 
+        \- BearerAuth: \[\]
 
-○  Create “plan packets” containing zone ID, target setpoint, fan speed. 
+      parameters:
 
-6.2.4. Execute Module 
+        \- name: txId
 
-●  Command Dispatch: 
+          in: path
 
-○  Send plan packets as commands to HVAC actuator simulators via REST or 
+          required: true
 
-MQTT. 
+          description: Transaction identifier
 
-●  Acknowledgement Handling: 
+          schema:
 
-○  Wait for ACK/NACK; retry up to N times; on repeated failure generate alert. 
+            type: string
 
-●  Feedback Loop: 
+      responses:
 
-○  Report actual achieved setpoint and energy delta back into the Monitor for 
+        '200':
 
-continuous adjustment. 
+          description: Transaction details
 
-6.3. Blockchain Simulation 
+          content:
 
-6.3.1. Transaction Builder 
+            application/json:
 
-●  Data Composition: 
+              schema:
 
-○  Combine sensor batch summary + executed commands + zone metadata + 
+                $ref: '\#/components/schemas/Transaction'
 
-timestamp. 
+        '404':
 
-●  Serialization: 
+          description: Transaction not found
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-○  Encode transactions as compact JSON or Protobuf messages. 
+components:
 
-6.3.2. Local Ledger 
+schemas:
 
-●  Append‑Only Store: 
+    Transaction:
 
-○  Use embedded LevelDB or simple JSON append file with CRC checks. 
+      type: object
 
-●  Block Emulation (Optional): 
+      properties:
 
-○  Group transactions into “blocks” at fixed intervals, compute hash chain. 
+        txId:
 
-6.3.3. Retry & Cache Mechanism 
+          type: string
 
-●  Failure Simulation: 
+          description: Blockchain transaction ID
 
-○ 
+        zoneId:
 
-Introduce artificial “network down” flags to test cache logic. 
+          type: string
 
-●  Retry Scheduler: 
+        timestamp:
 
-○  Exponential back‑off retry; configurable max attempts before dead‑letter 
+          type: string
 
-queue. 
+          format: date-time
 
-6.3.4. Query Interface 
+        type:
 
-●  REST API Endpoints: 
+          type: string
 
-○  GET /ledger/transactions?start=&end=&zoneId= 
+          enum: \[sensor, command\]
 
-○  GET /ledger/transaction/{txId} 
+        payload:
 
-●  Pagination & Filtering: 
+          type: object
 
-○  Support page size, sort order, and filter by transaction type (sensor vs. 
+          description: Original data or command details
 
-command). 
+        status:
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-6.4. Analytics & Gamification 
+          type: string
 
-6.4.1. Analytics Engine 
+          enum: \[pending, committed, failed\]
 
-●  Data Sources: 
+      required:
 
-○  Time‑series DB for raw metrics; Ledger for immutable records. 
+        \- txId
 
-●  KPI Calculations: 
+        \- zoneId
 
-○  Energy per m², % uptime within optimal temperature band, anomaly count. 
+        \- timestamp
 
-●  Batch vs. Stream: 
+        \- type
 
-○ 
+        \- payload
 
-Initial MVP: scheduled batch jobs (e.g. every hour). 
+        \- status
 
-○  Future: consider real‑time stream processing (Kafka Streams/Flink). 
+security:
 
-6.4.2. Scoring Module 
+\- BearerAuth: \[\]
 
-●  Scoring Rules: 
+**404 Not Found** (for single‐transaction fetch) –
 
-○  Lower energy → higher base score; penalties for anomalies. 
+* { "error": "Transaction not found" }
+    
+  ---
 
-●  Groupings: 
+  ### **7.5. Configuration & Extensibility**
 
-○  Support multiple organizational hierarchies: zone, floor, building. 
+* **Blockchain Provider:** Configurable endpoint and credentials (e.g. Hyperledger, Ethereum testnet).
 
-●  Weighting & Normalization: 
+* **Retry Policy:** Parameters for max attempts, back‑off intervals, and dead‑letter queue.
 
-○  Normalize scores to account for zone size or baseline consumption. 
+* **Encryption Toggle:** Enable/disable payload encryption via environment variable.
 
-6.4.3. Leaderboard Manager 
+* **Metrics Exposure:** Prometheus metrics for submission attempts, successes, failures, and ledger length.
 
-●  Public vs. Private: 
+  ---
 
-○  Public: compare all zones; Private: restricted to specific group IDs. 
+**Next Steps:**
 
-●  Ranking Algorithms: 
+* Finalize data schemas and smart‑contract interfaces.
 
-○  Sort by descending score; ties broken by fewer anomalies. 
+* Implement the above API spec in the Ledger Query microservice.
 
-●  Historical Trends: 
+* Integrate with a lightweight blockchain emulator for end‑to‑end tests.
 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-○  Show score evolution over time (sparkline charts). 
-
-6.5. API Endpoints 
-
-6.5.1. Authentication & Authorization 
-
-●  JWT Tokens: 
-
-○ 
-
-Issued by Auth Service; contain roles (admin, auditor, occupant). 
-
-●  RBAC Enforcement: 
-
-○  Admins can Override HVAC; Auditors can query Ledger; Occupants see only 
-
-their zone. 
-
-6.5.2. Sensor Data APIs 
-
-●  GET /api/v1/sensors/{sensorId}/latest 
-
-●  GET /api/v1/sensors/{sensorId}/history?from=&to=&interval= 
-
-6.5.3. Control APIs 
-
-POST /api/v1/hvac/commands 
-
- { "zoneId": "...", "action": "setPoint", "value": 22 } 
-
-● 
-●  GET /api/v1/hvac/status?zoneId= 
-
-●  POST /api/v1/hvac/override (admin only) 
-
-6.5.4. Blockchain APIs 
-
-●  GET /api/v1/ledger/transactions (with filter params) 
-
-●  GET /api/v1/ledger/transaction/{txId} 
-
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-6.5.5. Gamification APIs 
-
-●  GET /api/v1/leaderboards/{groupId} 
-
-●  GET /api/v1/scores/{zoneId} 
-
-●  GET /api/v1/trends/{zoneId} 
-
-6.6. Initial Dashboard Requirements 
-
-6.6.1. Real‑Time Sensor Dashboard 
-
-●  Widgets: 
-
-○  Line charts for each zone, selectable via dropdown. 
-
-○  Connectivity status icons (green/yellow/red). 
-
-●  Data Feed: 
-
-○  Live via WebSockets; fallback to polling every 5 s. 
-
-6.6.2. HVAC Control Panel 
-
-●  Display: 
-
-○  Current setpoint, actual temperature, fan speed. 
-
-●  Controls: 
-
-○  Buttons: +/– 1 °C, set fan to low/medium/high. 
-
-●  Logs: 
-
-○  Latest 10 commands with timestamps and ACK status. 
-
-6.6.3. Blockchain Audit Viewer 
-
-●  Table View: 
-
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-○  Columns: TxID, zoneId, type (sensor/command), timestamp, status. 
-
-●  Filters: 
-
-○  Date range picker, zone selector, transaction type. 
-
-6.6.4. Gamification Leaderboard 
-
-●  Ranking Table: 
-
-○  Rank, zone/floor name, score, anomaly count. 
-
-●  Personal Highlight: 
-
-○  Highlight the currently viewed zone’s position. 
-
-6.6.5. Notifications & Alerts 
-
-●  Banner Alerts: 
-
-○  Sensor offline, repeated command failures, ledger retry backlog. 
-
-●  Drill‑down Links: 
-
-○  Click alert to view detailed logs or corrective actions. 
-
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-7. Blockchain Integration 
-
- 
-7. Blockchain Integration 
-
-7.1. Overview 
-
-The blockchain integration ensures immutable, verifiable storage of both raw sensor data 
-and control actions. It comprises three main sub‑systems: 
-
-1.  Transaction Builder – Packages incoming data into blockchain‐ready transactions. 
-
-2.  Local Ledger & Submission Engine – Maintains an append‑only store, handles 
-
-retries, and submits to the external blockchain network. 
-
-3.  Ledger Query API – Exposes stored transactions to authorized external consumers 
-
-(e.g., regulators, dashboards). 
-
-7.2. Component Diagram 
-
-(See Figure 1 above TODO DA FILLARE CON DIAGRAMMA SU DRAW.IO) 
-
-7.2.1. Data Flow 
-
-1.  Data Aggregator → Transaction Builder 
-
-○  Responsibility: Receives cleaned, batched sensor readings and MAPE 
-
-control events. 
-
-○ 
-
-Interface: In‐memory queue (Kafka/RabbitMQ). 
-
-2.  Transaction Builder → Blockchain Module 
-
-○  Responsibility: Serializes data into a compact transaction format, appends 
-
-metadata (zoneId, timestamp, type). 
-
-3.  Blockchain Module → Blockchain Network 
-
-○  Responsibility: Submits transactions to the chosen blockchain node; on 
-
-failure, caches locally and retries. 
-
-4.  API Gateway ↔ Ledger Query API 
-
-○  Responsibility: Routes incoming REST calls to the Ledger Query API; 
-
-enforces JWT/RBAC. 
-
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-5.  Ledger Query API → External Auditors / Dashboards 
-
-○  Responsibility: Returns paginated, filterable transaction data for audit and 
-
-display. 
-
-7.3. Sequence Diagram: Transaction Flow 
-
-(See Figure 2 above TODO FARE DIAGRAMMA CON DRAW.IO) 
-
-7.3.1. Basic Flow 
-
-1.  sendBatch(data) from Data Aggregator to Transaction Builder 
-
-2.  buildTransaction() within Transaction Builder 
-
-3.  submit(tx) from Blockchain Module to Blockchain Node 
-
-4.  ack/receipt(txId) from Blockchain Node back to Blockchain Module 
-
-5.  store locally & update status in the local ledger 
-
-7.3.2. Alternative & Error Flows 
-
-●  Network Unavailable: 
-
-○  After step 3, if submission fails, the module caches the transaction and 
-
-schedules retries (exponential back‑off). 
-
-●  Data Integrity Failure: 
-
-○  During buildTransaction(), if validation fails (e.g. missing fields), the 
-
-transaction is rejected and an error log is emitted. 
-
-●  Timeout on Receipt: 
-
-○ 
-
-If no ack within T seconds, the module flags the transaction as “pending” and 
-re‑issues up to N times before marking it “failed.” 
-
-7.4. REST API Specification 
-
-7.4.1. Security 
-
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-●  Scheme: BearerAuth (JWT) 
-
-●  Roles: 
-
-○  auditor: read‐only access to /ledger/* 
-
-○  admin: full access including transaction submission stats 
-
-7.4.2. Endpoints 
-
-Path 
-
-Method 
-
-Description 
-
-Auth 
-
-/v1/ledger/transactions 
-
-GET 
-
-List all transactions with filtering & 
-
-auditor 
-
-pagination 
-
-/v1/ledger/transactions/{txId} 
-
-GET 
-
-Retrieve a single transaction by ID 
-
-auditor 
-
-7.4.2.1. Query Parameters for /transactions 
-
-●  start (string, date-time, optional) – ISO 8601 start timestamp 
-
-●  end (string, date-time, optional) – ISO 8601 end timestamp 
-
-●  zoneId (string, optional) – Filter by sensor/zone ID 
-
-●  page (integer, default 1) – Page number 
-
-●  pageSize (integer, default 20, max 100) – Items per page 
-
-7.4.2.2. Responses 
-
-(TODO SISTEMARE VISUALIZZAZIONE FILE JSON) 
-200 OK – 
-
-openapi: 3.0.3 
-
-info: 
-
-  title: NRG CHAMP Ledger API 
-
-  version: 1.0.0 
-
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-servers: 
-
-  - url: https://api.nrgchamp.example.com/v1 
-
-components: 
-
-  securitySchemes: 
-
-    BearerAuth: 
-
-      type: http 
-
-      scheme: bearer 
-
-      bearerFormat: JWT 
-
-  parameters: 
-
-    startDate: 
-
-      name: start 
-
-      in: query 
-
-      description: ISO8601 start timestamp (inclusive) 
-
-      required: false 
-
-      schema: 
-
-        type: string 
-
-        format: date-time 
-
-    endDate: 
-
-      name: end 
-
-      in: query 
-
-      description: ISO8601 end timestamp (inclusive) 
-
-      required: false 
-
-      schema: 
-
-        type: string 
-
-        format: date-time 
-
-    zoneId: 
-
- 
-      name: zoneId 
-
-      in: query 
-
-      description: Filter by sensor/zone identifier 
-
-      required: false 
-
-      schema: 
-
-        type: string 
-
-paths: 
-
-  /ledger/transactions: 
-
-    get: 
-
-      summary: List blockchain transactions 
-
-      security: 
-
-        - BearerAuth: [] 
-
-      parameters: 
-
-        - $ref: '#/components/parameters/startDate' 
-
-        - $ref: '#/components/parameters/endDate' 
-
-        - $ref: '#/components/parameters/zoneId' 
-
-        - name: page 
-
-          in: query 
-
-          description: Page number (default 1) 
-
-          schema: 
-
-            type: integer 
-
-            example: 1 
-
-        - name: pageSize 
-
-          in: query 
-
-          description: Items per page (max 100) 
-
-          schema: 
-
- 
-            type: integer 
-
-            example: 20 
-
-      responses: 
-
-        '200': 
-
-          description: A paginated list of transactions 
-
-          content: 
-
-            application/json: 
-
-              schema: 
-
-                type: object 
-
-                properties: 
-
-                  total: 
-
-                    type: integer 
-
-                  page: 
-
-                    type: integer 
-
-                  pageSize: 
-
-                    type: integer 
-
-                  transactions: 
-
-                    type: array 
-
-                    items: 
-
-                      $ref: '#/components/schemas/Transaction' 
-
-  /ledger/transaction/{txId}: 
-
-    get: 
-
-      summary: Get a single transaction by ID 
-
-      security: 
-
-        - BearerAuth: [] 
-
-      parameters: 
-
- 
-        - name: txId 
-
-          in: path 
-
-          required: true 
-
-          description: Transaction identifier 
-
-          schema: 
-
-            type: string 
-
-      responses: 
-
-        '200': 
-
-          description: Transaction details 
-
-          content: 
-
-            application/json: 
-
-              schema: 
-
-                $ref: '#/components/schemas/Transaction' 
-
-        '404': 
-
-          description: Transaction not found 
-
-components: 
-
-  schemas: 
-
-    Transaction: 
-
-      type: object 
-
-      properties: 
-
-        txId: 
-
-          type: string 
-
-          description: Blockchain transaction ID 
-
-        zoneId: 
-
-          type: string 
-
-        timestamp: 
-
- 
-          type: string 
-
-          format: date-time 
-
-        type: 
-
-          type: string 
-
-          enum: [sensor, command] 
-
-        payload: 
-
-          type: object 
-
-          description: Original data or command details 
-
-        status: 
-
-          type: string 
-
-          enum: [pending, committed, failed] 
-
-      required: 
-
-        - txId 
-
-        - zoneId 
-
-        - timestamp 
-
-        - type 
-
-        - payload 
-
-        - status 
-
-security: 
-
-  - BearerAuth: [] 
-
-404 Not Found (for single‐transaction fetch) – 
-
-● 
-
-{ "error": "Transaction not found" } 
-
- 
- 
- 
- 
- 
-7.5. Configuration & Extensibility 
-
-●  Blockchain Provider: Configurable endpoint and credentials (e.g. Hyperledger, 
-
-Ethereum testnet). 
-
-●  Retry Policy: Parameters for max attempts, back‑off intervals, and dead‑letter 
-
-queue. 
-
-●  Encryption Toggle: Enable/disable payload encryption via environment variable. 
-
-●  Metrics Exposure: Prometheus metrics for submission attempts, successes, 
-
-failures, and ledger length. 
-
-Next Steps: 
-
-●  Finalize data schemas and smart‑contract interfaces. 
-
-● 
-
-Implement the above API spec in the Ledger Query microservice. 
-
-● 
-
-Integrate with a lightweight blockchain emulator for end‑to‑end tests. 
-
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
- 
-
+---
