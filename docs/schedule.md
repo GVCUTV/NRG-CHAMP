@@ -1,136 +1,167 @@
-## 06/09 — 15:00–19:00 — Service 1: Device (External Simulator + Device Adapter)
+# NRG CHAMP — Service‑by‑Service Schedule (repo considered empty; updated per fixes)
 
-**Objective:** Deliver the **external sensor simulator** (outside NRG CHAMP) and the **NRG CHAMP Device Adapter** (first internal service), both coded and deployed via docker‑compose.
+## 06/09 — 15:00–19:00 — Service 1: External Sensor Simulator + Device Adapter (code + deploy)
+
+**Objective**  
+Deliver the **external simulator** and the first internal microservice (**Device Adapter**) with **Kafka** integration. Both runnable via **docker‑compose** and have **Kubernetes manifests**.
 
 **Scope & Deliverables**
-- **External Sensor Simulator (standalone project):**
-    - Implements indoor temperature evolution: `T_in(t+Δt) = f(T_in(t), T_out(t), HVAC_state(t))` (cooling/heating effects, simple first‑order model).
-    - **Inputs:** properties file with initial `T_in0`, `T_out0`, model coefficients (cooling/heating rates, thermal inertia).
-    - **API:** `GET /env` (current T_in, T_out, hvac state); `POST /actuator` (commands: HEAT_ON/OFF, COOL_ON/OFF, FAN levels).
-- **NRG CHAMP Device Adapter (internal microservice):**
-    - Pulls/polls simulator readings; normalizes to **canonical JSON** schema.
-    - Exposes **`GET /readings`** for current sample; **`/health`** for readiness; structured logging.
-    - **Dockerfiles** for both simulator and adapter; **docker‑compose** stack up & running.
-- **Verification:** local run shows evolving T_in responding to actuator commands.
+- **External Sensor Simulator (standalone)**
+    - Model: `T_in(t+Δt) = T_in(t) + α*(T_out − T_in) + β*HVAC_effect(t)`; parameters and initial values from `sim.properties`.
+    - REST API: `GET /env` (T_in, T_out, hvac_state, zoneId); `POST /actuator` (HEAT_ON/OFF, COOL_ON/OFF, FAN level).
+    - **Dockerfile + docker‑compose service** (for local dev). Optional K8s manifest to run in‑cluster for tests.
+- **Device Adapter (internal)**
+    - Publishes canonical readings to **Kafka** topic `device.readings` (JSON: `timestamp, zoneId, t_in, t_out, hvac_state`).
+    - Optional debug endpoint: `GET /readings?zoneId=...` (last sample); plus `/health`.
+    - **Dockerfile + docker‑compose service** (depends on Kafka).
+    - **Kubernetes**: `k8s/device-adapter/` → `deployment.yaml`, `service.yaml`, `configmap.yaml` (connection/env), `kustomization.yaml`.
+- **Kafka (dev)**
+    - Compose: single‑broker **Kafka + Zookeeper** (or Redpanda). Topic `device.readings` created on start.
+    - K8s: single‑broker dev manifest (Bitnami/Strimzi single node) with topic CR or init‑job to create `device.readings`.
+- **Verification**
+    - End‑to‑end local: changes to actuator via simulator affect `T_in`; adapter publishes to `device.readings`.
+    - `kubectl apply` brings up device‑adapter; logs show successful publish.
 
 **Ownership**
-- **Andrea:** docker‑compose, containerization, adapter API and health endpoints.
-- **Giuseppe:** simulator math/model, properties file format, command API, logs/tests.
+- **Andrea**: docker‑compose, K8s manifests, adapter service & `/health`.
+- **Giuseppe**: simulator model & properties; adapter producer; topic/bootstrap config; basic tests/logs.
 
 ---
 
 ## 07/09 — 09:00–13:00 — Service 2: Aggregator (code + deploy)
 
-**Objective:** Implement and deploy the **Aggregator** to ingest device‑adapter data, validate, buffer, and expose it downstream.
+**Objective**  
+Implement the **Aggregator** to **consume from Kafka** (`device.readings`), validate and buffer, and re‑expose via API and/or republish to a new topic for downstream services.
 
 **Scope & Deliverables**
-- **API:** `POST /ingest` (canonical reading), `GET /latest?zoneId=…`, `GET /series?from=&to=`; `/health`.
-- **Validation & Buffering:** JSON schema validation; in‑memory ring buffer; simple time windowing.
-- **Integration:** wire the Device Adapter → Aggregator via HTTP.
-- **Deploy:** Dockerfile + compose; logs/metrics enabled.
-- **Verification:** end‑to‑end flow: Simulator → Device Adapter → Aggregator (latest/series endpoints return data).
+- **Consumer** from `device.readings`; **schema validation**; in‑memory time window buffer (e.g., last 15 min).
+- API: `GET /latest?zoneId=...`, `GET /series?zoneId=...&from=&to=`, `/health`.
+- **Dockerfile + compose** (depends on Kafka).
+- **Kubernetes**: `k8s/aggregator/` → `deployment.yaml`, `service.yaml`, `configmap.yaml`, `kustomization.yaml`.
+- **Verification**: device‑adapter → Kafka → aggregator consumer; `/latest` and `/series` return recent data; pod healthy.
 
 **Ownership**
-- **Andrea:** service skeleton, endpoints, compose wiring.
-- **Giuseppe:** schema validation, buffering/windowing logic, tests/logs.
+- **Andrea**: service skeleton, API, compose wiring, K8s manifests.
+- **Giuseppe**: consumer, schema validation, windowing logic, tests/logs.
 
 ---
 
 ## 07/09 — 15:00–19:00 — Service 3 (Part 1): MAPE — Monitor & Analyze (code + deploy)
 
-**Objective:** Deliver a first MAPE service focusing on **Monitor** (subscribe/pull from Aggregator) and **Analyze** (baseline + simple anomaly/comfort detection).
+**Objective**  
+Deliver **Monitor**  and **Analyze** (comfort/anomaly checks).
 
 **Scope & Deliverables**
-- **API:** `GET /status` (per zone), `/health`.
-- **Monitor:** periodic pull from Aggregator; maintain sliding state (avg, min/max, trend).
-- **Analyze:** comfort band check, simple anomaly flags (e.g., overheating, oscillation).
-- **Deploy:** Dockerfile + compose; structured logs.
-- **Verification:** Analyzer status reflects live data trends; health passes.
+- **Monitor**
+    - Reads from Aggregator API (not Kafka).
+    - API: `GET /status?zoneId=...` (⚠️ **added `zoneId` param**), `/health`.
+- **Analyze**
+    - Comfort band checks; basic anomaly flags (over/under‑shoot, oscillations).
+- **Dockerfile + compose** (depends on Kafka).
+- **Kubernetes**: `k8s/mape/monitor-analyze/` → `deployment.yaml`, `service.yaml`, `configmap.yaml`, `kustomization.yaml`.
+- **Verification**: `/status?zoneId=Z1` responds with current metrics & flags; pods healthy; logs show consumption.
 
 **Ownership**
-- **Andrea:** monitor pulling & state.
-- **Giuseppe:** analyze rules & thresholds; tests.
+- **Andrea**: monitor consumer, API & status endpoint, K8s manifests.
+- **Giuseppe**: analyze rules, thresholds, tests/logs.
 
 ---
 
 ## 10/09 — 15:00–19:00 — Service 3 (Part 2): MAPE — Plan & Execute (code + deploy)
 
-**Objective:** Complete MAPE with **Plan** (simple rule‑based policy) and **Execute** (actuator commands back to simulator via the Device Adapter).
+**Objective**  
+Complete **Plan** (rule‑based) and **Execute** (actuator commands back to the simulator via Device Adapter).
 
 **Scope & Deliverables**
-- **Plan:** rule set (e.g., if T_in > T_high → COOL_ON to target; if T_in < T_low → HEAT_ON).
-- **Execute:** call Device Adapter → Simulator `POST /actuator` with retry/backoff and ACK/NACK handling.
-- **API:** `POST /actions/test` (dry‑run plan for a snapshot), `GET /last-actions`.
-- **Deploy:** Dockerfile + compose; logs + basic alerting (failed command attempts).
-- **Verification:** closed loop — commands change HVAC state, simulator T_in responds as expected.
+- **Plan**: simple rules (e.g., if `t_in > T_high` → COOL_ON to target; if `t_in < T_low` → HEAT_ON).
+- **Execute**: call Device Adapter → Simulator `POST /actuator` with retry/ACK‑NACK handling and idempotency key.
+- API: `POST /actions/test` (dry‑run plan for a snapshot), `GET /last-actions`, `/health`.
+- **Dockerfile + compose**.
+- **Kubernetes**: `k8s/mape/plan-execute/` → `deployment.yaml`, `service.yaml`, `configmap.yaml`, `kustomization.yaml`.
+- **Verification**: closed loop — commands change HVAC state; simulator `T_in` responds; MAPE logs actions.
 
 **Ownership**
-- **Giuseppe:** planning rules, dry‑run endpoint, logging & retries.
-- **Andrea:** execute client, integration & compose, action endpoints.
+- **Giuseppe**: planning rules, dry‑run endpoint, retries/idempotency, tests.
+- **Andrea**: execute client & endpoints, compose & K8s wiring.
 
 ---
 
 ## 13/09 — 09:00–13:00 — Service 4: Ledger (code + deploy)
 
-**Objective:** Create a **Ledger** microservice to persist key events (readings snapshots, MAPE decisions, actuator commands).
+**Objective**  
+Persist events (selected readings, MAPE decisions/actions) into an **append‑only ledger**, exposing query APIs.
 
 **Scope & Deliverables**
-- **Storage:** append‑only local store (file/embedded DB) with integrity checks (e.g., checksum or hash chain).
-- **API:** `POST /events` (MAPE/agg record), `GET /events?type=&from=&to=&page=&size=`, `GET /events/{id}`; `/health`.
-- **Integration:** MAPE and Aggregator post events; include correlation IDs & timestamps.
-- **Deploy:** Dockerfile + compose; retention policy placeholder.
-- **Verification:** events stream is persisted and queryable; IDs are stable; basic pagination works.
+- Storage: append‑only store (file/embedded DB) with integrity (checksum or hash chain).
+- API: `POST /events` (writes from Aggregator/MAPE), `GET /events?type=&zoneId=&from=&to=&page=&size=`, `GET /events/{id}`, `/health`.
+- Ingestion from services via HTTP (or Kafka sink optional later). **This becomes the single source of truth** for higher layers.
+- **Dockerfile + compose**.
+- **Kubernetes**: `k8s/ledger/` → `deployment.yaml`, `service.yaml`, `configmap.yaml`, `kustomization.yaml`.
+- **Verification**: writes succeed with correlation IDs; pagination works; integrity check passes for a sample chain.
 
 **Ownership**
-- **Giuseppe:** event model, integrity (checksum/hash chain), write path & tests.
-- **Andrea:** read/query endpoints, pagination/filters, compose integration.
+- **Giuseppe**: event model & integrity chain, write path, tests.
+- **Andrea**: query endpoints, pagination/filters, compose + K8s integration.
 
 ---
 
-## 13/09 — 15:00–19:00 — Service 5: Assessment (code + deploy)
+## 13/09 — 15:00–19:00 — Service 5: Assessment (code + deploy; **reads from Ledger only**)
 
-**Objective:** Build **Assessment** to compute KPIs from the Ledger/Aggregator and expose them for downstream use.
+**Objective**  
+Compute **KPIs** strictly from the **Ledger** (no other upstream dependency) and expose them for consumers.
 
 **Scope & Deliverables**
-- **KPIs:** comfort‑time %, anomaly counts, average deviation from target, actuator on‑time %.
-- **API:** `GET /kpi/summary?zoneId=&from=&to=`, `GET /kpi/series?metric=&from=&to=`; `/health`.
-- **Integration:** reads from Ledger and Aggregator; caches recent windows.
-- **Deploy:** Dockerfile + compose; logs/tests.
-- **Verification:** KPIs reflect live runs and react to control policies.
+- KPIs: comfort‑time %, anomaly counts, mean deviation from target, actuator on‑time %.
+- API: `GET /kpi/summary?zoneId=&from=&to=`, `GET /kpi/series?metric=&zoneId=&from=&to=`, `/health`.
+- Data source: **Ledger only** (HTTP queries); internal cache for recent windows.
+- **Dockerfile + compose**.
+- **Kubernetes**: `k8s/assessment/` → `deployment.yaml`, `service.yaml`, `configmap.yaml`, `kustomization.yaml`.
+- **Verification**: KPIs reflect ledger content; time‑window filters work; service scales independently.
 
 **Ownership**
-- **Andrea:** API & caching; compose wiring.
-- **Giuseppe:** KPI formulas & validation; tests.
+- **Andrea**: API & caching; compose/K8s wiring.
+- **Giuseppe**: KPI formulas & validation; tests.
 
 ---
 
-## 14/09 — 09:00–13:00 — Service 6: Gamification (code + deploy)
+## 14/09 — 09:00–13:00 — Service 6: Gamification (code + deploy; **reads from Ledger only**)
 
-**Objective:** Implement **Gamification** consuming Assessment to produce scores and leaderboards.
+**Objective**  
+Compute **scores and leaderboards** strictly from the **Ledger**; fully independent from Assessment service.
 
 **Scope & Deliverables**
-- **Scoring rules:** weights on KPIs (e.g., comfort %, energy proxy, anomaly penalty).
-- **API:** `POST /score/recompute?zoneId=&from=&to=`, `GET /leaderboard?scope=building|floor|zone&page=&size=`; `/health`.
-- **Storage:** simple table/file for scores & snapshots.
-- **Deploy:** Dockerfile + compose.
-- **Verification:** recompute produces scores; leaderboard lists entities with deterministic ordering.
+- Scoring: weights on ledger‑derived KPIs/events (e.g., comfort %, energy‑proxy events, anomaly penalties) computed **internally**.
+- API: `POST /score/recompute?zoneId=&from=&to=`, `GET /leaderboard?scope=building|floor|zone&page=&size=`, `/health`.
+- Data source: **Ledger only** (HTTP queries); maintain scores store (file/embedded DB).
+- **Dockerfile + compose**.
+- **Kubernetes**: `k8s/gamification/` → `deployment.yaml`, `service.yaml`, `configmap.yaml`, `kustomization.yaml`.
+- **Verification**: recompute produces deterministic scores; leaderboard paging/sorting works; independent scaling verified.
 
 **Ownership**
-- **Giuseppe:** scoring design + recompute endpoint + tests.
-- **Andrea:** leaderboard endpoints + storage model + compose integration.
+- **Giuseppe**: scoring design + recompute endpoint + tests.
+- **Andrea**: leaderboard endpoints + storage model + compose/K8s integration.
 
 ---
 
-## 14/09 — 15:00–19:00 — System Hardening, Docs & Demo
+## 14/09 — 15:00–19:00 — System Hardening, Docs & Demo (compose + Kubernetes)
 
-**Objective:** End‑to‑end validation and packaging.
+**Objective**  
+End‑to‑end validation and packaging for **both docker‑compose and Kubernetes**.
 
 **Scope & Deliverables**
-- **E2E tests:** full chain **Simulator → Device Adapter → Aggregator → MAPE (M/A/P/E) → Ledger → Assessment → Gamification** with fault injection (network blips, actuator NACKs).
-- **Docs:** service READMEs, properties file reference, OpenAPI specs, architecture diagram, run‑book.
-- **DX:** one‑command `docker-compose up` for the entire stack; sample `.properties` and sample datasets.
-- **Demo:** scripted flows (heat wave, cold snap) showing closed‑loop control and score changes.
+- **E2E tests**: full chain **Simulator → Device Adapter → Kafka → Aggregator → MAPE (M/A/P/E) → Ledger → (Assessment || Gamification)**; inject faults (Kafka outage, actuator NACKs, network blips).
+- **Compose UX**: one‑command `docker-compose up` for the full stack; `.env` defaults; sample `sim.properties`.
+- **Kubernetes**: per‑service `deployment.yaml`, `service.yaml`, `configmap.yaml`, `kustomization.yaml`; root `k8s/` README with apply order; optional `kustomize build` or namespace overlay.
+- **Docs**: service READMEs, OpenAPI specs, architecture diagram, run‑book (compose + K8s), topic & schema reference.
+- **Demo**: scripted flows (heat wave/cold snap) showing closed‑loop control and score swings.
 
 **Ownership**
-- **Andrea:** compose orchestration, run‑book, demo scripts.
-- **Giuseppe:** OpenAPI, architecture doc, fault‑injection tests, properties reference.
+- **Andrea**: compose orchestration, K8s apply order & README, demo scripts.
+- **Giuseppe**: OpenAPI, architecture doc, fault‑injection tests, schema/topic doc.
+
+---
+
+### General notes
+- All services ship with **health/readiness endpoints**, **structured logging**, and **basic tests**.
+- Security (JWT/RBAC) and an API Gateway can be added in the next iteration; priority here is **service‑by‑service delivery with compose + K8s**.
+- Message schemas (JSON) and Kafka topics are documented and versioned; breaking changes require explicit migration notes.
