@@ -54,7 +54,7 @@ Deliver **Monitor**  and **Analyze** (comfort/anomaly checks).
 **Scope & Deliverables**
 - **Monitor**
     - Reads from Aggregator API (not Kafka).
-    - API: `GET /status?zoneId=...` (⚠️ **added `zoneId` param**), `/health`.
+    - API: `GET /status?zoneId=...`, `/health`.
 - **Analyze**
     - Comfort band checks; basic anomaly flags (over/under‑shoot, oscillations).
 - **Dockerfile + compose** (depends on Kafka).
