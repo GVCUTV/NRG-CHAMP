@@ -16,4 +16,4 @@ require github.com/felixge/httpsnoop v1.0.3 // indirect
 
 require it.uniroma2.dicii/nrg-champ/device v0.0.0-20231009102814-1f3a2b4c5d7e
 
-replace it.uniroma2.dicii/nrg-champ/device => ../device
+replace it.uniroma2.dicii/nrg-champ/device => ./../../device

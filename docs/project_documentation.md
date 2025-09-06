@@ -1,4 +1,4 @@
-# **NRG CHAMP**
+# NRG CHAMP
 
 ## Responsive Goal-driven Cooling and Heating Automated Monitoring Platform
 
@@ -6,11 +6,11 @@ Cantarini Andrea, Cantone Giuseppe Valerio
 
 ---
 
-1. # **Description**
+1. # Description
 
 NRG CHAMP is an advanced system designed for the efficient management of HVAC systems in large corporate and public buildings, with the primary goal of reducing energy consumption and promoting sustainable behaviors.
 
-## **1.1. Key Features**
+## 1.1. Key Features
 
 * **Data Collection and Environmental Monitoring:**  
   A dense network of IoT sensors continuously gathers essential parameters such as temperature and humidity, providing a precise and constant overview of both indoor and outdoor conditions.
@@ -24,21 +24,21 @@ NRG CHAMP is an advanced system designed for the efficient management of HVAC sy
 * **Data Analysis and Gamification:**  
   The platform processes the blockchain-stored data to generate performance scores. These scores power a gamification mechanism that incentivizes users to achieve energy-conscious targets. Competitions can be structured hierarchically — for instance, comparing different offices within the same building, floors, or even among various organizations — ensuring that every participant has the opportunity to excel, regardless of their initial ranking.
 
-## **1.2. Scalability and Adaptability**
+## 1.2. Scalability and Adaptability
 
 While the solution is primarily developed for large-scale, B2B deployments, its design is inherently scalable. With appropriate modifications, NRG CHAMP can be adapted to smaller settings such as apartment complexes or individual residences.
 
-## **1.3. Summary**
+## 1.3. Summary
 
 In summary, NRG CHAMP provides a holistic and innovative approach to energy management in buildings, combining real-time monitoring, intelligent control, blockchain traceability, and gamification to drive sustainable energy practices.
 
 ---
 
-# **2\. Software Requirements**
+# 2. Software Requirements
 
-## **2.1 Functional Requirements**
+## 2.1 Functional Requirements
 
-### **2.1.1. Data Collection and Environmental Monitoring**
+### 2.1.1. Data Collection and Environmental Monitoring
 
 * **Sensor Integration:**
   * Support for a wide range of IoT sensors to monitor temperature, humidity, energy consumption, and other relevant environmental parameters (e.g., CO₂ levels, occupancy).
@@ -47,7 +47,7 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
   * Collection and aggregation of sensor data for further analysis.
   * Support for data buffering and recovery in case of temporary network failures.
 
-### **2.1.2. Dynamic HVAC Control via MAPE Cycle**
+### 2.1.2. Dynamic HVAC Control via MAPE Cycle
 
 * **Monitoring Module:**
   * Continuously monitor real-time sensor data and energy consumption metrics.
@@ -60,7 +60,7 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
   * Send control commands to the HVAC systems to dynamically adjust operation parameters.
   * Provide feedback loops to refine the control strategy continuously.
 
-### **2.1.3. Blockchain Integration for Traceability**
+### 2.1.3. Blockchain Integration for Traceability
 
 * **Data Recording:**
   * Store collected sensor data and control actions in an immutable blockchain ledger.
@@ -69,7 +69,7 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
   * Provide APIs for external regulators and stakeholders to query the blockchain.
   * Implement access control to manage different user roles (e.g., administrators, auditors).
 
-###    **2.1.4. Data Analysis and Gamification**
+### 2.1.4. Data Analysis and Gamification
 
 * **Analytics Engine:**
   * Process historical and real-time data to compute performance metrics and energy consumption scores.
@@ -80,14 +80,14 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
   * Develop dashboards and visualizations to display performance scores, trends, gamification leaderboards, and real-time system status.
   * Support for multi-platform access (web, mobile).
 
-### **2.1.5. Scalability and Adaptability**
+### 2.1.5. Scalability and Adaptability
 
 * **Modular Design:**
   * Design the system architecture to allow scaling from large corporate/public buildings down to smaller units like apartment complexes.
 * **Configuration Management:**
   * Provide mechanisms for system configuration and parameter adjustments tailored to different building types.
 
-### **2.1.6. Interoperability and Integration**
+### 2.1.6. Interoperability and Integration
 
 * **API Services:**
   * Expose RESTful APIs for data access, control commands, and integration with third-party systems.
@@ -96,46 +96,45 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 
 ---
 
-## 
 
-## **2.2. Non-Functional Requirements**
+## 2.2. Non-Functional Requirements
 
-### **2.2.1. Performance**
+### 2.2.1. Performance
 
 * **Real-Time Response:**
   * Ensure that sensor data processing and HVAC control commands are executed with minimal latency.
 * **Scalability:**
   * The system must support the addition of millions of sensors and devices and thousands of organizations without performance degradation.
 
-### **2.2.2. Reliability and Availability**
+### 2.2.2. Reliability and Availability
 
 * **Fault Tolerance:**
   * Implement distributed architectures and redundancy strategies (e.g., Circuit Breaker pattern) to ensure high availability.
 * **Data Integrity:**
   * Guarantee that data recorded on the blockchain remains secure and tamper-proof.
 
-### **2.2.3. Security**
+### 2.2.3. Security
 
 * **Data Security:**
   * Encrypt data in transit and at rest, ensuring secure communication between sensors, control systems, and the blockchain.
 * **Access Control:**
   * Implement role-based access control (RBAC) for all modules, especially for blockchain data queries and control operations.
 
-### **2.2.4. Maintainability and Extensibility**
+### 2.2.4. Maintainability and Extensibility
 
 * **Modular Architecture:**
   * Use microservices architecture patterns (e.g., Database per Service, Saga) to support independent development and maintenance of components.
 * **Logging and Monitoring:**
   * Incorporate comprehensive logging and monitoring mechanisms for both system performance and security audits.
 
-### **2.2.5. Usability**
+### 2.2.5. Usability
 
 * **User-Friendly Interface:**
   * Design intuitive dashboards and control panels for both administrators and end-users.
 * **Customization:**
   * Allow customization of views and reports to cater to different user roles and building configurations.
 
-### **2.2.6. Compliance**
+### 2.2.6. Compliance
 
 * **Regulatory Compliance:**
   * Ensure the system adheres to relevant energy efficiency and data protection regulations.
@@ -144,9 +143,9 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 
 ---
 
-## **2.3. Technical Requirements**
+## 2.3. Technical Requirements
 
-### **2.3.1. Technology Stack**
+### 2.3.1. Technology Stack
 
 * **Programming Language:**
   * The system is implemented in Go for performance and concurrency.
@@ -157,12 +156,12 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 * **Database Systems:**
   * Use distributed databases where needed to manage sensor data and system logs.
 
-### **2.3.2. Architectural Patterns**
+### 2.3.2. Architectural Patterns
 
 * **Distributed System Patterns:**
   * Implement patterns like Circuit Breaker for fault tolerance, Database per Service for data isolation, and Saga for managing distributed transactions.
 
-### **2.3.3. Deployment and Operations**
+### 2.3.3. Deployment and Operations
 
 * **Cloud-Native Deployment:**
   * Design for deployment on cloud platforms using containerization (e.g., Docker) and orchestration (e.g., Kubernetes).
@@ -173,11 +172,11 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 
 ---
 
-# **3\. Blockchain Requirements**
+# 3. Blockchain Requirements
 
-## **3.1. Functional Requirements for Blockchain Archiviation**
+## 3.1. Functional Requirements for Blockchain Archiviation
 
-### **3.1.1. Data Packaging and Preparation**
+### 3.1.1. Data Packaging and Preparation
 
 * **F3.1.1.1 Data Aggregation:**  
   The system shall collect and aggregate sensor and control data, including timestamps and relevant metadata, from the data collection modules.
@@ -185,7 +184,7 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 * **F3.1.1.2 Data Validation:**  
   The system shall validate the integrity and completeness of the aggregated data before it is packaged for blockchain storage.
 
-### **3.1.2. Blockchain Transaction Management**
+### 3.1.2. Blockchain Transaction Management
 
 * **F3.1.2.1 Transaction Creation:**  
   The system shall create a new blockchain transaction that encapsulates the packaged data, including all necessary metadata (e.g., sensor ID, timestamp, data type).
@@ -196,7 +195,7 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 * **F3.1.2.3 Transaction Retry Mechanism:**  
   In the event of blockchain network unavailability or transaction failure, the system shall cache the transaction and automatically retry submission at regular intervals.
 
-### **3.1.3. Data Retrieval and API Integration**
+### 3.1.3. Data Retrieval and API Integration
 
 * **F3.1.3.1 API for Data Query:**  
   The system shall expose a RESTful API that allows authorized external users (e.g., regulators, auditors) to query and retrieve recorded blockchain data.
@@ -207,7 +206,7 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 * **F3.1.3.3 Data Formatting and Presentation:**  
   The system shall format and present queried blockchain data in a user-friendly format, supporting filters such as date range, sensor type, and building identifier.
 
-### **3.1.4. Audit and Logging**
+### 3.1.4. Audit and Logging
 
 * **F3.1.4.1 Transaction Logging:**  
   The system shall log every transaction submission, confirmation, and any error events associated with blockchain operations.
@@ -217,9 +216,9 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 
 ---
 
-## **3.2. Non-Functional Requirements for Blockchain Archiviation**
+## 3.2. Non-Functional Requirements for Blockchain Archiviation
 
-### **3.2.1. Performance**
+### 3.2.1. Performance
 
 * **NF3.2.1.1 Transaction Throughput:**  
   The blockchain archiviation component shall support a transaction throughput that meets or exceeds the expected data submission rate from the sensor network.
@@ -227,7 +226,7 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 * **NF3.2.1.2 Latency:**  
   The time between data packaging and blockchain confirmation should be minimized to support near-real-time transparency. Specific latency targets should be defined based on network performance benchmarks.
 
-### **3.2.2. Scalability**
+### 3.2.2. Scalability
 
 * **NF3.2.2.1 Horizontal Scalability:**  
   The system shall be capable of handling an increasing number of transactions by scaling horizontally (e.g., distributed nodes or services).
@@ -235,7 +234,7 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 * **NF3.2.2.2 Future Blockchain Integration:**  
   The design should allow integration with alternative or additional blockchain networks as system demands evolve.
 
-### **3.2.3. Security**
+### 3.2.3. Security
 
 * **NF3.2.3.1 Data Integrity:**  
   All data stored on the blockchain shall be tamper-proof and cryptographically secured to prevent unauthorized modifications.
@@ -246,7 +245,7 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 * **NF3.2.3.3 Encryption:**  
   Data in transit between the system and the blockchain, as well as sensitive data at rest, shall be encrypted using industry-standard cryptographic protocols.
 
-### **3.2.4. Reliability and Fault Tolerance**
+### 3.2.4. Reliability and Fault Tolerance
 
 * **NF3.2.4.1 Redundancy:**  
   The blockchain component shall include redundancy measures to ensure continued operation in case of node failures or network issues.
@@ -254,7 +253,7 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 * **NF3.2.4.2 Error Handling:**  
   The system shall implement robust error handling and recovery strategies for blockchain submission failures, including automatic retries and fallbacks.
 
-### **3.2.5. Maintainability and Extensibility**
+### 3.2.5. Maintainability and Extensibility
 
 * **NF3.2.5.1 Modular Architecture:**  
   The blockchain module shall be designed in a modular manner, allowing independent updates and easy integration of new blockchain features.
@@ -262,7 +261,7 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 * **NF3.2.5.2 Documentation:**  
   Comprehensive documentation must be provided for all blockchain-related processes, including API endpoints, transaction formats, and error handling procedures.
 
-### **3.2.6. Compliance and Auditability**
+### 3.2.6. Compliance and Auditability
 
 * **NF3.2.6.1 Regulatory Compliance:**  
   The system shall comply with relevant industry standards and regulatory requirements concerning data transparency, privacy, and energy efficiency reporting.
@@ -272,9 +271,9 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 
 ---
 
-# **4\. Software Use Case Document**
+# 4. Software Use Case Document
 
-## **4.1. Use Case: Data Collection and Environmental Monitoring**
+## 4.1. Use Case: Data Collection and Environmental Monitoring
 
 **Actors:**
 
@@ -316,7 +315,7 @@ This use case describes the process of continuously acquiring and aggregating en
 
 ---
 
-## **4.2. Use Case: Dynamic HVAC Control via MAPE Cycle**
+## 4.2. Use Case: Dynamic HVAC Control via MAPE Cycle
 
 **Actors:**
 
@@ -357,7 +356,7 @@ This use case explains how the system employs the MAPE (Monitor, Analyze, Plan, 
 
 ---
 
-## **4.3. Use Case: Blockchain-Enabled Data Recording and Transparency**
+## 4.3. Use Case: Blockchain-Enabled Data Recording and Transparency
 
 **Actors:**
 
@@ -399,7 +398,7 @@ This use case details the process of securely recording sensor and control data 
 
 ---
 
-## **4.4. Use Case: Data Analysis and Gamification**
+## 4.4. Use Case: Data Analysis and Gamification
 
 **Actors:**
 
@@ -441,9 +440,8 @@ This use case covers the analysis of collected data to compute energy consumptio
 
 ---
 
-## 
 
-## **4.5. Use Case: External Transparency and Regulatory Query**
+## 4.5. Use Case: External Transparency and Regulatory Query
 
 **Actors:**
 
@@ -485,7 +483,7 @@ This use case defines how external stakeholders (e.g., regulators, auditors) can
 
 ---
 
-## **4.6. Use Case: System Scalability and Adaptability Management**
+## 4.6. Use Case: System Scalability and Adaptability Management
 
 **Actors:**
 
@@ -527,11 +525,11 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-# **5\. System Architecture**
+# 5. Software Architecture
 
-## **5.1. Back-end Architecture**
+## 5.1. Back-end Architecture
 
-### **Components:**
+### Components:
 
 * **IoT Sensor Layer:**
 
@@ -595,7 +593,7 @@ This use case describes how system administrators configure and manage the platf
 
   * **Audit Logs:** Centralized logging for debugging, compliance, and auditing.
 
-### **Infrastructure:**
+### Infrastructure:
 
 * **Containerization:**
 
@@ -611,9 +609,9 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-## **5.1. API Layers**
+## 5.2. API Layers
 
-### **API Gateway:**
+### API Gateway:
 
 * **Function:**
 
@@ -623,7 +621,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Implements authentication, authorization (using RBAC), and rate limiting.
 
-### **RESTful API Services:**
+### RESTful API Services:
 
 * **Data Query API:**
 
@@ -649,11 +647,8 @@ This use case describes how system administrators configure and manage the platf
 
   * Supports notifications and score updates.
 
-### 
 
-### 
-
-### **Communication and Security:**
+### Communication and Security:
 
 * **Protocols:**
 
@@ -665,9 +660,9 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-## **3\. Distributed Data Flow**
+## 5.3. Distributed Data Flow
 
-### **Data Flow Overview:**
+### Data Flow Overview:
 
 1. **Data Acquisition:**
 
@@ -714,7 +709,7 @@ This use case describes how system administrators configure and manage the platf
   * **API Gateway → External Stakeholders:**  
     External systems and users can query data securely.
 
-### **Diagram (Conceptual Representation):**
+### Diagram (Conceptual Representation):
 
 \[Sensors\]   
 ↓ (MQTT/TLS)  
@@ -732,11 +727,8 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-## 
 
-## 
-
-## **Next Steps**
+## Next Steps
 
 * **Refinement:**
 
@@ -756,11 +748,11 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-# **6\. Core Modules**
+# 6. Core Modules
 
-## **6.1. Ingestion Service & Data Aggregation**
+## 6.1. Ingestion Service & Data Aggregation
 
-## **6.1.1. Ingestion Service**
+## 6.1.1. Ingestion Service
 
 * **Protocols Supported:**
 
@@ -782,7 +774,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Expose ingestion rate, error rate, and buffer size via Prometheus metrics.
 
-### **6.1.2. Data Aggregator**
+### 6.1.2. Data Aggregator
 
 * **Batching & Windowing:**
 
@@ -806,9 +798,9 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-## **6.2. MAPE Engine**
+## 6.2. MAPE Engine
 
-### **6.2.1. Monitor Module**
+### 6.2.1. Monitor Module
 
 * **Subscription:**
 
@@ -822,7 +814,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Publish real‑time KPI metrics (average temp/humidity, energy usage) for Prometheus.
 
-### **6.2.2. Analyze Module**
+### 6.2.2. Analyze Module
 
 * **Rule-Based Analysis:**
 
@@ -838,7 +830,7 @@ This use case describes how system administrators configure and manage the platf
 
 ### 
 
-### **6.2.3. Plan Module**
+### 6.2.3. Plan Module
 
 * **Optimization Strategies:**
 
@@ -852,7 +844,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Create “plan packets” containing zone ID, target setpoint, fan speed.
 
-### **6.2.4. Execute Module**
+### 6.2.4. Execute Module
 
 * **Command Dispatch:**
 
@@ -868,9 +860,9 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-## **6.3. Blockchain Simulation**
+## 6.3. Blockchain Simulation
 
-### **6.3.1. Transaction Builder**
+### 6.3.1. Transaction Builder
 
 * **Data Composition:**
 
@@ -880,7 +872,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Encode transactions as compact JSON or Protobuf messages.
 
-### **6.3.2. Local Ledger**
+### 6.3.2. Local Ledger
 
 * **Append‑Only Store:**
 
@@ -890,7 +882,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Group transactions into “blocks” at fixed intervals, compute hash chain.
 
-### **6.3.3. Retry & Cache Mechanism**
+### 6.3.3. Retry & Cache Mechanism
 
 * **Failure Simulation:**
 
@@ -900,7 +892,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Exponential back‑off retry; configurable max attempts before dead‑letter queue.
 
-### **6.3.4. Query Interface**
+### 6.3.4. Query Interface
 
 * **REST API Endpoints:**
 
@@ -914,13 +906,9 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-## 
+## 6.4. Analytics & Gamification
 
-## 
-
-## **6.4. Analytics & Gamification**
-
-### **6.4.1. Analytics Engine**
+### 6.4.1. Analytics Engine
 
 * **Data Sources:**
 
@@ -936,7 +924,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Future: consider real‑time stream processing (Kafka Streams/Flink).
 
-### **6.4.2. Scoring Module**
+### 6.4.2. Scoring Module
 
 * **Scoring Rules:**
 
@@ -950,7 +938,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Normalize scores to account for zone size or baseline consumption.
 
-### **6.4.3. Leaderboard Manager**
+### 6.4.3. Leaderboard Manager
 
 * **Public vs. Private:**
 
@@ -966,9 +954,9 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-## **6.5. API Endpoints**
+## 6.5. API Endpoints
 
-### **6.5.1. Authentication & Authorization**
+### 6.5.1. Authentication & Authorization
 
 * **JWT Tokens:**
 
@@ -978,13 +966,13 @@ This use case describes how system administrators configure and manage the platf
 
   * Admins can Override HVAC; Auditors can query Ledger; Occupants see only their zone.
 
-### **6.5.2. Sensor Data APIs**
+### 6.5.2. Sensor Data APIs
 
 * `GET /api/v1/sensors/{sensorId}/latest`
 
 * `GET /api/v1/sensors/{sensorId}/history?from=&to=&interval=`
 
-### **6.5.3. Control APIs**
+### 6.5.3. Control APIs
 
 `POST /api/v1/hvac/commands`
 
@@ -995,13 +983,13 @@ This use case describes how system administrators configure and manage the platf
 
 * `POST /api/v1/hvac/override` (admin only)
 
-### **6.5.4. Blockchain APIs**
+### 6.5.4. Blockchain APIs
 
 * `GET /api/v1/ledger/transactions` (with filter params)
 
 * `GET /api/v1/ledger/transaction/{txId}`
 
-### **6.5.5. Gamification APIs**
+### 6.5.5. Gamification APIs
 
 * `GET /api/v1/leaderboards/{groupId}`
 
@@ -1011,9 +999,9 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-## **6.6. Initial Dashboard Requirements**
+## 6.6. Initial Dashboard Requirements
 
-### **6.6.1. Real‑Time Sensor Dashboard**
+### 6.6.1. Real‑Time Sensor Dashboard
 
 * **Widgets:**
 
@@ -1025,7 +1013,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Live via WebSockets; fallback to polling every 5 s.
 
-### **6.6.2. HVAC Control Panel**
+### 6.6.2. HVAC Control Panel
 
 * **Display:**
 
@@ -1039,7 +1027,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Latest 10 commands with timestamps and ACK status.
 
-### **6.6.3. Blockchain Audit Viewer**
+### 6.6.3. Blockchain Audit Viewer
 
 * **Table View:**
 
@@ -1049,7 +1037,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Date range picker, zone selector, transaction type.
 
-### **6.6.4. Gamification Leaderboard**
+### 6.6.4. Gamification Leaderboard
 
 * **Ranking Table:**
 
@@ -1059,7 +1047,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Highlight the currently viewed zone’s position.
 
-### **6.6.5. Notifications & Alerts**
+### 6.6.5. Notifications & Alerts
 
 * **Banner Alerts:**
 
@@ -1071,9 +1059,9 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-# **7\. Blockchain Integration**
+# 7. Blockchain Integration
 
-### **7.1. Overview**
+### 7.1. Overview
 
 The blockchain integration ensures immutable, verifiable storage of both raw sensor data and control actions. It comprises three main sub‑systems:
 
@@ -1085,11 +1073,11 @@ The blockchain integration ensures immutable, verifiable storage of both raw sen
 
    ---
 
-   ### **7.2. Component Diagram**
+   ### 7.2. Component Diagram
 
 *(See Figure 1 above TODO DA FILLARE CON DIAGRAMMA SU DRAW.IO)*
 
-#### **7.2.1. Data Flow**
+#### 7.2.1. Data Flow
 
 1. **Data Aggregator → Transaction Builder**
 
@@ -1115,11 +1103,11 @@ The blockchain integration ensures immutable, verifiable storage of both raw sen
 
    ---
 
-   ### **7.3. Sequence Diagram: Transaction Flow**
+   ### 7.3. Sequence Diagram: Transaction Flow
 
 *(See Figure 2 above TODO FARE DIAGRAMMA CON DRAW.IO)*
 
-#### **7.3.1. Basic Flow**
+#### 7.3.1. Basic Flow
 
 1. **sendBatch(data)** from Data Aggregator to Transaction Builder
 
@@ -1131,7 +1119,7 @@ The blockchain integration ensures immutable, verifiable storage of both raw sen
 
 5. **store locally & update status** in the local ledger
 
-   #### **7.3.2. Alternative & Error Flows**
+   #### 7.3.2. Alternative & Error Flows
 
 * **Network Unavailable:**
 
@@ -1147,9 +1135,9 @@ The blockchain integration ensures immutable, verifiable storage of both raw sen
 
   ---
 
-  ### **7.4. REST API Specification**
+  ### 7.4. REST API Specification
 
-  #### **7.4.1. Security**
+  #### 7.4.1. Security
 
 * **Scheme:** BearerAuth (JWT)
 
@@ -1159,14 +1147,14 @@ The blockchain integration ensures immutable, verifiable storage of both raw sen
 
   * `admin`: full access including transaction submission stats
 
-  #### **7.4.2. Endpoints**
+  #### 7.4.2. Endpoints
 
 | Path | Method | Description | Auth |
 | :---: | :---: | :---: | :---: |
 | `/v1/ledger/transactions` | GET | List all transactions with filtering & pagination | auditor |
 | `/v1/ledger/transactions/{txId}` | GET | Retrieve a single transaction by ID | auditor |
 
-##### **7.4.2.1. Query Parameters for `/transactions`**
+##### 7.4.2.1. Query Parameters for `/transactions`
 
 * `start` (string, date-time, optional) – ISO 8601 start timestamp
 
@@ -1178,7 +1166,7 @@ The blockchain integration ensures immutable, verifiable storage of both raw sen
 
 * `pageSize` (integer, default 20, max 100\) – Items per page
 
-  ##### **7.4.2.2. Responses**
+  ##### 7.4.2.2. Responses
 
 **(TODO SISTEMARE VISUALIZZAZIONE FILE JSON)**  
 **200 OK** –
@@ -1445,7 +1433,7 @@ security:
     
   ---
 
-  ### **7.5. Configuration & Extensibility**
+  ### 7.5. Configuration & Extensibility
 
 * **Blockchain Provider:** Configurable endpoint and credentials (e.g. Hyperledger, Ethereum testnet).
 
