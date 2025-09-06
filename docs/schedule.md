@@ -16,8 +16,8 @@ Deliver the **external simulator** and the first internal microservice (**Device
     - **Dockerfile + docker‑compose service** (depends on Kafka).
     - **Kubernetes**: `k8s/device-adapter/` → `deployment.yaml`, `service.yaml`, `configmap.yaml` (connection/env), `kustomization.yaml`.
 - **Kafka (dev)**
-    - Compose: single‑broker **Kafka + Zookeeper** (or Redpanda). Topic `device.readings` created on start.
-    - K8s: single‑broker dev manifest (Bitnami/Strimzi single node) with topic CR or init‑job to create `device.readings`.
+    - Compose: single‑broker **Kafka + Zookeeper**. Topic `device.readings` created on start.
+    - K8s: single‑broker dev manifest (Bitnami single node) with topic CR or init‑job to create `device.readings`.
 - **Verification**
     - End‑to‑end local: changes to actuator via simulator affect `T_in`; adapter publishes to `device.readings`.
     - `kubectl apply` brings up device‑adapter; logs show successful publish.
@@ -49,7 +49,7 @@ Implement the **Aggregator** to **consume from Kafka** (`device.readings`), vali
 ## 07/09 — 15:00–19:00 — Service 3 (Part 1): MAPE — Monitor & Analyze (code + deploy)
 
 **Objective**  
-Deliver **Monitor**  and **Analyze** (comfort/anomaly checks).
+Deliver **Monitor** and **Analyze** (comfort/anomaly checks).
 
 **Scope & Deliverables**
 - **Monitor**
@@ -111,7 +111,7 @@ Persist events (selected readings, MAPE decisions/actions) into an **append‑on
 Compute **KPIs** strictly from the **Ledger** (no other upstream dependency) and expose them for consumers.
 
 **Scope & Deliverables**
-- KPIs: comfort‑time %, anomaly counts, mean deviation from target, actuator on‑time %.
+- KPIs: comfort‑time %, anomaly counts, mean deviation from target, actuator on‑time % (rivedere, anche per gamification).
 - API: `GET /kpi/summary?zoneId=&from=&to=`, `GET /kpi/series?metric=&zoneId=&from=&to=`, `/health`.
 - Data source: **Ledger only** (HTTP queries); internal cache for recent windows.
 - **Dockerfile + compose**.
