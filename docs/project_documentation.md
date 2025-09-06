@@ -666,48 +666,48 @@ This use case describes how system administrators configure and manage the platf
 
 1. **Data Acquisition:**
 
-  * **Sensors → Data Ingestion Service:**  
-    Sensors capture environmental parameters and send data via secure protocols.
+* **Sensors → Data Ingestion Service:**  
+  Sensors capture environmental parameters and send data via secure protocols.
 
 2. **Data Processing:**
 
-  * **Data Ingestion → Message Queue:**  
-    Ingested data is pushed into a message queue, decoupling ingestion from processing.
+* **Data Ingestion → Message Queue:**  
+  Ingested data is pushed into a message queue, decoupling ingestion from processing.
 
-  * **Message Queue → Data Aggregator:**  
-    The aggregator retrieves messages, validates and pre-processes data, then forwards it.
+* **Message Queue → Data Aggregator:**  
+  The aggregator retrieves messages, validates and pre-processes data, then forwards it.
 
 3. **MAPE Cycle and Control:**
 
-  * **Data Aggregator → MAPE Engine:**  
-    Pre-processed data feeds into the MAPE Engine.
+* **Data Aggregator → MAPE Engine:**  
+  Pre-processed data feeds into the MAPE Engine.
 
-  * **MAPE Engine → HVAC Systems:**  
-    Optimized control commands are sent to HVAC units, and feedback is received.
+* **MAPE Engine → HVAC Systems:**  
+  Optimized control commands are sent to HVAC units, and feedback is received.
 
 4. **Blockchain Archiviation:**
 
-  * **Data Aggregator → Blockchain Module:**  
-    Aggregated data and control logs are packaged into transactions.
+* **Data Aggregator → Blockchain Module:**  
+  Aggregated data and control logs are packaged into transactions.
 
-  * **Blockchain Module → Blockchain Network:**  
-    Transactions are submitted; failed transactions are retried and logged.
+* **Blockchain Module → Blockchain Network:**  
+  Transactions are submitted; failed transactions are retried and logged.
 
 5. **Analytics and Gamification:**
 
-  * **Data Aggregator / MAPE Feedback → Analytics Engine:**  
-    Collected data, performance metrics, and control feedback are analyzed.
+* **Data Aggregator / MAPE Feedback → Analytics Engine:**  
+  Collected data, performance metrics, and control feedback are analyzed.
 
-  * **Analytics Engine → Gamification Module:**  
-    Results are processed into scores and updated in leaderboards.
+* **Analytics Engine → Gamification Module:**  
+  Results are processed into scores and updated in leaderboards.
 
 6. **API and External Access:**
 
-  * **Internal Databases → API Gateway:**  
-    Processed data, analytics, and blockchain records are accessible via RESTful APIs.
+* **Internal Databases → API Gateway:**  
+  Processed data, analytics, and blockchain records are accessible via RESTful APIs.
 
-  * **API Gateway → External Stakeholders:**  
-    External systems and users can query data securely.
+* **API Gateway → External Stakeholders:**  
+  External systems and users can query data securely.
 
 ### Diagram (Conceptual Representation):
 
@@ -748,7 +748,28 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-# 6. Core Modules
+
+# 6. System Architecture
+
+**External View and Interaction Model.** NRG CHAMP is **internally distributed** (a set of independently deployable, containerized microservices) while it **presents itself as a single platform** to external parties.
+
+- **Edge (User Side).** Only **sensors** and **actuators** are deployed at the facility. Both include **electrical consumption metering** (e.g., per‑unit HVAC power/energy meters or smart outlets) and are connected to the Internet. They publish telemetry (environmental and consumption) and receive actuation commands over secure channels (MQTT over TLS and/or HTTPS).
+- **Core (NRG CHAMP Side).** The NRG CHAMP back end ingests telemetry and issues control decisions through its services (Ingestion/Aggregation, MAPE – Monitor/Analyze/Plan/Execute, Ledger/Blockchain, Analytics, Gamification, Assessment, API Gateway). Control actions are derived from sensor observations and policy, and are pushed to actuators.
+- **Unified Access.** External clients (dashboards, auditors, third‑party BMS) interact through **unified APIs** (REST/WebSocket) protected by **JWT‑based authentication and RBAC**. Internal distribution (service discovery, messaging, persistence) is abstracted away from external consumers to preserve a single‑platform experience.
+
+# 7. Facility & Asset Topology
+
+NRG CHAMP models facilities and assets using a **hierarchical topology** to support control, reporting, and gamification at multiple granularities.
+
+- **Level 0 — Room.** A single room equipped with a **sensor** (temperature / humidity / CO₂ / occupancy) and an **actuator** (HVAC unit, fan‑coil, VAV, smart thermostat), both with **electrical consumption metering**.
+- **Level 1 — Group of Rooms.** A set of rooms, optionally with a **shared central room** (e.g., corridor, waiting area, printer area) where metrics and policies can be aggregated.
+- **Level 2 — Floor.** A group of **room groups** (Level 1), optionally with **shared central spaces** (stair/elevator lobbies, break areas). Enables intra‑floor coordination of thermal/energy behavior.
+- **Level 3 — Building.** A set of floors, optionally with **shared central spaces** (lobby, waiting areas, break areas). Enables building‑wide optimization strategies.
+- **Level 4 — Campus / Group of Buildings.** Multiple buildings, optionally with a **central building** (e.g., a hospital central block coordinating department pavilions). Enables multi‑site policies, consolidated reporting, and cross‑site rankings.
+
+**Operational Implications.** **MAPE policies** and **KPI/leaderboard views** can be applied at any level; **energy dependencies and constraints** (load limits, time windows, comfort) can be modeled consistently along the hierarchy.
+
+# 8. Core Modules
 
 ## 6.1. Ingestion Service & Data Aggregation
 
@@ -1059,7 +1080,7 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-# 7. Blockchain Integration
+# 9. Blockchain Integration
 
 ### 7.1. Overview
 
@@ -1081,29 +1102,29 @@ The blockchain integration ensures immutable, verifiable storage of both raw sen
 
 1. **Data Aggregator → Transaction Builder**
 
-  * **Responsibility:** Receives cleaned, batched sensor readings and MAPE control events.
+* **Responsibility:** Receives cleaned, batched sensor readings and MAPE control events.
 
-  * **Interface:** In‐memory queue (Kafka/RabbitMQ).
+* **Interface:** In‐memory queue (Kafka/RabbitMQ).
 
 2. **Transaction Builder → Blockchain Module**
 
-  * **Responsibility:** Serializes data into a compact transaction format, appends metadata (zoneId, timestamp, type).
+* **Responsibility:** Serializes data into a compact transaction format, appends metadata (zoneId, timestamp, type).
 
 3. **Blockchain Module → Blockchain Network**
 
-  * **Responsibility:** Submits transactions to the chosen blockchain node; on failure, caches locally and retries.
+* **Responsibility:** Submits transactions to the chosen blockchain node; on failure, caches locally and retries.
 
 4. **API Gateway ↔ Ledger Query API**
 
-  * **Responsibility:** Routes incoming REST calls to the Ledger Query API; enforces JWT/RBAC.
+* **Responsibility:** Routes incoming REST calls to the Ledger Query API; enforces JWT/RBAC.
 
 5. **Ledger Query API → External Auditors / Dashboards**
 
-  * **Responsibility:** Returns paginated, filterable transaction data for audit and display.
+* **Responsibility:** Returns paginated, filterable transaction data for audit and display.
 
    ---
 
-   ### 7.3. Sequence Diagram: Transaction Flow
+### 7.3. Sequence Diagram: Transaction Flow
 
 *(See Figure 2 above TODO FARE DIAGRAMMA CON DRAW.IO)*
 
