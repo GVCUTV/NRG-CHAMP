@@ -525,11 +525,15 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-# 5. Software Architecture
+# 5. Architecture
 
-## 5.1. Back-end Architecture
+## 5.1. Software Architecture
 
-### Components:
+**Deployment Model.** Each NRG CHAMP service is deployed as a **standalone microservice**, packaged as its own container image and independently scalable under Kubernetes. Services communicate over well-defined internal APIs and message channels; failure isolation, rolling upgrades, and horizontal scaling are handled per service.
+
+### 5.1.1 Back-end Architecture
+
+#### Components:
 
 * **IoT Sensor Layer:**
 
@@ -593,7 +597,7 @@ This use case describes how system administrators configure and manage the platf
 
   * **Audit Logs:** Centralized logging for debugging, compliance, and auditing.
 
-### Infrastructure:
+#### Infrastructure:
 
 * **Containerization:**
 
@@ -609,9 +613,9 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-## 5.2. API Layers
+### 5.1.2 API Layers
 
-### API Gateway:
+#### API Gateway:
 
 * **Function:**
 
@@ -621,7 +625,7 @@ This use case describes how system administrators configure and manage the platf
 
   * Implements authentication, authorization (using RBAC), and rate limiting.
 
-### RESTful API Services:
+#### RESTful API Services:
 
 * **Data Query API:**
 
@@ -648,7 +652,7 @@ This use case describes how system administrators configure and manage the platf
   * Supports notifications and score updates.
 
 
-### Communication and Security:
+#### Communication and Security:
 
 * **Protocols:**
 
@@ -660,9 +664,9 @@ This use case describes how system administrators configure and manage the platf
 
 ---
 
-## 5.3. Distributed Data Flow
+### 5.1.3 Distributed Data Flow
 
-### Data Flow Overview:
+#### Data Flow Overview:
 
 1. **Data Acquisition:**
 
@@ -709,7 +713,7 @@ This use case describes how system administrators configure and manage the platf
 * **API Gateway → External Stakeholders:**  
   External systems and users can query data securely.
 
-### Diagram (Conceptual Representation):
+#### Diagram (Conceptual Representation):
 
 \[Sensors\]   
 ↓ (MQTT/TLS)  
@@ -728,28 +732,7 @@ This use case describes how system administrators configure and manage the platf
 ---
 
 
-## Next Steps
-
-* **Refinement:**
-
-  * Collaborate with development teams to refine component boundaries and protocols.
-
-* **Prototyping:**
-
-  * Develop low-fidelity prototypes for critical modules (e.g., data ingestion, MAPE engine, blockchain integration).
-
-* **Validation:**
-
-  * Validate data flow and integration points through iterative testing in a simulated environment.
-
-* **Documentation:**
-
-  * Update architectural documents as design details solidify.
-
----
-
-
-# 6. System Architecture
+## 5.2. System Architecture
 
 **External View and Interaction Model.** NRG CHAMP is **internally distributed** (a set of independently deployable, containerized microservices) while it **presents itself as a single platform** to external parties.
 
@@ -757,7 +740,7 @@ This use case describes how system administrators configure and manage the platf
 - **Core (NRG CHAMP Side).** The NRG CHAMP back end ingests telemetry and issues control decisions through its services (Ingestion/Aggregation, MAPE – Monitor/Analyze/Plan/Execute, Ledger/Blockchain, Analytics, Gamification, Assessment, API Gateway). Control actions are derived from sensor observations and policy, and are pushed to actuators.
 - **Unified Access.** External clients (dashboards, auditors, third‑party BMS) interact through **unified APIs** (REST/WebSocket) protected by **JWT‑based authentication and RBAC**. Internal distribution (service discovery, messaging, persistence) is abstracted away from external consumers to preserve a single‑platform experience.
 
-# 7. Facility & Asset Topology
+## 5.3. Facility & Asset Topology
 
 NRG CHAMP models facilities and assets using a **hierarchical topology** to support control, reporting, and gamification at multiple granularities.
 
@@ -769,7 +752,17 @@ NRG CHAMP models facilities and assets using a **hierarchical topology** to supp
 
 **Operational Implications.** **MAPE policies** and **KPI/leaderboard views** can be applied at any level; **energy dependencies and constraints** (load limits, time windows, comfort) can be modeled consistently along the hierarchy.
 
-# 8. Core Modules
+## 5.4. Microservices Patterns Application
+
+**Intent.** Apply proven microservice patterns to meet scalability, resilience, and traceability goals.
+
+- **CQRS.** The **Ledger** consolidates immutable write‑optimized records from both the **Data Aggregator** (sensor batches/summaries) and the **MAPE Engine** (control actions/outcomes). Read paths for audits and dashboards are optimized and decoupled from writes, allowing independent scaling.
+- **Database per Service.** The **Data Aggregator** and **MAPE Engine** maintain **private databases** for operational needs (time‑series buffers, windows/baselines, plans). This preserves schema autonomy and avoids cross‑service coupling.
+- **Service Registry.** All services rely on a **service registry** (or Kubernetes service discovery) to locate peers, enabling location transparency and progressive rollouts.
+- **Circuit Breaker.** Clients enforce **circuit breakers** when calling downstream services to avoid request flooding and cascading failures on node outages; retries/back‑off and bulkheads are applied at client boundaries.
+
+**Outcome.** These patterns isolate failures, support the independent evolution of services, and keep the ledger’s audit trail robust while operational components scale as needed.
+# 6. Core Modules
 
 ## 6.1. Ingestion Service & Data Aggregation
 
@@ -1080,7 +1073,7 @@ NRG CHAMP models facilities and assets using a **hierarchical topology** to supp
 
 ---
 
-# 9. Blockchain Integration
+# 7. Blockchain Integration
 
 ### 7.1. Overview
 
