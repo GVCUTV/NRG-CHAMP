@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	log "log/slog"
 	"math"
 	"net/http"
 	"os"
@@ -20,11 +20,6 @@ import (
 
 	"github.com/segmentio/kafka-go"
 )
-
-// ---- Logging helpers ----
-func infof(format string, v ...any)  { log.Printf("[INFO] "+format, v...) }
-func warnf(format string, v ...any)  { log.Printf("[WARN] "+format, v...) }
-func errorf(format string, v ...any) { log.Printf("[ERROR] "+format, v...) }
 
 // ---- UUIDv4 (no external deps) ----
 func uuidv4() string {
@@ -39,7 +34,6 @@ func uuidv4() string {
 	return fmt.Sprintf("%s-%s-%s-%s-%s", hexs[0:8], hexs[8:12], hexs[12:16], hexs[16:20], hexs[20:32])
 }
 
-// ---- Device & Reading types ----
 type DeviceType string
 
 const (
@@ -56,10 +50,8 @@ const (
 	ModeOn  HVACMode = "ON"
 )
 
-// For ventilation: levels are 0,25,50,75,100
 type VentPhase int
 
-// ---- Config ----
 type SimConfig struct {
 	ZoneID     string
 	ListenAddr string
@@ -118,7 +110,7 @@ func getf(m map[string]string, key string, def float64) float64 {
 			return f
 		}
 	}
-	infof("Using default for %s = %v", key, def)
+	log.Info("Using default for %s = %v", key, def)
 	return def
 }
 
@@ -128,7 +120,7 @@ func getd(m map[string]string, key string, def time.Duration) time.Duration {
 			return d
 		}
 	}
-	infof("Using default for %s = %v", key, def)
+	log.Info("Using default for %s = %v", key, def)
 	return def
 }
 
@@ -144,7 +136,6 @@ func splitCSV(s string) []string {
 	return out
 }
 
-// ---- Simulator state ----
 type Simulator struct {
 	cfg SimConfig
 
@@ -153,7 +144,7 @@ type Simulator struct {
 	tIn  float64
 	tOut float64
 
-	// actuators state
+	// actuator state
 	heat HVACMode
 	cool HVACMode
 	vent VentPhase
@@ -249,7 +240,6 @@ func (s *Simulator) integrateEnergy(now time.Time) {
 	s.fanKWh += (fanW * dt) / 1000.0
 }
 
-// Kafka message model
 type Reading struct {
 	DeviceID   string     `json:"deviceId"`
 	DeviceType DeviceType `json:"deviceType"`
@@ -285,12 +275,16 @@ func (s *Simulator) publish(ctx context.Context, msg Reading) error {
 }
 
 // HTTP handlers
-func (s *Simulator) handleHealth(w http.ResponseWriter, r *http.Request) {
+func (s *Simulator) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
+	_, err := w.Write([]byte("ok"))
+	if err != nil {
+		log.Error("failed to write health response: %v", err)
+		return
+	}
 }
 
-func (s *Simulator) handleStatus(w http.ResponseWriter, r *http.Request) {
+func (s *Simulator) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	resp := map[string]any{
@@ -313,7 +307,11 @@ func (s *Simulator) handleStatus(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	err := json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		log.Error("failed to encode status response: %v", err)
+		return
+	}
 }
 
 func (s *Simulator) handleCmdHeating(w http.ResponseWriter, r *http.Request) {
@@ -458,11 +456,11 @@ func newKafkaWriter(brokers []string, topic string) *kafka.Writer {
 func main() {
 	cfg, err := buildConfig()
 	if err != nil {
-		errorf("configuration error: %v", err)
+		log.Error("configuration error: %v", err)
 		os.Exit(1)
 	}
 
-	infof("Starting room-simulator zone=%s listen=%s brokers=%v topic=%s",
+	log.Info("Starting room-simulator zone=%s listen=%s brokers=%v topic=%s",
 		cfg.ZoneID, cfg.ListenAddr, cfg.KafkaBrokers, cfg.TopicPrefix+"."+cfg.ZoneID)
 
 	sim := &Simulator{
@@ -481,7 +479,12 @@ func main() {
 
 	topic := sim.topic()
 	sim.writer = newKafkaWriter(cfg.KafkaBrokers, topic)
-	defer sim.writer.Close()
+	defer func(writer *kafka.Writer) {
+		err := writer.Close()
+		if err != nil {
+			log.Error("failed to close kafka writer: %v", err)
+		}
+	}(sim.writer)
 
 	// Thermal integration loop
 	go func() {
@@ -519,7 +522,7 @@ func main() {
 					Reading:    TempReading{TempC: temp},
 				}
 				if err := sim.publish(ctx, msg); err != nil {
-					warnf("publish temp failed: %v", err)
+					log.Warn("publish temp failed: %v", err)
 				}
 			case <-sim.stopC:
 				return
@@ -550,7 +553,7 @@ func main() {
 					Reading:    ActuatorReading{State: map[bool]string{true: "ON", false: "OFF"}[on], PowerW: p, EnergyKWh: kwh},
 				}
 				if err := sim.publish(ctx, msg); err != nil {
-					warnf("publish heat failed: %v", err)
+					log.Warn("publish heat failed: %v", err)
 				}
 			case <-sim.stopC:
 				return
@@ -581,7 +584,7 @@ func main() {
 					Reading:    ActuatorReading{State: map[bool]string{true: "ON", false: "OFF"}[on], PowerW: p, EnergyKWh: kwh},
 				}
 				if err := sim.publish(ctx, msg); err != nil {
-					warnf("publish cool failed: %v", err)
+					log.Warn("publish cool failed: %v", err)
 				}
 			case <-sim.stopC:
 				return
@@ -621,7 +624,7 @@ func main() {
 					Reading:    ActuatorReading{State: fmt.Sprintf("%d", level), PowerW: p, EnergyKWh: kwh},
 				}
 				if err := sim.publish(ctx, msg); err != nil {
-					warnf("publish fan failed: %v", err)
+					log.Warn("publish fan failed: %v", err)
 				}
 			case <-sim.stopC:
 				return
@@ -629,7 +632,7 @@ func main() {
 		}
 	}()
 
-	// HTTP Server for health/status & commands
+	// HTTP Server for health/status and commands
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", sim.handleHealth)
 	mux.HandleFunc("/status", sim.handleStatus)
@@ -646,9 +649,9 @@ func main() {
 	}
 
 	go func() {
-		infof("room-simulator listening on %s", cfg.ListenAddr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errorf("http server error: %v", err)
+		log.Info("room-simulator listening on %s", cfg.ListenAddr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Error("http server error: %v", err)
 		}
 	}()
 
@@ -656,10 +659,10 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
 	<-stop
-	infof("shutting down...")
+	log.Info("shutting down...")
 	close(sim.stopC)
 	cancel()
 	_ = srv.Close()
 	_ = sim.writer.Close()
-	infof("bye")
+	log.Info("bye")
 }
