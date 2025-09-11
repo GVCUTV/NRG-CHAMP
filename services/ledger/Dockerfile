@@ -1,37 +1,15 @@
-# Stage 1: Build the ledger archiviation service
-FROM golang:1.22.7-alpine AS builder
-
-ENV CGO_ENABLED=0 \
-    GOOS=linux \
-    GOARCH=amd64
-
-WORKDIR /app
-
-# Copy go.mod and go.sum (from root or local module)
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy the full project to resolve imports
+// v1
+// Dockerfile
+FROM golang:1.22-alpine AS build
+WORKDIR /src
 COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+	go build -o /out/ledger ./...
 
-# Build the ledger binary
-RUN go build -o ledger-app ./cmd/ledger
-
-# Stage 2: Minimal runtime container
-FROM alpine:latest
-
+FROM alpine:3.20
 WORKDIR /app
-
-COPY --from=builder /app/ledger-app .
-
-# Logging via env vars
-ENV LOG_LEVEL=info
-ENV LOG_FORMAT=json
-
-# Health check via HTTP (adjust port/endpoint if needed)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
-
-EXPOSE 8080
-
-ENTRYPOINT ["./ledger-app"]
+COPY --from=build /out/ledger /usr/local/bin/ledger
+RUN adduser -D -H -u 10001 ledger && mkdir -p /app/data /app/logs && chown -R ledger:ledger /app
+USER ledger
+EXPOSE 8083
+ENTRYPOINT ["/usr/local/bin/ledger"]
