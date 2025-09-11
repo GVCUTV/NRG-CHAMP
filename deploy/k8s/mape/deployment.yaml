@@ -1,0 +1,30 @@
+// v1
+// k8s/mape/full/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mape-full
+  labels: { app: mape-full }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mape-full }
+  template:
+    metadata:
+      labels: { app: mape-full }
+    spec:
+      containers:
+        - name: mape-full
+          image: nrg-champ/mape-full:latest
+          imagePullPolicy: IfNotPresent
+          ports: [ { containerPort: 8090, name: http } ]
+          envFrom:
+            - configMapRef: { name: mape-full }
+          volumeMounts:
+            - name: targets
+              mountPath: /app/config
+              readOnly: true
+      volumes:
+        - name: targets
+          configMap:
+            name: mape-full-targets
