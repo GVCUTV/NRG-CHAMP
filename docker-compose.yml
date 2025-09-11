@@ -83,7 +83,36 @@ services:
         fi ;
       done'
     networks: [ nrg-net ]
-
+  mape-full:
+    build:
+      context: ./mape/full
+    image: nrg-champ/mape-full:local
+    container_name: mape-full
+    environment:
+      - ENV=dev
+      - LISTEN_ADDR=:8090
+      - KAFKA_BROKERS=kafka:9092
+      - TOPIC_PREFIX=device.readings
+      - COMMAND_TOPIC_PREFIX=device.commands
+      - CONSUMER_GROUP=mape-full
+      - CONTROL_INTERVAL=5s
+      - DEADBAND_C=0.4
+      - KP=12
+      - MAX_FAN_PCT=100
+      - TARGETS_FILE=/app/config/targets.properties
+      - TARGETS_RELOAD_EVERY=15s
+      - DEFAULT_TARGET_C=22.0
+      - EXECUTE_MODE=http
+      - ROOM_HTTP_BASE=http://room-simulator:8080
+      - LOG_LEVEL=INFO
+      - LOG_FILE=/var/log/mape/mape.log
+    volumes:
+      - ./mape/full/config:/app/config:ro
+    ports:
+      - "8090:8090"
+    depends_on:
+      - kafka
+    restart: unless-stopped
 
 networks:
   nrg-net: {}

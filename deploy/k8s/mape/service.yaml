@@ -1,0 +1,14 @@
+// v1
+// k8s/mape/full/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mape-full
+  labels: { app: mape-full }
+spec:
+  selector: { app: mape-full }
+  ports:
+    - name: http
+      port: 8090
+      targetPort: 8090
+  type: ClusterIP

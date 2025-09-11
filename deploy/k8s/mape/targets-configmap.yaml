@@ -1,0 +1,11 @@
+// v1
+// k8s/mape/full/targets-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mape-full-targets
+data:
+  targets.properties: |
+    # roomId=targetTempC
+    zone-A=22.0
+    zone-B=23.0
