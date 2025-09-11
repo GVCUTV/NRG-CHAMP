@@ -114,6 +114,18 @@ services:
       - kafka
     restart: unless-stopped
 
+  ledger:
+    build: .
+    container_name: nrg-ledger
+    ports:
+      - "8083:8083"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    command: [ "-addr", ":8083", "-data", "/app/data", "-logs", "/app/logs" ]
+    restart: unless-stopped
+
+
 networks:
   nrg-net: {}
 
