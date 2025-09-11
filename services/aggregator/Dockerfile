@@ -1,38 +1,16 @@
-#v0
-# aggregator/Dockerfile
-
-# Stage 1: Build the Go binary
-FROM golang:1.21-alpine AS builder
-
-ENV CGO_ENABLED=0 \
-    GOOS=linux \
-    GOARCH=amd64
-
+# v1
+# file: Dockerfile
+# Build a minimal static Go image
+FROM golang:1.22 AS build
 WORKDIR /app
-
-COPY go.mod go.sum ./
+COPY go.mod ./
 RUN go mod download
-
 COPY . .
+RUN CGO_ENABLED=0 go build -o /aggregator ./main.go
 
-# Build the aggregator binary
-RUN go build -o aggregator-app ./cmd
-
-# Stage 2: Run with minimal image
-FROM alpine:latest
-
-WORKDIR /app
-
-COPY --from=builder /app/aggregator-app .
-
-# Logging environment variables (optional)
-ENV LOG_LEVEL=info
-ENV LOG_FORMAT=json
-
-# Health check endpoint assumed at /health
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8081/health || exit 1
-
-EXPOSE 8081
-
-ENTRYPOINT ["./aggregator-app"]
+FROM gcr.io/distroless/base-debian12
+WORKDIR /
+COPY --from=build /aggregator /aggregator
+ENV AGG_LISTEN_ADDR=:8080
+EXPOSE 8080
+ENTRYPOINT ["/aggregator"]
