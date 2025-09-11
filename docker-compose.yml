@@ -55,6 +55,36 @@ services:
     restart: unless-stopped
     networks: [nrg-net]
 
+  aggregator:
+    build:
+      context: ./aggregator
+    image: nrg-champ/aggregator:dev
+    environment:
+      - AGG_LISTEN_ADDR=:8080
+      - AGG_BUFFER_MINUTES=15
+    ports:
+      - "8081:8080"
+    depends_on:
+      - kafka
+    networks: [ nrg-net ]
+
+  aggregator-forwarder:
+    image: edenhill/kcat:1.7.1
+    depends_on:
+      - kafka
+      - aggregator
+    command: >
+      sh -lc '
+      echo "Reading from Kafka and posting to Aggregator..." ;
+      kcat -b kafka:9092 -t device.readings -C -u -q -K: |
+      while IFS= read -r line; do
+        if [ -n "$line" ]; then
+          echo "$line" | curl -sS -X POST -H "Content-Type: application/x-ndjson" --data-binary @- http://aggregator:8080/ingest ;
+        fi ;
+      done'
+    networks: [ nrg-net ]
+
+
 networks:
   nrg-net: {}
 
