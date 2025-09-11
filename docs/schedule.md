@@ -1,4 +1,4 @@
-# NRG CHAMP — Service‑by‑Service Schedule (repo considered empty; updated per fixes)
+# NRG CHAMP — Service‑by‑Service Schedule (repo considered empty)
 
 ## 06/09 — 15:00–19:00 — Service 1: External Sensor Simulator + Device Adapter (code + deploy)
 
