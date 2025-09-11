@@ -1,0 +1,10 @@
+// v1
+// k8s/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ledger-config
+data:
+  LEDGER_ADDR: ":8083"
+  LEDGER_DATA: "/data"
+  LEDGER_LOGS: "/logs"
