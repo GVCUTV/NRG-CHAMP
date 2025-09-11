@@ -1,9 +1,13 @@
+// v1
+// k8s/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ledger-service
+  name: ledger
+  labels:
+    app: ledger
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: ledger
@@ -13,16 +17,19 @@ spec:
         app: ledger
     spec:
       containers:
-        - name: ledger-service
-          image: your-registry/nrg-champ-ledger:latest
+        - name: ledger
+          image: ledger:latest
+          imagePullPolicy: IfNotPresent
+          args: ["-addr", ":8083", "-data", "/data", "-logs", "/logs"]
           ports:
-            - containerPort: 8080
-          env:
-            - name: LOG_LEVEL
-              value: "info"
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 5
-            periodSeconds: 10
+            - containerPort: 8083
+          volumeMounts:
+            - name: ledger-data
+              mountPath: /data
+            - name: ledger-logs
+              mountPath: /logs
+      volumes:
+        - name: ledger-data
+          emptyDir: {}
+        - name: ledger-logs
+          emptyDir: {}

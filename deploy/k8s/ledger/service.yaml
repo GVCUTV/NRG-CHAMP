@@ -1,12 +1,17 @@
+// v1
+// k8s/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: ledger-service
+  name: ledger
+  labels:
+    app: ledger
 spec:
   selector:
     app: ledger
   ports:
-    - protocol: TCP
-      port: 8080
-      targetPort: 8080
+    - port: 8083
+      targetPort: 8083
+      protocol: TCP
+      name: http
   type: ClusterIP
