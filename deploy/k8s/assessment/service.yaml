@@ -1,0 +1,16 @@
+// v0
+// k8s/assessment/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: assessment
+  labels:
+    app: assessment
+spec:
+  selector:
+    app: assessment
+  ports:
+    - name: http
+      port: 8085
+      targetPort: 8085
+  type: ClusterIP
