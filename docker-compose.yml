@@ -125,6 +125,24 @@ services:
     command: [ "-addr", ":8083", "-data", "/app/data", "-logs", "/app/logs" ]
     restart: unless-stopped
 
+  assessment:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: nrgchamp/assessment:local
+    environment:
+      - LEDGER_BASE_URL=http://ledger:8084
+      - TARGET_TEMP_C=22
+      - COMFORT_TOLERANCE_C=0.5
+      - CACHE_TTL=30s
+      - ASSESSMENT_LOGFILE=/var/log/assessment/assessment.log
+      - ASSESSMENT_BIND_ADDR=:8085
+    ports:
+      - "8085:8085"
+    depends_on:
+      - ledger
+    volumes:
+      - assessment_logs:/var/log/assessment
 
 networks:
   nrg-net: {}

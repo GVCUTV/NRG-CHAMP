@@ -1,0 +1,11 @@
+// v0
+// k8s/assessment/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: assessment-config
+data:
+  LEDGER_BASE_URL: "http://ledger:8084"
+  TARGET_TEMP_C: "22"
+  COMFORT_TOLERANCE_C: "0.5"
+  CACHE_TTL: "30s"

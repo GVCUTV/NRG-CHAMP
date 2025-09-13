@@ -1,38 +1,15 @@
-# Stage 1: Build
-FROM golang:1.21-alpine AS builder
-
-ENV CGO_ENABLED=0 \
-    GOOS=linux \
-    GOARCH=amd64
-
+// v0
+// Dockerfile
+# Build stage
+FROM golang:1.22 AS build
 WORKDIR /app
+COPY . ./
+RUN --mount=type=cache,target=/go/pkg/mod     --mount=type=cache,target=/root/.cache/go-build     cd assessment && go build -o /out/assessment ./cmd/assessment
 
-# Copy module definition files
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy the full source tree (assuming dependencies may be shared)
-COPY . .
-
-# Build the assessment binary
-RUN go build -o assessment-app ./cmd
-
-# Stage 2: Create minimal runtime image
-FROM alpine:latest
-
-WORKDIR /app
-
-# Copy the compiled binary
-COPY --from=builder /app/assessment-app .
-
-# Logging configuration via env vars
-ENV LOG_LEVEL=info
-ENV LOG_FORMAT=json
-
-# Health check for Kubernetes
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8089/health || exit 1
-
-EXPOSE 8089
-
-ENTRYPOINT ["./assessment-app"]
+# Runtime stage
+FROM gcr.io/distroless/base-debian12
+WORKDIR /
+COPY --from=build /out/assessment /assessment
+EXPOSE 8085
+ENV ASSESSMENT_BIND_ADDR=":8085"
+ENTRYPOINT ["/assessment"]

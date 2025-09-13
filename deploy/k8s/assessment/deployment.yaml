@@ -1,0 +1,55 @@
+// v0
+// k8s/assessment/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: assessment
+  labels:
+    app: assessment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: assessment
+  template:
+    metadata:
+      labels:
+        app: assessment
+    spec:
+      containers:
+        - name: assessment
+          image: nrgchamp/assessment:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8085
+          env:
+            - name: LEDGER_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: assessment-config
+                  key: LEDGER_BASE_URL
+            - name: TARGET_TEMP_C
+              valueFrom:
+                configMapKeyRef:
+                  name: assessment-config
+                  key: TARGET_TEMP_C
+            - name: COMFORT_TOLERANCE_C
+              valueFrom:
+                configMapKeyRef:
+                  name: assessment-config
+                  key: COMFORT_TOLERANCE_C
+            - name: CACHE_TTL
+              valueFrom:
+                configMapKeyRef:
+                  name: assessment-config
+                  key: CACHE_TTL
+            - name: ASSESSMENT_BIND_ADDR
+              value: ":8085"
+            - name: ASSESSMENT_LOGFILE
+              value: "/var/log/assessment/assessment.log"
+          volumeMounts:
+            - name: logdir
+              mountPath: /var/log/assessment
+      volumes:
+        - name: logdir
+          emptyDir: {}
