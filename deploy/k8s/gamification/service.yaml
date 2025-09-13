@@ -1,0 +1,13 @@
+# v0
+# k8s/gamification/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: gamification
+spec:
+  selector:
+    app: gamification
+  ports:
+    - port: 8086
+      targetPort: 8086
+      protocol: TCP

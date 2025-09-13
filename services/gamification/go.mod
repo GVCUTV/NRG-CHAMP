@@ -1,3 +1,5 @@
-module it.uniroma2.dicii/nrg-champ/gamification
+// v0
+// go.mod
+module nrgchamp/gamification
 
-go 1.22.7
+go 1.22.0
