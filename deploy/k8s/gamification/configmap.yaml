@@ -1,0 +1,15 @@
+# v0
+# k8s/gamification/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gamification-config
+data:
+  LEDGER_BASE_URL: "http://ledger:8084"
+  LISTEN_ADDRESS: ":8086"
+  LOG_LEVEL: "INFO"
+  ZONE_ID_DELIM: ":"
+  DATA_DIR: "/data"
+  WEIGHT_COMFORT: "1.0"
+  WEIGHT_ANOMALY: "-5.0"
+  WEIGHT_ENERGY: "-0.1"
