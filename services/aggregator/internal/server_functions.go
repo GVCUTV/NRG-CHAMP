@@ -1,12 +1,15 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -57,11 +60,15 @@ func (s *server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 
 func Start() {
 	s := newServer()
+	cfg := loadConfig()
+
 	addr := os.Getenv("AGG_LISTEN_ADDR")
 	if strings.TrimSpace(addr) == "" {
 		addr = ":8080"
 	}
-	s.log.Info("starting aggregator", "addr", addr, "buffer_minutes", int(s.buf.window.Minutes()))
+
+	_ = os.MkdirAll(dataDir(), 0o755)
+
 	srv := &http.Server{
 		Addr:         addr,
 		Handler:      s.routes(),
@@ -69,8 +76,15 @@ func Start() {
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		s.log.Error("server error", "err", err)
-		os.Exit(1)
-	}
+	go func() { s.log.Info("http_server_start", "addr", addr); _ = srv.ListenAndServe() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	p := newPoller(s.log, cfg, s.buf)
+	go p.run(ctx)
+
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+	<-sigc
+	cancel()
+	_ = srv.Shutdown(context.Background())
 }

@@ -1,4 +1,4 @@
-# v1
+# v2
 # file: Dockerfile
 # Build a minimal static Go image
 FROM golang:1.23-alpine AS build
@@ -17,3 +17,6 @@ USER appuser
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=2s --retries=5 CMD wget -qO- http://127.0.0.1:8080/health || exit 1
 ENTRYPOINT ["/app/aggregator"]
+
+ENV AGG_PROPERTIES=/app/aggregator.properties
+ENV AGG_DATA_DIR=/app/data
