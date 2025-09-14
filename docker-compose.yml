@@ -61,7 +61,11 @@ services:
     image: nrg-champ/aggregator:dev
     environment:
       - AGG_LISTEN_ADDR=:8080
-      - AGG_BUFFER_MINUTES=15
+      - AGG_PROPERTIES=/app/aggregator.properties
+      - AGG_DATA_DIR=/app/data
+    volumes:
+      - ./deploy/config/aggregator.properties:/app/aggregator.properties:ro
+      - agg-data:/app/data
     ports:
       - "8081:8080"
     depends_on:
@@ -164,3 +168,4 @@ networks:
 
 volumes:
   kafka-data: {}
+  agg-data: {}
