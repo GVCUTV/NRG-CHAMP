@@ -1,0 +1,41 @@
+# v0
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zone-simulator
+  labels:
+    app: zone-simulator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zone-simulator
+  template:
+    metadata:
+      labels:
+        app: zone-simulator
+    spec:
+      containers:
+        - name: zone-simulator
+          # Replace the image with your registry/image:tag or build a local image and use imagePullPolicy: IfNotPresent
+          image: zone_simulator:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: SIM_PROPERTIES
+              value: /etc/zone_simulator/sim.properties
+            - name: KAFKA_BROKERS
+              value: "kafka:9092"
+            - name: TOPIC_PREFIX
+              value: "device.readings"
+          volumeMounts:
+            - name: sim-config
+              mountPath: /etc/zone_simulator
+              readOnly: true
+      volumes:
+        - name: sim-config
+          configMap:
+            name: zone-simulator-config
