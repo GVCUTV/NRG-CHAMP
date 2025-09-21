@@ -778,7 +778,7 @@ NRG CHAMP models facilities and assets using a **hierarchical topology** to supp
 
   * JSON schema enforcement: required fields (sensorId, timestamp, readings).
 
-  * Reject or flag out‑of‑range values (e.g. temperature \< –10 °C or \> 50 °C).
+  * Reject or flag out‑of‑range values (e.g. temperature < –10 °C or > 50 °C).
 
 * **Buffering & Retry:**
 
@@ -836,7 +836,7 @@ NRG CHAMP models facilities and assets using a **hierarchical topology** to supp
 
 * **Anomaly Detection:**
 
-  * Flag deviations \> X % from baseline; generate anomaly events.
+  * Flag deviations > X % from baseline; generate anomaly events.
 
 * **Historical Baseline:**
 
@@ -848,7 +848,7 @@ NRG CHAMP models facilities and assets using a **hierarchical topology** to supp
 
 * **Optimization Strategies:**
 
-  * Define rule set: e.g. “If temp \> 25 °C, plan setpoint \= 22 °C.”
+  * Define rule set: e.g. “If temp > 25 °C, plan setpoint = 22 °C.”
 
 * **Multi‑Zone Coordination:**
 
@@ -880,7 +880,7 @@ NRG CHAMP models facilities and assets using a **hierarchical topology** to supp
 
 * **Data Composition:**
 
-  * Combine sensor batch summary \+ executed commands \+ zone metadata \+ timestamp.
+  * Combine sensor batch summary + executed commands + zone metadata + timestamp.
 
 * **Serialization:**
 
@@ -1035,7 +1035,7 @@ NRG CHAMP models facilities and assets using a **hierarchical topology** to supp
 
 * **Controls:**
 
-  * Buttons: \+/– 1 °C, set fan to low/medium/high.
+  * Buttons: +/- 1 °C, set fan to low/medium/high.
 
 * **Logs:**
 
@@ -1176,9 +1176,9 @@ The blockchain integration ensures immutable, verifiable storage of both raw sen
 
 * `zoneId` (string, optional) – Filter by sensor/zone ID
 
-* `page` (integer, default 1\) – Page number
+* `page` (integer, default 1) – Page number
 
-* `pageSize` (integer, default 20, max 100\) – Items per page
+* `pageSize` (integer, default 20, max 100) – Items per page
 
   ##### 7.4.2.2. Responses
 
@@ -1195,7 +1195,7 @@ version: 1.0.0
 
 servers:
 
-\- url: https://api.nrgchamp.example.com/v1
+- url: https://api.nrgchamp.example.com/v1
 
 components:
 
@@ -1267,21 +1267,21 @@ paths:
 
       security:
 
-        \- BearerAuth: \[\]
+        - BearerAuth: []
 
       parameters:
 
-        \- $ref: '\#/components/parameters/startDate'
+        - $ref: '#/components/parameters/startDate'
 
-        \- $ref: '\#/components/parameters/endDate'
+        - $ref: '#/components/parameters/endDate'
 
-        \- $ref: '\#/components/parameters/zoneId'
+        - $ref: '#/components/parameters/zoneId'
 
-        \- name: page
+        - name: page
 
           in: query
 
-          description: Page number (default 1\)
+          description: Page number (default 1)
 
           schema:
 
@@ -1289,11 +1289,11 @@ paths:
 
             example: 1
 
-        \- name: pageSize
+        - name: pageSize
 
           in: query
 
-          description: Items per page (max 100\)
+          description: Items per page (max 100)
 
           schema:
 
@@ -1335,7 +1335,7 @@ paths:
 
                     items:
 
-                      $ref: '\#/components/schemas/Transaction'
+                      $ref: '#/components/schemas/Transaction'
 
 /ledger/transaction/{txId}:
 
@@ -1345,11 +1345,11 @@ paths:
 
       security:
 
-        \- BearerAuth: \[\]
+        - BearerAuth: []
 
       parameters:
 
-        \- name: txId
+        - name: txId
 
           in: path
 
@@ -1373,7 +1373,7 @@ paths:
 
               schema:
 
-                $ref: '\#/components/schemas/Transaction'
+                $ref: '#/components/schemas/Transaction'
 
         '404':
 
@@ -1409,7 +1409,7 @@ schemas:
 
           type: string
 
-          enum: \[sensor, command\]
+          enum: [sensor, command]
 
         payload:
 
@@ -1421,25 +1421,25 @@ schemas:
 
           type: string
 
-          enum: \[pending, committed, failed\]
+          enum: [pending, committed, failed]
 
       required:
 
-        \- txId
+        - txId
 
-        \- zoneId
+        - zoneId
 
-        \- timestamp
+        - timestamp
 
-        \- type
+        - type
 
-        \- payload
+        - payload
 
-        \- status
+        - status
 
 security:
 
-\- BearerAuth: \[\]
+- BearerAuth: []
 
 **404 Not Found** (for single‐transaction fetch) –
 
@@ -1468,3 +1468,73 @@ security:
 * Integrate with a lightweight blockchain emulator for end‑to‑end tests.
 
 ---
+
+# 8. Implementation Thoughts and Design Choices
+
+> This section consolidates architectural reasoning and implementation choices that informed the current design. It is intentionally kept separate from requirements and use cases to capture the "why" behind the "what".
+
+## 8.1. Kafka as the Communication Middleware
+
+We selected **Apache Kafka** as the primary communication middleware among most services to guarantee high-throughput ingestion, durability, and decoupling between producers and consumers. The following topic/partition strategies apply:
+
+### 8.1.1. Devices → Aggregator
+
+- **Topic-per-zone:** each *zone* has a dedicated Kafka topic to naturally shard traffic and align operational boundaries (ownership, scaling, quota).
+- **Partition-per-device:** within each zone topic, **each device** gets its own partition to avoid collisions under high write frequency and to keep per-device ordering.
+- **Aggregator consumption pattern:** the **aggregator instance assigned to that zone** performs a **round‑robin** over partitions. For each partition:
+  - it **marks messages up to the current epoch as read** (processed),
+  - on encountering a message from the **next epoch**, it **does not mark it read** and switches to the next partition, ensuring fairness and bounded latency.
+- **Cross-topic fairness:** when an aggregator handles multiple zones, it also performs an upper‑level **round‑robin across assigned zone topics**.
+- **Pre‑processing responsibilities:** the aggregator **removes communication overhead**, **discards outliers**, and **aggregates device data** at the zone level before downstream fan‑out.
+
+### 8.1.2. Aggregator → MAPE
+
+- **One topic (multi‑zone), partition-per-zone:** each aggregator publishes to a shared topic using **one partition per zone**.
+- **Consumer assignment:** there is a **1:1 assignment** between an **aggregator** and a **MAPE instance**. The MAPE consumer performs **round‑robin over zone partitions** and, **for each partition**, reads **all messages** and **processes only the most recent one**, discarding older items as obsolete.
+
+### 8.1.3. MAPE → Actuators
+
+- **Zone‑scoped topics:** each MAPE instance, which **manages multiple zones**, writes to **one topic per zone**.
+- **Partition-per-actuator:** inside each zone topic, partitions correspond to **actuators in that zone** (heater, cooler, fans). Each actuator reads all available messages on **its own partition**, but **executes only the most recent command**, dropping stale ones.
+
+### 8.1.4. Aggregator & MAPE → Ledger
+
+- **Topic-per-zone with two partitions:** for each zone there is a dedicated topic with **two partitions**:
+  - **aggregator** (sensor summaries),
+  - **mape** (decisions/actions).
+- **Epoch‑based matching:** the **ledger** matches items **by epoch** across the two partitions. If any element is missing, it is **estimated from the previous and next epochs** (interpolation/extrapolation policy to be finalized).
+
+> **Why this layout?** It cleanly maps operational boundaries (zones, devices, actuators) to Kafka primitives (topics, partitions), minimizing cross‑talk, preserving ordering where needed, and enabling independent scaling and back‑pressure control per boundary.
+
+## 8.2. Shared Circuit Breaker Module
+
+A **shared circuit‑breaker module** is used across services (HTTP clients, Kafka producers/consumers, etc.). Each call is routed through its **call‑type specific handler** which:
+
+1. **Issues the request**.
+2. On failure and after exceeding the **max failures threshold**, **waits X seconds** before probing the remote.
+3. **Sends a lightweight probe**; if healthy, **replays the original request**.
+4. **Resets failure counters** on success.
+
+This prevents cascading failures and thundering herds while standardizing resilience policy project‑wide.
+
+## 8.3. MAPE Targets & Decision Logic
+
+- **Temperature targets per zone** are defined in a **`.properties` file** (user‑editable).
+- **Monitor:** consumes zone batches from Kafka, maintains **sliding windows** per zone.
+- **Analyze:** uses **outlier‑cleaned** signals from the aggregator; computes deviations from target and detects anomalies.
+- **Plan:** when actual temperature differs from target, it **engages heating/cooling** considering **hysteresis** from the properties file; **fan speed** is set proportionally to the temperature delta.
+- **Execute:** dispatches commands to actuators via Kafka (zone topic, partition per actuator); **only latest commands** are acted upon by actuators, older ones are discarded.
+
+## 8.4. Ledger Matching & Blockchain Rolling
+
+- **Matching:** for each zone’s topic, the ledger **matches aggregator vs. MAPE items by epoch**; missing data is **estimated** from adjacent epochs.
+- **Block lifecycle:** matched entries are added to the **current block**; when data area reaches the limit, the module **computes block data hash**, stores it in the header, **hashes the header**, opens a **new block**, and links via the **previous header hash** (hash chain).
+- **Indexing:** a **zone → blocks** mapping is maintained to accelerate queries (policy under refinement).
+
+## 8.5. Assessment (Pull) & 8.6. Gamification (Push)
+
+- **Assessment:** follows a **pull approach**, querying the ledger **on demand** when verification is needed.
+- **Gamification:** follows a **push approach**; whenever the ledger **commits**, it **forwards data** to the gamification service which computes **peer‑relative averages** and awards **points** to entities that **lower** the average consumption (penalties for increases).
+
+---
+
