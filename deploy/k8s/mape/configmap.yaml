@@ -1,24 +1,15 @@
-// v1
-// k8s/mape/full/configmap.yaml
+# v2
+# configmap.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: mape-full
+  name: mape-config
+  namespace: nrgchamp
 data:
-  ENV: "prod"
-  LISTEN_ADDR: ":8090"
-  KAFKA_BROKERS: "kafka:9092"
-  TOPIC_PREFIX: "device.readings"
-  COMMAND_TOPIC_PREFIX: "device.commands"
-  CONSUMER_GROUP: "mape-full"
-  CONTROL_INTERVAL: "5s"
-  DEADBAND_C: "0.4"
-  KP: "12"
-  MAX_FAN_PCT: "100"
-  TARGETS_FILE: "/app/config/targets.properties"
-  TARGETS_RELOAD_EVERY: "15s"
-  DEFAULT_TARGET_C: "22.0"
-  EXECUTE_MODE: "http"
-  ROOM_HTTP_BASE: "http://room-simulator:8080"
-  LOG_LEVEL: "INFO"
-  LOG_FILE: "/var/log/mape/mape.log"
+  mape.properties: |
+    # v2
+    zones=zone-a,zone-b
+    target=22.0
+    hysteresis=0.5
+    fan.steps=0.3,0.7,1.2,2.0
+    fan.speeds=25,50,75,100

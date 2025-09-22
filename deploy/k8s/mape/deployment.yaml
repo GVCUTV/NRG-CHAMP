@@ -1,30 +1,60 @@
-# v1
-# k8s/mape/full/deployment.yaml
+# v2
+# deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: mape-full
-  labels: { app: mape-full }
+  name: mape
+  namespace: nrgchamp
 spec:
   replicas: 1
   selector:
-    matchLabels: { app: mape-full }
+    matchLabels:
+      app: mape
   template:
     metadata:
-      labels: { app: mape-full }
+      labels:
+        app: mape
     spec:
       containers:
-        - name: mape-full
-          image: nrg-champ/mape-full:latest
+        - name: mape
+          image: mape:latest
           imagePullPolicy: IfNotPresent
-          ports: [ { containerPort: 8090, name: http } ]
-          envFrom:
-            - configMapRef: { name: mape-full }
+          ports:
+            - containerPort: 8080
+          env:
+            - name: KAFKA_BROKERS
+              value: "kafka:9092"
+            - name: AGGREGATOR_TOPIC
+              value: "aggregator.to.mape"
+            - name: ACTUATOR_TOPIC_PREFIX
+              value: "zone.commands."
+            - name: LEDGER_TOPIC_PREFIX
+              value: "zone.ledger."
+            - name: LEDGER_MAPE_PARTITION
+              value: "1"
+            - name: PROPERTIES_PATH
+              value: "/app/configs/mape.properties"
+            - name: POLL_INTERVAL_MS
+              value: "250"
+            - name: LOG_DIR
+              value: "/app/logs"
           volumeMounts:
-            - name: targets
-              mountPath: /app/config
+            - name: config
+              mountPath: /app/configs
               readOnly: true
+            - name: logs
+              mountPath: /app/logs
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
       volumes:
-        - name: targets
+        - name: config
           configMap:
-            name: mape-full-targets
+            name: mape-config
+        - name: logs
+          emptyDir: {}

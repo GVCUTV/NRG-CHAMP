@@ -1,14 +1,15 @@
-// v1
-// k8s/mape/full/service.yaml
+# v2
+# service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: mape-full
-  labels: { app: mape-full }
+  name: mape
+  namespace: nrgchamp
 spec:
-  selector: { app: mape-full }
+  selector:
+    app: mape
   ports:
     - name: http
-      port: 8090
-      targetPort: 8090
-  type: ClusterIP
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

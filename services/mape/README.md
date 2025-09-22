@@ -46,3 +46,19 @@ docker run --rm -p 8080:8080 \
 Kafka access uses `github.com/segmentio/kafka-go` (minimal, well‑maintained). All other
 code relies only on the standard library. Logging is done via `slog` to **both** a logfile
 and stdout, as required.
+
+
+---
+## v2 — K8s base/overlays
+- `k8s/base` → set minimale (namespace, configmap, deployment, service).
+- `k8s/overlays/dev` → base + Secret broker (semplice).
+- `k8s/overlays/prod` → base + SA/RBAC + NetworkPolicy + PDB + resources + Secret.
+
+### Apply
+```bash
+# Dev
+kubectl apply -k k8s/overlays/dev
+
+# Prod
+kubectl apply -k k8s/overlays/prod
+```
