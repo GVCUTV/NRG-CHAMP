@@ -62,3 +62,13 @@ kubectl apply -k k8s/overlays/dev
 # Prod
 kubectl apply -k k8s/overlays/prod
 ```
+
+
+### v3 — Topic auto-creation
+- Il servizio tenta di **creare/validare** i topic necessari all'avvio (idempotente):
+  - `AGGREGATOR_TOPIC` → partizioni = numero di zone.
+  - `ACTUATOR_TOPIC_PREFIX + <zone>` → partizioni = `ACTUATOR_PARTITIONS` (default 2).
+  - `LEDGER_TOPIC_PREFIX + <zone>` → partizioni = 2.
+- Nuove env:
+  - `ACTUATOR_PARTITIONS` (default: 2)
+  - `TOPIC_REPLICATION` (default: 1)

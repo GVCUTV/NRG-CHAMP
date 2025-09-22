@@ -1,4 +1,4 @@
-// v0
+// v1
 // io.go
 package kafkaio
 
@@ -29,6 +29,58 @@ type IO struct {
 	ledgerWriters   map[string]*kafka.Writer // key: zoneId
 }
 
+// ensureTopics makes sure the required topics exist with the expected partitioning.
+// - Aggregator→MAPE topic must have N partitions = number of zones (order maps to index)
+// - Per-zone actuator topic must exist with cfg.ActuatorPartitions partitions
+// - Per-zone ledger topic must exist with exactly 2 partitions
+func (ioh *IO) ensureTopics(ctx context.Context) error {
+	if len(ioh.cfg.KafkaBrokers) == 0 {
+		return fmt.Errorf("no brokers provided")
+	}
+	broker := ioh.cfg.KafkaBrokers[0]
+	conn, err := kafka.DialContext(ctx, "tcp", broker)
+	if err != nil {
+		return fmt.Errorf("dial broker %s: %w", broker, err)
+	}
+	defer conn.Close()
+
+	controller, err := conn.Controller()
+	if err != nil {
+		return fmt.Errorf("get controller: %w", err)
+	}
+	c, err := kafka.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", controller.Host, controller.Port))
+	if err != nil {
+		return fmt.Errorf("dial controller: %w", err)
+	}
+	defer c.Close()
+
+	// Aggregator topic: partitions = number of zones
+	agg := kafka.TopicConfig{
+		Topic:             ioh.cfg.AggregatorTopic,
+		NumPartitions:     len(ioh.cfg.Zones),
+		ReplicationFactor: ioh.cfg.TopicReplication,
+	}
+	// For per-zone topics we create a config list and call CreateTopics once.
+	var configs []kafka.TopicConfig
+	configs = append(configs, agg)
+
+	for _, zone := range ioh.cfg.Zones {
+		actTopic := ioh.cfg.ActuatorTopicPref + zone
+		ledTopic := ioh.cfg.LedgerTopicPref + zone
+		configs = append(configs,
+			kafka.TopicConfig{Topic: actTopic, NumPartitions: ioh.cfg.ActuatorPartitions, ReplicationFactor: ioh.cfg.TopicReplication},
+			kafka.TopicConfig{Topic: ledTopic, NumPartitions: 2, ReplicationFactor: ioh.cfg.TopicReplication},
+		)
+	}
+
+	if err := c.CreateTopics(configs...); err != nil {
+		// Kafka may return an error if topics exist. We log and continue.
+		ioh.lg.Warn("CreateTopics returned non-nil", "error", err)
+	}
+	ioh.lg.Info("topic ensure attempted", "aggregator", ioh.cfg.AggregatorTopic, "zones", ioh.cfg.Zones, "actuatorPartitions", ioh.cfg.ActuatorPartitions, "replication", ioh.cfg.TopicReplication)
+	return nil
+}
+
 func New(cfg *config.AppConfig, lg *slog.Logger) (*IO, error) {
 	if len(cfg.Zones) == 0 {
 		return nil, errors.New("no zones configured")
@@ -39,6 +91,10 @@ func New(cfg *config.AppConfig, lg *slog.Logger) (*IO, error) {
 		zoneReaders:     map[string]*kafka.Reader{},
 		actuatorWriters: map[string]*kafka.Writer{},
 		ledgerWriters:   map[string]*kafka.Writer{},
+	}
+	// Ensure topics exist with expected partitioning before wiring readers/writers
+	if err := io.ensureTopics(context.Background()); err != nil {
+		lg.Warn("topic ensure failed", "error", err)
 	}
 	// Build a partition-bound reader for each zone.
 	for idx, zone := range cfg.Zones {
