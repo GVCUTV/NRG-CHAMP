@@ -1,4 +1,4 @@
-// v0
+// v1
 // config.go
 package config
 
@@ -14,32 +14,36 @@ import (
 
 // AppConfig holds runtime configuration and zone properties.
 type AppConfig struct {
-	HTTPBind          string             // address:port for HTTP server
-	KafkaBrokers      []string           // list of bootstrap servers
-	AggregatorTopic   string             // Topic name where Aggregator writes (multi-partition: one per zone)
-	ActuatorTopicPref string             // Prefix for per-zone actuator command topics: zone.commands.<zoneId>
-	LedgerTopicPref   string             // Prefix for per-zone ledger topics: zone.ledger.<zoneId> (2 partitions: 0=aggregator, 1=mape)
-	MAPEPartitionID   int                // Partition index to use for MAPE when writing to ledger (default 1)
-	PropertiesPath    string             // path to file with zone targets and hysteresis
-	PollIntervalMs    int                // main loop sleep between round-robins
-	Zones             []string           // list of zone IDs this MAPE instance manages
-	ZoneTargets       map[string]float64 // target temp per zone
-	ZoneHysteresis    map[string]float64 // hysteresis per zone (± around target)
-	FanSteps          []float64          // ascending thresholds of |delta T| mapping to fan percentages
-	FanSpeeds         []int              // same length as FanSteps, values among {0,25,50,75,100}
+	ActuatorPartitions int                // number of partitions for per-zone actuator topics (partitions map to actuators)
+	TopicReplication   int                // replication factor for topics we (optionally) create
+	HTTPBind           string             // address:port for HTTP server
+	KafkaBrokers       []string           // list of bootstrap servers
+	AggregatorTopic    string             // Topic name where Aggregator writes (multi-partition: one per zone)
+	ActuatorTopicPref  string             // Prefix for per-zone actuator command topics: zone.commands.<zoneId>
+	LedgerTopicPref    string             // Prefix for per-zone ledger topics: zone.ledger.<zoneId> (2 partitions: 0=aggregator, 1=mape)
+	MAPEPartitionID    int                // Partition index to use for MAPE when writing to ledger (default 1)
+	PropertiesPath     string             // path to file with zone targets and hysteresis
+	PollIntervalMs     int                // main loop sleep between round-robins
+	Zones              []string           // list of zone IDs this MAPE instance manages
+	ZoneTargets        map[string]float64 // target temp per zone
+	ZoneHysteresis     map[string]float64 // hysteresis per zone (± around target)
+	FanSteps           []float64          // ascending thresholds of |delta T| mapping to fan percentages
+	FanSpeeds          []int              // same length as FanSteps, values among {0,25,50,75,100}
 }
 
 // LoadEnvAndFiles loads environment variables and the properties file.
 func LoadEnvAndFiles() (*AppConfig, error) {
 	cfg := &AppConfig{
-		HTTPBind:          getEnv("HTTP_BIND", ":8080"),
-		KafkaBrokers:      splitAndTrim(os.Getenv("KAFKA_BROKERS"), ","),
-		AggregatorTopic:   getEnv("AGGREGATOR_TOPIC", "aggregator.to.mape"),
-		ActuatorTopicPref: getEnv("ACTUATOR_TOPIC_PREFIX", "zone.commands."),
-		LedgerTopicPref:   getEnv("LEDGER_TOPIC_PREFIX", "zone.ledger."),
-		MAPEPartitionID:   getEnvInt("LEDGER_MAPE_PARTITION", 1),
-		PropertiesPath:    getEnv("PROPERTIES_PATH", "./configs/mape.properties"),
-		PollIntervalMs:    getEnvInt("POLL_INTERVAL_MS", 250),
+		HTTPBind:           getEnv("HTTP_BIND", ":8080"),
+		KafkaBrokers:       splitAndTrim(os.Getenv("KAFKA_BROKERS"), ","),
+		AggregatorTopic:    getEnv("AGGREGATOR_TOPIC", "aggregator.to.mape"),
+		ActuatorTopicPref:  getEnv("ACTUATOR_TOPIC_PREFIX", "zone.commands."),
+		LedgerTopicPref:    getEnv("LEDGER_TOPIC_PREFIX", "zone.ledger."),
+		MAPEPartitionID:    getEnvInt("LEDGER_MAPE_PARTITION", 1),
+		PropertiesPath:     getEnv("PROPERTIES_PATH", "./configs/mape.properties"),
+		PollIntervalMs:     getEnvInt("POLL_INTERVAL_MS", 250),
+		ActuatorPartitions: getEnvInt("ACTUATOR_PARTITIONS", 2),
+		TopicReplication:   getEnvInt("TOPIC_REPLICATION", 1),
 	}
 	if len(cfg.KafkaBrokers) == 0 {
 		return nil, errors.New("KAFKA_BROKERS is required (comma-separated)")
