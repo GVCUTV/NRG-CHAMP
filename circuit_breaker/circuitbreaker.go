@@ -1,31 +1,32 @@
-// v0
-// circuit_breaker.go
-package circuit_breaker
+// v1
+// circuitbreaker.go
+package circuitbreaker
 
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log"
 	"log/slog"
 	"sync"
 	"time"
 )
 
+// State is the circuit state machine.
 type State int
 
 const (
-	Closed State = iota
-	Open
-	HalfOpen
+	Closed   State = iota // normal operation
+	Open                  // short-circuit until ResetTimeout elapses
+	HalfOpen              // allow a trial after reset window
 )
 
+// ErrOpen is returned to callers when the breaker is open (fast-fail).
 var ErrOpen = errors.New("circuit breaker is open; fast-fail")
 
+// Breaker wraps any operation with circuit breaker semantics.
+type Breaker struct {
 	name   string
 	cfg    Config
 	logger *slog.Logger
-	logger      *slog.Logger
 
 	mu          sync.Mutex
 	state       State
@@ -35,25 +36,24 @@ var ErrOpen = errors.New("circuit breaker is open; fast-fail")
 	probe func(ctx context.Context) error
 }
 
+// New constructs a Breaker. The probe is a quick health-check for the dependency.
 func New(name string, cfg Config, probe func(ctx context.Context) error) *Breaker {
-	logger := newLogger(cfg.LogFile)
 	b := &Breaker{
-		name:   name,
-		cfg:    cfg,
-		logger: logger,
-		state:  Closed,
-		probe:  probe,
+		name:  name,
+		cfg:   cfg,
+		probe: probe,
 	}
+	b.logger = newLogger(cfg.LogFile)
+	b.state = Closed
 	b.logger.Info("breaker_created", "name", name, "state", b.stateString(), "maxFailures", cfg.MaxFailures, "resetTimeout", cfg.ResetTimeout.String())
 	return b
 }
 
+// Execute runs op with circuit breaker protection.
 func (b *Breaker) Execute(ctx context.Context, op func(ctx context.Context) error) error {
 	b.mu.Lock()
 	state := b.state
 	openedAt := b.openedAt
-	recent := b.recentFails
-	_ = recent
 	b.mu.Unlock()
 
 	if state == Open {
@@ -64,21 +64,21 @@ func (b *Breaker) Execute(ctx context.Context, op func(ctx context.Context) erro
 		return b.tryProbeThenOp(ctx, op)
 	}
 
-	err := op(ctx)
-	if err == nil {
-		b.onSuccess()
-		return nil
+	if err := op(ctx); err != nil {
+		b.onFailure(err)
+		b.mu.Lock()
+		isOpen := (b.state == Open)
+		b.mu.Unlock()
+		if isOpen {
+			return ErrOpen
+		}
+		return err
 	}
-	b.onFailure(err)
-	b.mu.Lock()
-	isOpen := b.state == Open
-	b.mu.Unlock()
-	if isOpen {
-		return ErrOpen
-	}
-	return err
+	b.onSuccess()
+	return nil
 }
 
+// tryProbeThenOp attempts a probe, then re-runs the original op if healthy.
 func (b *Breaker) tryProbeThenOp(ctx context.Context, op func(ctx context.Context) error) error {
 	b.mu.Lock()
 	b.state = HalfOpen
@@ -139,6 +139,7 @@ func (b *Breaker) onFailure(err error) {
 	}
 }
 
+// stateString is used only for logs to keep imports minimal.
 func (b *Breaker) stateString() string {
 	switch b.state {
 	case Closed:
@@ -152,10 +153,9 @@ func (b *Breaker) stateString() string {
 	}
 }
 
+// State exposes the current state for metrics/inspection.
 func (b *Breaker) State() State {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.state
 }
-
-func (_ State) String() string { return fmt.Sprintf("%d", int(_)) }
