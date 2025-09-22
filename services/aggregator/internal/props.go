@@ -1,4 +1,4 @@
-// v3
+// v6
 // file: internal/props.go
 package internal
 
@@ -22,6 +22,7 @@ type Config struct {
 	LedgerPartAgg   int
 	LedgerPartMAPE  int
 	OutlierZ        float64
+	LogPath         string
 }
 
 func DefaultConfig() Config {
@@ -35,6 +36,7 @@ func DefaultConfig() Config {
 		LedgerPartAgg:   0,
 		LedgerPartMAPE:  1,
 		OutlierZ:        4.0,
+		LogPath:         filepath.Join("data", "aggregator.log"),
 	}
 }
 
@@ -44,7 +46,12 @@ func LoadProps(path string) Config {
 	if err != nil {
 		return cfg
 	}
-	defer f.Close()
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			// ignore
+		}
+	}(f)
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
@@ -88,6 +95,8 @@ func LoadProps(path string) Config {
 			if z, err := strconv.ParseFloat(v, 64); err == nil {
 				cfg.OutlierZ = z
 			}
+		case "log_path":
+			cfg.LogPath = v
 		}
 	}
 	return cfg

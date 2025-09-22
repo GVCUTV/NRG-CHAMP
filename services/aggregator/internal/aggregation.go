@@ -1,10 +1,9 @@
-// v3
+// Package internal v6
 // file: internal/aggregation.go
 package internal
 
 import (
 	"math"
-	"sort"
 	"time"
 )
 
@@ -14,8 +13,7 @@ func aggregate(zone string, epoch EpochID, readings []Reading, zThresh float64) 
 	clean := removeOutliers(readings, zThresh)
 
 	byDev := map[string][]Reading{}
-	var temps []float64
-	var hums []float64
+	var temps, powers, energies []float64
 
 	for _, r := range clean {
 		rr := r        // copy
@@ -24,8 +22,11 @@ func aggregate(zone string, epoch EpochID, readings []Reading, zThresh float64) 
 		if r.Temperature != nil {
 			temps = append(temps, *r.Temperature)
 		}
-		if r.Humidity != nil {
-			hums = append(hums, *r.Humidity)
+		if r.PowerW != nil {
+			powers = append(powers, *r.PowerW)
+		}
+		if r.EnergyKWh != nil {
+			energies = append(energies, *r.EnergyKWh)
 		}
 	}
 
@@ -33,8 +34,11 @@ func aggregate(zone string, epoch EpochID, readings []Reading, zThresh float64) 
 	if len(temps) > 0 {
 		summary["avgTemp"] = mean(temps)
 	}
-	if len(hums) > 0 {
-		summary["avgHumidity"] = mean(hums)
+	if len(powers) > 0 {
+		summary["avgPowerW"] = mean(powers)
+	}
+	if len(energies) > 0 {
+		summary["avgEnergyKWh"] = mean(energies)
 	}
 
 	return AggregatedEpoch{
@@ -51,28 +55,37 @@ func removeOutliers(rs []Reading, z float64) []Reading {
 		return rs
 	}
 	// compute field-wise mean/std
-	var temps, hums []float64
+	var temps, powers, energies []float64
 	for _, r := range rs {
 		if r.Temperature != nil {
 			temps = append(temps, *r.Temperature)
 		}
-		if r.Humidity != nil {
-			hums = append(hums, *r.Humidity)
+		if r.PowerW != nil {
+			powers = append(powers, *r.PowerW)
+		}
+		if r.EnergyKWh != nil {
+			energies = append(energies, *r.EnergyKWh)
 		}
 	}
 	mt, st := meanStd(temps)
-	mh, sh := meanStd(hums)
+	mp, sp := meanStd(powers)
+	me, se := meanStd(energies)
 
 	out := make([]Reading, 0, len(rs))
 	for _, r := range rs {
 		ok := true
 		if r.Temperature != nil && st > 0 {
-			if math.Abs((*r.Temperature-mt)/st) > z {
+			if ((*r.Temperature-mt)/st) > z || ((mt-*r.Temperature)/st) > z {
 				ok = false
 			}
 		}
-		if r.Humidity != nil && sh > 0 {
-			if math.Abs((*r.Humidity-mh)/sh) > z {
+		if r.PowerW != nil && sp > 0 {
+			if ((*r.PowerW-mp)/sp) > z || ((mp-*r.PowerW)/sp) > z {
+				ok = false
+			}
+		}
+		if r.EnergyKWh != nil && se > 0 {
+			if ((*r.EnergyKWh-me)/se) > z || ((me-*r.EnergyKWh)/se) > z {
 				ok = false
 			}
 		}
@@ -105,11 +118,4 @@ func meanStd(a []float64) (float64, float64) {
 		s += d * d
 	}
 	return m, math.Sqrt(s / float64(len(a)))
-}
-
-// sortByTime helps ensure deterministic order.
-func sortByTime(rs []Reading) {
-	sort.Slice(rs, func(i, j int) bool {
-		return rs[i].Timestamp.Before(rs[j].Timestamp)
-	})
 }

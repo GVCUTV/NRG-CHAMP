@@ -25,9 +25,9 @@ services:
       - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1
       - ALLOW_PLAINTEXT_LISTENER=yes
     volumes:
-      - kafka_data:/bitnami/kafka
+      - kafka-data:/bitnami/kafka
     networks:
-      - nrg
+      - nrg-net
 
   kcat:
     image: edenhill/kcat:1.7.1
