@@ -1,6 +1,6 @@
 // v0
 // properties.go
-package circuitbreaker
+package circuit_breaker
 
 import (
 	"bufio"
