@@ -1,5 +1,4 @@
-// v1
-// main.go
+// v2// main.go
 package main
 
 import (
@@ -91,8 +90,10 @@ type SimConfig struct {
 	FanW100    float64
 
 	// Kafka
-	KafkaBrokers []string
-	TopicPrefix  string
+	KafkaBrokers   []string
+	ReadingsPrefix string
+	CommandsPrefix string
+	NumPartitions  int
 }
 
 func (c *SimConfig) DeviceRate(deviceID string, devType DeviceType) time.Duration {
@@ -163,8 +164,9 @@ type Simulator struct {
 	coolID       string
 	fanID        string
 
-	// kafka writer for publishing readings
-	writer *kafka.Writer
+	// kafka writers
+	readingsWriter *kafka.Writer
+	commandsWriter *kafka.Writer
 
 	// context / stop
 	cancel context.CancelFunc
@@ -213,7 +215,7 @@ func getd(m map[string]string, key string, def time.Duration) time.Duration {
 }
 
 func splitCSV(s string) []string {
-	out := []string{}
+	var out []string
 	for _, p := range strings.Split(s, ",") {
 		p = strings.TrimSpace(p)
 		if p == "" {
@@ -261,9 +263,13 @@ func buildConfig() (SimConfig, error) {
 	if brokersEnv == "" {
 		brokersEnv = "kafka:9092"
 	}
-	prefix := os.Getenv("TOPIC_PREFIX")
-	if prefix == "" {
-		prefix = "device.readings"
+	readingsPrefix := os.Getenv("TOPIC_READINGS_PREFIX")
+	commandsPrefix := os.Getenv("TOPIC_COMMANDS_PREFIX")
+	if readingsPrefix == "" {
+		readingsPrefix = "device.readings"
+	}
+	if commandsPrefix == "" {
+		commandsPrefix = "device.commands"
 	}
 
 	cfg := SimConfig{
@@ -274,8 +280,9 @@ func buildConfig() (SimConfig, error) {
 		SensorRate: sensorRate, HeatRate: heatRate, CoolRate: coolRate, FanRate: fanRate,
 		HeatPowerW: heatW, CoolPowerW: coolW,
 		FanW25: f25, FanW50: f50, FanW75: f75, FanW100: f100,
-		KafkaBrokers: splitCSV(brokersEnv),
-		TopicPrefix:  prefix,
+		KafkaBrokers:   splitCSV(brokersEnv),
+		ReadingsPrefix: readingsPrefix,
+		CommandsPrefix: commandsPrefix,
 	}
 
 	// populate per-device rates from properties (keys like device.<deviceId>.rate=500ms)
@@ -317,16 +324,12 @@ func newKafkaWriter(brokers []string, topic string) *kafka.Writer {
 	}
 }
 
-func (s *Simulator) publish(ctx context.Context, msg Reading) error {
+func (s *Simulator) publish(ctx context.Context, w *kafka.Writer, msg Reading) error {
 	b, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
-	return s.writer.WriteMessages(ctx, kafka.Message{
-		Key:   []byte(msg.DeviceID),
-		Value: b,
-		Time:  msg.Timestamp,
-	})
+	return w.WriteMessages(ctx, kafka.Message{Key: []byte(msg.DeviceID), Value: b, Time: msg.Timestamp})
 }
 
 func (s *Simulator) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -369,6 +372,10 @@ func (s *Simulator) handleStatus(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Simulator) handleCmdHeating(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	type body struct {
 		State string `json:"state"`
 	}
@@ -394,6 +401,10 @@ func (s *Simulator) handleCmdHeating(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Simulator) handleCmdCooling(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	type body struct {
 		State string `json:"state"`
 	}
@@ -445,7 +456,7 @@ func (s *Simulator) startPartitionConsumerForDevice(ctx context.Context, deviceI
 	go func() {
 		defer s.wg.Done()
 
-		topic := s.cfg.TopicPrefix + "." + s.cfg.ZoneID
+		topic := s.cfg.CommandsPrefix + "." + s.cfg.ZoneID
 
 		// connect to the first broker to discover partitions
 		var conn *kafka.Conn
@@ -637,7 +648,7 @@ func (s *Simulator) startSimulation(ctx context.Context) {
 					Timestamp:  now,
 					Reading:    TempReading{TempC: s.tIn},
 				}
-				_ = s.publish(ctx, tempRd)
+				_ = s.publish(ctx, s.readingsWriter, tempRd)
 
 				// publish actuator readings (state + power + accumulated energy)
 				heatAr := ActuatorReading{State: string(s.heat), PowerW: 0, EnergyKWh: s.heatKWh}
@@ -645,18 +656,18 @@ func (s *Simulator) startSimulation(ctx context.Context) {
 					heatAr.PowerW = s.cfg.HeatPowerW
 				}
 				heatMsg := Reading{DeviceID: s.heatID, DeviceType: DeviceHeating, ZoneID: s.cfg.ZoneID, Timestamp: now, Reading: heatAr}
-				_ = s.publish(ctx, heatMsg)
+				_ = s.publish(ctx, s.readingsWriter, heatMsg)
 
 				coolAr := ActuatorReading{State: string(s.cool), PowerW: 0, EnergyKWh: s.coolKWh}
 				if s.cool == ModeOn {
 					coolAr.PowerW = s.cfg.CoolPowerW
 				}
 				coolMsg := Reading{DeviceID: s.coolID, DeviceType: DeviceCooling, ZoneID: s.cfg.ZoneID, Timestamp: now, Reading: coolAr}
-				_ = s.publish(ctx, coolMsg)
+				_ = s.publish(ctx, s.readingsWriter, coolMsg)
 
 				fanAr := ActuatorReading{State: strconv.Itoa(s.vent), PowerW: fanPower, EnergyKWh: s.fanKWh}
 				fanMsg := Reading{DeviceID: s.fanID, DeviceType: DeviceVentilation, ZoneID: s.cfg.ZoneID, Timestamp: now, Reading: fanAr}
-				_ = s.publish(ctx, fanMsg)
+				_ = s.publish(ctx, s.readingsWriter, fanMsg)
 
 				s.lastE = now
 				s.mu.Unlock()
@@ -709,10 +720,10 @@ func main() {
 		cancel:       cancel,
 	}
 
-	topic := cfg.TopicPrefix + "." + cfg.ZoneID
-	sim.writer = newKafkaWriter(cfg.KafkaBrokers, topic)
+	topic := cfg.ReadingsPrefix + "." + cfg.ZoneID
+	sim.readingsWriter = newKafkaWriter(cfg.KafkaBrokers, topic)
 
-	// start simulation loop
+	// start a simulation loop
 	sim.startSimulation(ctx)
 
 	// start per-partition consumers for each actuator (heating, cooling, ventilation)
