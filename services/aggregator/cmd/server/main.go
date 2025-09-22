@@ -1,9 +1,11 @@
-// Package main v2
-// file: main.go
+// v3
+// file: cmd/server/main.go
 package main
 
 import "NRG-CHAMP/aggregator/internal"
 
 func main() {
-	internal.Start()
+	if err := internal.StartCmd(); err != nil {
+		panic(err)
+	}
 }

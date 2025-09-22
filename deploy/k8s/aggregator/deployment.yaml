@@ -1,5 +1,5 @@
-# v2
-# file: deployment.yaml
+# v3
+# file: k8s/aggregator/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,46 +7,20 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels:
-      app: aggregator
+    matchLabels: { app: aggregator }
   template:
     metadata:
-      labels:
-        app: aggregator
+      labels: { app: aggregator }
     spec:
       containers:
         - name: aggregator
-          image: nrg-champ/aggregator:latest
-          imagePullPolicy: IfNotPresent
-          envFrom:
-            - configMapRef:
-                name: aggregator-config
-          ports:
-            - containerPort: 8080
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 2
-            periodSeconds: 5
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8080
-            initialDelaySeconds: 10
-            periodSeconds: 10
-        - name: kcat-forwarder
-          image: edenhill/kcat:1.7.1
-          args:
-            - sh
-            - -c
-            - |
-              echo "Starting kcat forwarder..." ;
-              kcat -b ${KAFKA_BROKER:-kafka:9092} -t ${KAFKA_TOPIC:-device.readings} -C -u -q -K:               | while IFS= read -r line; do
-                  if [ -n "$line" ]; then
-                    echo "$line" | curl -sS -X POST -H "Content-Type: application/x-ndjson" --data-binary @- http://127.0.0.1:8080/ingest ;
-                  fi ;
-                done
-          envFrom:
-            - configMapRef:
-                name: aggregator-config
+          image: aggregator:latest
+          args: ["-props","/app/aggregator.properties"]
+          volumeMounts:
+            - name: props
+              mountPath: /app/aggregator.properties
+              subPath: aggregator.properties
+      volumes:
+        - name: props
+          configMap:
+            name: aggregator-props

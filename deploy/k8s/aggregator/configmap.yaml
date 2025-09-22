@@ -1,11 +1,17 @@
-# v1
-# file: configmap.yaml
+# v3
+# file: k8s/aggregator/configmap.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: aggregator-config
+  name: aggregator-props
 data:
-  AGG_LISTEN_ADDR: ":8080"
-  AGG_BUFFER_MINUTES: "15"
-  KAFKA_BROKER: "kafka:9092"
-  KAFKA_TOPIC: "device.readings"
+  aggregator.properties: |
+    brokers=kafka:9092
+    topics=zone-rome-01
+    epoch_ms=500
+    offsets_path=/app/data/offsets.json
+    mape_topic=agg-to-mape
+    ledger_topic_template=ledger-{zone}
+    ledger_partition_aggregator=0
+    ledger_partition_mape=1
+    outlier_z=4.0

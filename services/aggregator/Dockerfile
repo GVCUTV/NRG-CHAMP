@@ -1,22 +1,15 @@
-# v2
+# v3
 # file: Dockerfile
-# Build a minimal static Go image
-FROM golang:1.23-alpine AS build
+FROM golang:1.22 AS build
 WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o aggregator ./cmd/server
+COPY . /app/
+# build aggregator
+RUN cd aggregator && go mod tidy && CGO_ENABLED=0 go build -o /bin/aggregator ./cmd/server
 
-FROM alpine:3.20
+FROM gcr.io/distroless/base-debian12:nonroot
 WORKDIR /app
-RUN adduser -D -H appuser
-COPY --from=build /app/aggregator /app/aggregator
-ENV AGG_LISTEN_ADDR=:8080
-USER appuser
-EXPOSE 8080
-HEALTHCHECK --interval=10s --timeout=2s --retries=5 CMD wget -qO- http://127.0.0.1:8080/health || exit 1
-ENTRYPOINT ["/app/aggregator"]
-
-ENV AGG_PROPERTIES=/app/aggregator.properties
-ENV AGG_DATA_DIR=/app/data
+COPY --from=build /bin/aggregator /usr/local/bin/aggregator
+COPY aggregator/aggregator.properties /app/aggregator.properties
+COPY aggregator/data /app/data
+USER nonroot:nonroot
+ENTRYPOINT ["/usr/local/bin/aggregator","-props","/app/aggregator.properties"]

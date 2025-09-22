@@ -1,0 +1,12 @@
+# v3
+# file: k8s/aggregator/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: aggregator
+spec:
+  selector: { app: aggregator }
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
