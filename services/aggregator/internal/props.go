@@ -1,5 +1,5 @@
-// v2
-// file: props.go
+// v3
+// file: internal/props.go
 package internal
 
 import (
@@ -12,25 +12,34 @@ import (
 )
 
 type Config struct {
-	Brokers      []string
-	Topics       []string
-	PollInterval time.Duration
-	BatchSize    int
-	OffsetsPath  string
+	Brokers         []string
+	Topics          []string
+	Epoch           time.Duration
+	MaxPerPartition int
+	OffsetsPath     string
+	MAPETopic       string
+	LedgerTopicTmpl string
+	LedgerPartAgg   int
+	LedgerPartMAPE  int
+	OutlierZ        float64
 }
 
-func loadConfig() Config {
-	path := strings.TrimSpace(os.Getenv("AGG_PROPERTIES"))
-	if path == "" {
-		path = "/app/aggregator.properties"
+func DefaultConfig() Config {
+	return Config{
+		Brokers:         []string{"kafka:9092"},
+		Epoch:           500 * time.Millisecond,
+		MaxPerPartition: 1000,
+		OffsetsPath:     filepath.Join("data", "offsets.json"),
+		MAPETopic:       "agg-to-mape",
+		LedgerTopicTmpl: "ledger-{zone}",
+		LedgerPartAgg:   0,
+		LedgerPartMAPE:  1,
+		OutlierZ:        4.0,
 	}
-	cfg := Config{
-		Brokers:      []string{"kafka:9092"},
-		Topics:       nil,
-		PollInterval: 500 * time.Millisecond,
-		BatchSize:    200,
-		OffsetsPath:  filepath.Join(dataDir(), "offsets.json"),
-	}
+}
+
+func LoadProps(path string) Config {
+	cfg := DefaultConfig()
 	f, err := os.Open(path)
 	if err != nil {
 		return cfg
@@ -39,7 +48,7 @@ func loadConfig() Config {
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 		kv := strings.SplitN(line, "=", 2)
@@ -48,50 +57,50 @@ func loadConfig() Config {
 		}
 		k := strings.TrimSpace(kv[0])
 		v := strings.TrimSpace(kv[1])
-		switch strings.ToLower(k) {
+		switch k {
 		case "brokers":
-			parts := strings.Split(v, ",")
-			out := make([]string, 0, len(parts))
-			for _, p := range parts {
-				p = strings.TrimSpace(p)
-				if p != "" {
-					out = append(out, p)
-				}
-			}
-			if len(out) > 0 {
-				cfg.Brokers = out
-			}
+			cfg.Brokers = splitCSV(v)
 		case "topics":
-			parts := strings.Split(v, ",")
-			out := make([]string, 0, len(parts))
-			for _, p := range parts {
-				p = strings.TrimSpace(p)
-				if p != "" {
-					out = append(out, p)
-				}
+			cfg.Topics = splitCSV(v)
+		case "epoch_ms":
+			if ms, err := strconv.Atoi(v); err == nil && ms > 0 {
+				cfg.Epoch = time.Duration(ms) * time.Millisecond
 			}
-			cfg.Topics = out
-		case "poll_interval_ms":
+		case "max_per_partition":
 			if n, err := strconv.Atoi(v); err == nil && n > 0 {
-				cfg.PollInterval = time.Duration(n) * time.Millisecond
-			}
-		case "batch_size":
-			if n, err := strconv.Atoi(v); err == nil && n > 0 {
-				cfg.BatchSize = n
+				cfg.MaxPerPartition = n
 			}
 		case "offsets_path":
-			if v != "" {
-				cfg.OffsetsPath = v
+			cfg.OffsetsPath = v
+		case "mape_topic":
+			cfg.MAPETopic = v
+		case "ledger_topic_template":
+			cfg.LedgerTopicTmpl = v
+		case "ledger_partition_aggregator":
+			if n, err := strconv.Atoi(v); err == nil {
+				cfg.LedgerPartAgg = n
+			}
+		case "ledger_partition_mape":
+			if n, err := strconv.Atoi(v); err == nil {
+				cfg.LedgerPartMAPE = n
+			}
+		case "outlier_z":
+			if z, err := strconv.ParseFloat(v, 64); err == nil {
+				cfg.OutlierZ = z
 			}
 		}
 	}
-	_ = os.MkdirAll(filepath.Dir(cfg.OffsetsPath), 0o755)
 	return cfg
 }
 
-func dataDir() string {
-	if d := strings.TrimSpace(os.Getenv("AGG_DATA_DIR")); d != "" {
-		return d
+func splitCSV(s string) []string {
+	parts := strings.Split(s, ",")
+	var out []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
 	}
-	return "/app/data"
+	return out
 }

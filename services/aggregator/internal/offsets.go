@@ -1,5 +1,5 @@
-// v2
-// file: offsets.go
+// v3
+// file: internal/offsets.go
 package internal
 
 import (
@@ -9,50 +9,61 @@ import (
 	"sync"
 )
 
+// Offsets tracks per-topic/partition offsets persisted on disk.
 type Offsets struct {
-	mu sync.Mutex
-	M  map[string]map[int]int64 `json:"m"` // topic -> partition -> nextOffset
-	p  string
+	path string
+	mu   sync.Mutex
+	Data map[string]map[int]int64 `json:"data"` // topic -> partition -> lastCommittedOffset
 }
 
-func newOffsets(path string) *Offsets {
+func NewOffsets(path string) *Offsets {
+	o := &Offsets{path: path, Data: map[string]map[int]int64{}}
 	_ = os.MkdirAll(filepath.Dir(path), 0o755)
-	o := &Offsets{M: make(map[string]map[int]int64), p: path}
-	if b, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(b, &o.M)
-	}
+	o.load()
 	return o
 }
 
-func (o *Offsets) get(topic string, partition int) (int64, bool) {
+func (o *Offsets) load() {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if mp, ok := o.M[topic]; ok {
-		v, ok2 := mp[partition]
-		return v, ok2
+	b, err := os.ReadFile(o.path)
+	if err != nil {
+		return
 	}
-	return 0, false
+	var tmp map[string]map[int]int64
+	if json.Unmarshal(b, &tmp) == nil {
+		o.Data = tmp
+	}
 }
 
-func (o *Offsets) set(topic string, partition int, next int64) {
+func (o *Offsets) Save() error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	mp, ok := o.M[topic]
-	if !ok {
-		mp = make(map[int]int64)
-		o.M[topic] = mp
-	}
-	mp[partition] = next
-}
-
-func (o *Offsets) save() error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	b, err := json.MarshalIndent(o.M, "", "  ")
+	b, err := json.MarshalIndent(o.Data, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(o.p, b, 0o644)
+	return os.WriteFile(o.path, b, 0o644)
 }
 
-func (o *Offsets) path() string { return o.p }
+func (o *Offsets) Get(topic string, partition int) int64 {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if m, ok := o.Data[topic]; ok {
+		if v, ok2 := m[partition]; ok2 {
+			return v
+		}
+	}
+	return -1
+}
+
+func (o *Offsets) Set(topic string, partition int, offset int64) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	m, ok := o.Data[topic]
+	if !ok {
+		m = map[int]int64{}
+		o.Data[topic] = m
+	}
+	m[partition] = offset
+}

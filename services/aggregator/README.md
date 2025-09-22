@@ -1,19 +1,20 @@
-# Aggregator Service
+# v3
+# file: README.md
+NRG-CHAMP Aggregator — Epoch-based Kafka reader/writer
 
-Consumes readings from Kafka topic `device.readings` (via sidecar), validates schema,
-buffers the last 15 minutes in memory, and exposes:
+This version implements the "epoca" mechanics:
+- Reads every X milliseconds (epoch_ms) from assigned zone topics.
+- Topics are per-zone; partitions are per-device (partition chosen by hash(deviceId)).
+- For each epoch: round-robin over topics, and within each topic round-robin over partitions.
+  As soon as a partition yields a message from the next epoch, we STOP and leave that message unread
+  (offset not advanced) and move to the next partition.
+- Overhead is stripped, outliers are discarded, and readings are grouped by device within the zone.
+- After aggregating per zone+epoch, the aggregator writes the compact payload to:
+  * MAPE topic (one topic; partition = hash(zoneId))
+  * Ledger per-zone topic (two partitions: 0=aggregator, 1=mape). Aggregator writes to partition 0.
+- All Kafka I/O is wrapped with the shared circuit breaker module.
 
-- `GET /health`
-- `GET /latest?zoneId=Z`
-- `GET /series?zoneId=Z&from=RFC3339&to=RFC3339`
-- `POST /ingest` (internal, used by the kcat sidecar; accepts NDJSON or JSON array)
+Run locally:
+  go run ./aggregator/cmd/server -props ./aggregator/aggregator.properties
 
-## Local run
-```bash
-go run ./main.go
-```
-
-## Env vars
-- `AGG_LISTEN_ADDR` (default `:8080`)
-- `AGG_BUFFER_MINUTES` (default `15`)
-```
+Properties are in `aggregator.properties` (see that file for docs).
