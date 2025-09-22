@@ -1,6 +1,6 @@
 // v0
 // logging.go
-package circuitbreaker
+package circuit_breaker
 
 import (
 	"io"

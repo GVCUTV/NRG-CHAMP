@@ -1,15 +1,16 @@
 // v0
-// circuitbreaker.go
-package circuitbreaker
+// circuit_breaker.go
+package circuit_breaker
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"lo
+	"log"
 	"log/slog"
 	"sync"
 	"fmt"
+	"time"
 )
 
 type State int

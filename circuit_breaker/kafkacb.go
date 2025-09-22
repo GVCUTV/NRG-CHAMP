@@ -1,6 +1,6 @@
 // v0
 // kafkacb.go
-package circuitbreaker
+package circuit_breaker
 
 import "context"
 
