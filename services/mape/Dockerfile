@@ -1,15 +1,24 @@
-// v1
-// Dockerfile
-# syntax=docker/dockerfile:1
-FROM golang:1.22 as builder
-WORKDIR /src
-COPY . ./
-RUN --mount=type=cache,target=/root/.cache/go-build \    --mount=type=cache,target=/go/pkg/mod \    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/mape ./cmd/server
-
-FROM gcr.io/distroless/base-debian12
+# v0
+# Dockerfile
+FROM golang:1.22-alpine AS build
 WORKDIR /app
-COPY --from=builder /out/mape /app/mape
-USER 65532:65532
-ENV LISTEN_ADDR=:8090
-EXPOSE 8090
+COPY . .
+RUN go mod download && CGO_ENABLED=0 go build -o /mape ./cmd/mape
+
+FROM alpine:3.20
+WORKDIR /app
+RUN adduser -D -u 10001 appuser
+USER appuser
+COPY --from=build /mape /app/mape
+COPY --from=build /app/configs /app/configs
+ENV HTTP_BIND=:8080
+ENV LOG_DIR=/app/logs
+ENV KAFKA_BROKERS=localhost:9092
+ENV AGGREGATOR_TOPIC=aggregator.to.mape
+ENV ACTUATOR_TOPIC_PREFIX=zone.commands.
+ENV LEDGER_TOPIC_PREFIX=zone.ledger.
+ENV LEDGER_MAPE_PARTITION=1
+ENV PROPERTIES_PATH=/app/configs/mape.properties
+ENV POLL_INTERVAL_MS=250
+EXPOSE 8080
 ENTRYPOINT ["/app/mape"]
