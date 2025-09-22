@@ -1,0 +1,29 @@
+# v0
+# k8s/create-topics-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-kafka-topics
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: kt
+          image: bitnami/kafka:3.7
+          env:
+            - name: BOOTSTRAP
+              value: kafka:9092
+            - name: TOPIC_NAME
+              value: device.readings.zone-A
+            - name: PARTITIONS
+              value: "6"
+            - name: REPLICATION
+              value: "1"
+          command: ["/bin/sh","-c"]
+          args:
+            - |
+              echo "Creating topic ${TOPIC_NAME} ..."
+              kafka-topics.sh --create --topic "${TOPIC_NAME}" --bootstrap-server "${BOOTSTRAP}"                 --partitions "${PARTITIONS}" --replication-factor "${REPLICATION}" || true
+              echo "Describe:"
+              kafka-topics.sh --describe --topic "${TOPIC_NAME}" --bootstrap-server "${BOOTSTRAP}"
