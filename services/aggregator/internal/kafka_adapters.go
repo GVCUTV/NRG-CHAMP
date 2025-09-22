@@ -1,4 +1,4 @@
-// v3
+// Package internal v6
 // file: internal/kafka_adapters.go
 package internal
 
@@ -6,11 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
 	"log/slog"
+	"strings"
 	"time"
 
-	cb "github.com/nrg-champ/circuitbreaker"
 	"github.com/segmentio/kafka-go"
 )
 
@@ -31,7 +30,12 @@ func (c *KafkaGoConsumer) Partitions(ctx context.Context, topic string) ([]int, 
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func(conn *kafka.Conn) {
+		err := conn.Close()
+		if err != nil {
+			c.log.Warn("kafka_conn_close_failed", "err", err)
+		}
+	}(conn)
 	parts, err := conn.ReadPartitions(topic)
 	if err != nil {
 		return nil, err
@@ -56,8 +60,14 @@ func (c *KafkaGoConsumer) ReadFromPartition(ctx context.Context, topic string, p
 		Partition: partition,
 		MinBytes:  1,
 		MaxBytes:  10e6,
+		// No GroupID — we manage offsets ourselves
 	})
-	defer r.Close()
+	defer func(r *kafka.Reader) {
+		err := r.Close()
+		if err != nil {
+			c.log.Warn("kafka_reader_close_failed", "topic", topic, "partition", partition, "err", err)
+		}
+	}(r)
 	if err := r.SetOffset(start); err != nil {
 		return nil, start - 1, start, false, err
 	}
@@ -70,80 +80,81 @@ func (c *KafkaGoConsumer) ReadFromPartition(ctx context.Context, topic string, p
 	for i := 0; i < max; i++ {
 		m, err := r.FetchMessage(ctx)
 		if err != nil {
-			// timeout / no message: just break
+			// likely timeout / empty
+			c.log.Error("kafka_fetch_failed", "topic", topic, "partition", partition, "err", err)
 			break
 		}
 		msgTime := m.Time
-		msgEpoch := int64(msgTime.UnixMilli()) / int64(epoch.Len.Milliseconds())
+		msgEpoch := msgTime.UnixMilli() / epoch.Len.Milliseconds()
+
+		c.log.Info("time", "msgEpoch", msgEpoch, "epoch.Index", epoch.Index)
 
 		if msgEpoch > epoch.Index {
-			// next epoch: do not commit, leave for next tick
+			// next epoch: leave unread
 			nextOffset = m.Offset
 			sawNext = true
 			break
 		}
 		if msgEpoch < epoch.Index {
-			// late message: skip but advance offset
+			// late message: skip but advance local offset
 			lastCommitted = m.Offset
-			if err := r.CommitMessages(ctx, m); err != nil {
-				c.log.Error("commit_late_failed", "topic", topic, "partition", partition, "err", err)
-			}
+			nextOffset = m.Offset + 1
 			continue
 		}
 
 		// msg in current epoch
-		rec, ok := decodeReading(m.Value, topic, partition, msgTime)
+		rec, ok := decodeReading(m.Value, topic, msgTime)
 		if ok {
 			parsed = append(parsed, rec)
 		}
-		// commit
 		lastCommitted = m.Offset
-		if err := r.CommitMessages(ctx, m); err != nil {
-			c.log.Error("commit_failed", "topic", topic, "partition", partition, "err", err)
-		}
 		nextOffset = m.Offset + 1
 	}
-	// persist last committed
+	// persist last processed
 	c.offsets.Set(topic, partition, lastCommitted)
 	return parsed, lastCommitted, nextOffset, sawNext, nil
 }
 
-func decodeReading(b []byte, topic string, part int, ts time.Time) (Reading, bool) {
+// decodeReading parses the specified JSON schema.
+func decodeReading(b []byte, topic string, brokerTS time.Time) (Reading, bool) {
 	var m map[string]any
 	if err := json.Unmarshal(b, &m); err != nil {
 		return Reading{}, false
 	}
-	// heuristics: expect deviceId, zoneId and some fields; drop overhead
+	// Required top-level fields
 	dev, _ := m["deviceId"].(string)
-	zone := ""
+	zone, _ := m["zoneId"].(string)
+	dtype, _ := m["deviceType"].(string)
+	ts := parseTimestamp(m["timestamp"], brokerTS)
 
-	if z, ok := m["zoneId"].(string); ok {
-		zone = z
-	} else {
-		zone = topic // fallback to topic name == zone id
-	}
+	// reading object varies by deviceType
+	readingObj, _ := m["reading"].(map[string]any)
 
 	r := Reading{
-		DeviceID:  dev,
-		ZoneID:    zone,
-		Timestamp: ts,
-		Extra:     nil,
+		DeviceID:   dev,
+		ZoneID:     fallback(zone, topic),
+		DeviceType: dtype,
+		Timestamp:  ts,
+		Extra:      nil,
 	}
-	// pull known numeric fields if present
-	if v, ok := toFloat(m["tempC"]); ok {
-		r.Temperature = &v
-	}
-	if v, ok := toFloat(m["humidity"]); ok {
-		r.Humidity = &v
-	}
-	if s, ok := m["state"].(string); ok {
-		r.ActuatorState = &s
-	}
-	if v, ok := toFloat(m["powerW"]); ok {
-		r.PowerW = &v
-	}
-	if v, ok := toFloat(m["energyKWh"]); ok {
-		r.EnergyKWh = &v
+
+	switch dtype {
+	case "temp_sensor":
+		if v, ok := toFloat(readingObj["tempC"]); ok {
+			r.Temperature = &v
+		}
+	case "act_heating", "act_cooling", "act_ventilation":
+		if s, ok := readingObj["state"].(string); ok {
+			r.ActuatorState = &s
+		}
+		if v, ok := toFloat(readingObj["powerW"]); ok {
+			r.PowerW = &v
+		}
+		if v, ok := toFloat(readingObj["energyKWh"]); ok {
+			r.EnergyKWh = &v
+		}
+	default:
+		// unknown deviceType: keep minimal info
 	}
 	return r, true
 }
@@ -161,44 +172,47 @@ func toFloat(a any) (float64, bool) {
 	case json.Number:
 		v, err := t.Float64()
 		return v, err == nil
+	case string:
+		if v, err := json.Number(t).Float64(); err == nil {
+			return v, true
+		}
+		return 0, false
 	default:
 		return 0, false
 	}
 }
 
-// --- Producer implementation using kafka-go + CB ---
-
-type ProducerFactory struct {
-	log     *slog.Logger
-	brokers []string
-	cbCfg   cb.Config
-}
-
-func NewProducerFactory(log *slog.Logger, brokers []string, cbCfg cb.Config) *ProducerFactory {
-	return &ProducerFactory{log: log, brokers: brokers, cbCfg: cbCfg}
-}
-
-func (pf *ProducerFactory) NewKafkaProducer(name string) CBWrappedProducer {
-	w := &kafka.Writer{
-		Addr:         kafka.TCP(pf.brokers...),
-		Async:        false,
-		Balancer:     &kafka.Hash{},
-		RequiredAcks: kafka.RequireAll,
-		BatchTimeout: 5 * time.Millisecond,
-	}
-	adapter := &writerAdapter{w: w}
-	probe := func(ctx context.Context) error {
-		// simple metadata probe via connection
-		conn, err := kafka.DialContext(ctx, "tcp", pf.brokers[0])
-		if err != nil {
-			return err
+func parseTimestamp(v any, fallbackTS time.Time) time.Time {
+	switch t := v.(type) {
+	case string:
+		layouts := []string{
+			time.RFC3339Nano,
+			time.RFC3339,
+			"2006-01-02T15:04:05.000Z07:00",
+			"2006-01-02 15:04:05Z07:00",
 		}
-		defer conn.Close()
-		return nil
+		for _, l := range layouts {
+			if ts, err := time.Parse(l, t); err == nil {
+				return ts
+			}
+		}
+		// try millis as a numeric string
+		if ms, err := json.Number(t).Int64(); err == nil {
+			return time.UnixMilli(ms)
+		}
+	case float64:
+		return time.UnixMilli(int64(t))
+	case int64:
+		return time.UnixMilli(t)
+	case json.Number:
+		if ms, err := t.Int64(); err == nil {
+			return time.UnixMilli(ms)
+		}
 	}
-	cbProd := cb.NewCBProducer(name, pf.cbCfg, adapter, probe)
-	return &cbProducerShim{inner: cbProd}
+	return fallbackTS
 }
+
+// --- Producer implementation using kafka-go ---
 
 type writerAdapter struct {
 	w *kafka.Writer
@@ -213,15 +227,23 @@ func (wa *writerAdapter) Send(ctx context.Context, topic string, key, value []by
 	})
 }
 
-type cbProducerShim struct {
-	inner *cb.CBProducer
+// DefaultCBFactory default CB factory (no-op CB; replace with real CB in prod)
+type DefaultCBFactory struct{}
+
+func NewDefaultCBFactory() *DefaultCBFactory { return &DefaultCBFactory{} }
+func (f *DefaultCBFactory) NewKafkaProducer(_ string, brokers []string) CBWrappedProducer {
+	w := &kafka.Writer{
+		Addr:                   kafka.TCP(brokers...),
+		Async:                  false,
+		Balancer:               &kafka.Hash{},
+		RequiredAcks:           kafka.RequireAll,
+		BatchTimeout:           5 * time.Millisecond,
+		AllowAutoTopicCreation: false,
+	}
+	return &writerAdapter{w: w}
 }
 
-func (s *cbProducerShim) Send(ctx context.Context, topic string, key, value []byte) error {
-	return s.inner.Send(ctx, topic, key, value)
-}
-
-// MAPE writer: topic with partitions keyed by hash(zoneId).
+// MAPEWriter Writers
 type MAPEWriter struct {
 	prod  CBWrappedProducer
 	topic string
@@ -239,7 +261,6 @@ func (w *MAPEWriter) Send(ctx context.Context, zone string, epoch AggregatedEpoc
 	return w.prod.Send(ctx, w.topic, key, b)
 }
 
-// Ledger writer: per-zone topic, fixed partition index for aggregator = cfg.LedgerPartAgg
 type LedgerWriter struct {
 	prod    CBWrappedProducer
 	tmpl    string
@@ -254,32 +275,16 @@ func (w *LedgerWriter) Send(ctx context.Context, zone string, epoch AggregatedEp
 	if err != nil {
 		return err
 	}
-	topic := stringsReplaceAll(w.tmpl, "{zone}", zone)
-	// encode partition choice via key hashing: use "{zone}|agg"
+	topic := strings.ReplaceAll(w.tmpl, "{zone}", zone)
 	key := []byte(fmt.Sprintf("%s|agg", zone))
 	return w.prod.Send(ctx, topic, key, b)
 }
 
-func stringsReplaceAll(s, old, new string) string {
-	return string([]byte(stringsReplace([]rune(s), []rune(old), []rune(new))))
-}
-func stringsReplace(runes []rune, old, new []rune) []rune {
-	out := make([]rune, 0, len(runes))
-	for i := 0; i < len(runes); {
-		if i+len(old) <= len(runes) && string(runes[i:i+len(old)]) == string(old) {
-			out = append(out, new...)
-			i += len(old)
-		} else {
-			out = append(out, runes[i])
-			i++
-		}
+func fallback(s, fb string) string {
+	if s != "" {
+		return s
 	}
-	return out
+	return fb
 }
 
-// Hash helper consistent with Kafka's default hash partitioner behavior.
-func hashKey(zone string) int {
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(zone))
-	return int(h.Sum32())
-}
+// Hash helper (if needed)

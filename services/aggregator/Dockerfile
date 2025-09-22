@@ -1,15 +1,18 @@
 # v3
 # file: Dockerfile
-FROM golang:1.22 AS build
+FROM golang:1.23-alpine AS builder
 WORKDIR /app
-COPY . /app/
-# build aggregator
-RUN cd aggregator && go mod tidy && CGO_ENABLED=0 go build -o /bin/aggregator ./cmd/server
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o aggregator ./cmd/server
 
-FROM gcr.io/distroless/base-debian12:nonroot
+FROM alpine:3.20
 WORKDIR /app
-COPY --from=build /bin/aggregator /usr/local/bin/aggregator
-COPY aggregator/aggregator.properties /app/aggregator.properties
-COPY aggregator/data /app/data
-USER nonroot:nonroot
-ENTRYPOINT ["/usr/local/bin/aggregator","-props","/app/aggregator.properties"]
+RUN adduser -D -H appuser
+COPY --from=builder /app/aggregator /app/aggregator
+COPY --from=builder /app/aggregator.properties /app/aggregator.properties
+ENV AGG_PROPERTIES=/app/aggregator.properties
+USER appuser
+EXPOSE 8080
+ENTRYPOINT ["/app/aggregator"]

@@ -1,4 +1,4 @@
-// v3
+// Package internal v6
 // file: internal/offsets.go
 package internal
 

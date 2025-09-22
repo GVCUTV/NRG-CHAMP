@@ -2,7 +2,7 @@
 # scripts/create_topic.sh
 #!/usr/bin/env bash
 set -euo pipefail
-TOPIC="${1:-device.readings.zone-A}"
+TOPIC="${1:-agg-to-mape}"
 PARTITIONS="${2:-6}"
 REPLICATION="${3:-1}"
 BROKER="${BROKER:-localhost:9092}"

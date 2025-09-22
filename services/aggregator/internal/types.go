@@ -1,4 +1,4 @@
-// v3
+// Package internal v6
 // file: internal/types.go
 package internal
 
@@ -18,14 +18,13 @@ type EpochID struct {
 
 // Reading represents a validated device measurement with minimal overhead.
 type Reading struct {
-	DeviceID  string    `json:"deviceId"`
-	ZoneID    string    `json:"zoneId"`
-	Timestamp time.Time `json:"timestamp"`
-	// Sensors (examples; extend as needed)
-	Temperature *float64 `json:"temperature,omitempty"`
-	Humidity    *float64 `json:"humidity,omitempty"`
-	// Actuator
-	ActuatorState *string  `json:"actuatorState,omitempty"` // e.g., "ON","OFF","0","25","50"...
+	DeviceID   string    `json:"deviceId"`
+	ZoneID     string    `json:"zoneId"`
+	DeviceType string    `json:"deviceType"`
+	Timestamp  time.Time `json:"timestamp"`
+	// Sensors / Actuators
+	Temperature   *float64 `json:"temperature,omitempty"`   // tempC for temp_sensor
+	ActuatorState *string  `json:"actuatorState,omitempty"` // ON/OFF or 0|25|50|75|100
 	PowerW        *float64 `json:"powerW,omitempty"`
 	EnergyKWh     *float64 `json:"energyKWh,omitempty"`
 	// Extra is dropped when writing aggregated payloads (communication overhead removed).
@@ -37,7 +36,7 @@ type AggregatedEpoch struct {
 	ZoneID     string               `json:"zoneId"`
 	Epoch      EpochID              `json:"epoch"`
 	ByDevice   map[string][]Reading `json:"byDevice"`
-	Summary    map[string]float64   `json:"summary"` // optional quick stats (e.g., avgTemp, avgHumidity)
+	Summary    map[string]float64   `json:"summary"` // e.g., avgTemp, avgPower
 	ProducedAt time.Time            `json:"producedAt"`
 }
 
@@ -65,20 +64,13 @@ type ProducerMulti interface {
 
 // KafkaConsumer abstracts partitioned reads.
 type KafkaConsumer interface {
-	// Partitions returns partition IDs for a topic.
 	Partitions(ctx context.Context, topic string) ([]int, error)
-	// ReadFromPartition reads up to max messages whose timestamp is < epoch.End,
-	// starting from the saved offset, and returns:
-	// - readings parsed/validated,
-	// - lastCommittedOffset (after processing),
-	// - nextOffset (first unread message for next epoch, or lastCommitted+1 if none),
-	// - sawNextEpoch (true if encountered message from next epoch).
 	ReadFromPartition(ctx context.Context, topic string, partition int, epoch EpochID, max int) (parsed []Reading, lastCommitted, nextOffset int64, sawNextEpoch bool, err error)
 }
 
 // CircuitBreakerFactory creates CB-wrapped producers.
 type CircuitBreakerFactory interface {
-	NewKafkaProducer(name string) CBWrappedProducer
+	NewKafkaProducer(name string, brokers []string) CBWrappedProducer
 }
 
 // CBWrappedProducer is the minimal interface used by our writers.
