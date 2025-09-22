@@ -1,6 +1,6 @@
-// v0
+// v1
 // httpcb.go
-package circuit_breaker
+package circuitbreaker
 
 import (
 	"context"
@@ -17,6 +17,7 @@ type HTTPClient struct {
 	probeURL string
 }
 
+// NewHTTPClient builds an HTTP client protected by the circuit breaker.
 func NewHTTPClient(name string, cfg Config, probeURL string, httpClient *http.Client) (*HTTPClient, error) {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 15 * time.Second}
@@ -31,7 +32,7 @@ func NewHTTPClient(name string, cfg Config, probeURL string, httpClient *http.Cl
 			return err
 		}
 		defer resp.Body.Close()
-		io.CopyN(io.Discard, resp.Body, 64)
+		io.CopyN(io.Discard, resp.Body, 64) // ensure connection validity
 		if resp.StatusCode >= 200 && resp.StatusCode < 500 {
 			return nil
 		}
@@ -41,6 +42,7 @@ func NewHTTPClient(name string, cfg Config, probeURL string, httpClient *http.Cl
 	return &HTTPClient{Client: httpClient, brk: brk, probeURL: probeURL}, nil
 }
 
+// Do mirrors http.Client.Do, but runs behind the breaker.
 func (h *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	err := h.brk.Execute(req.Context(), func(ctx context.Context) error {

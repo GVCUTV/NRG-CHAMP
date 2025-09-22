@@ -1,6 +1,6 @@
-// v0
+// v1
 // properties.go
-package circuit_breaker
+package circuitbreaker
 
 import (
 	"bufio"
@@ -21,7 +21,7 @@ type Config struct {
 
 // LoadConfigFromProperties parses a simple key=value .properties file.
 func LoadConfigFromProperties(path string) (Config, error) {
-	logger := newLogger("") // temporary logger to at least log failures to stdout
+	logger := newLogger("")
 	logger.Info("loading_properties", "path", path)
 
 	f, err := os.Open(path)
@@ -44,7 +44,6 @@ func LoadConfigFromProperties(path string) (Config, error) {
 		}
 		key := strings.ToLower(strings.TrimSpace(kv[0]))
 		val := strings.TrimSpace(kv[1])
-
 		switch key {
 		case "circuit.maxfailures":
 			if n, err := strconv.Atoi(val); err == nil && n > 0 {
@@ -57,22 +56,18 @@ func LoadConfigFromProperties(path string) (Config, error) {
 		case "log.file":
 			cfg.LogFile = val
 		default:
-			// ignore unknown keys
+			// ignore
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return Config{}, err
 	}
-
-	// basic sanity
 	if cfg.MaxFailures < 1 {
 		return Config{}, errors.New("MaxFailures must be >= 1")
 	}
 	if cfg.ResetTimeout <= 0 {
 		return Config{}, errors.New("ResetTimeout must be > 0")
 	}
-
-	// recreate logger with file if provided
 	logger = newLogger(cfg.LogFile)
 	logger.Info("properties_loaded", "maxFailures", cfg.MaxFailures, "resetTimeout", cfg.ResetTimeout.String(), "logFile", cfg.LogFile)
 	return cfg, nil

@@ -1,4 +1,4 @@
-// v0
+// v1
 // go.mod
 module github.com/nrg-champ/circuitbreaker
 
