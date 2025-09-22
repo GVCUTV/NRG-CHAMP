@@ -30,8 +30,10 @@ relativo alla chiamata all'interno del modulo.
 I gestori delle chiamate eseguiranno le seguenti operazioni:
 - invia la richiesta
 - se la richiesta non va a buon fine ed è stato raggiunto il limite massimo di fallimenti, attende X secondi prima di ricontattare il servizio remoto
-- passati gli X secondi, invia una richiesta di test al servizio; se va a buon fine, reinvia la richiesta originale
+- passati gli X secondi, invia una richiesta di test al servizio; se va a buon fine, ripete l'invio della richiesta originale
 - resetta il contatore dei fallimenti
+
+Il numero massimo di fallimenti e il tempo di reset del circuit braker dovranno assere impostabili tramite un file di properties
 
 ## MAPE
 Gli obiettivi di temperatura all'interno di ogni zona devono essere scritti all'interno di un file di properties.
