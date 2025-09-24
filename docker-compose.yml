@@ -1,4 +1,4 @@
-version: "3.9"
+#version: "3.9"
 
 services:
   kafka:
@@ -101,7 +101,7 @@ services:
 #    depends_on:
 #      - kafka
 #    restart: unless-stopped
-#
+
 #  ledger:
 #    build: .
 #    container_name: nrg-ledger
