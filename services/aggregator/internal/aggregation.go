@@ -1,4 +1,4 @@
-// Package internal v6
+// Package internal v8
 // file: internal/aggregation.go
 package internal
 
@@ -9,15 +9,12 @@ import (
 
 // aggregate cleans overhead, removes outliers, and groups by device.
 func aggregate(zone string, epoch EpochID, readings []Reading, zThresh float64) AggregatedEpoch {
-	// remove obvious outliers via simple z-score on numeric fields (per-field)
 	clean := removeOutliers(readings, zThresh)
-
 	byDev := map[string][]Reading{}
 	var temps, powers, energies []float64
-
 	for _, r := range clean {
-		rr := r        // copy
-		rr.Extra = nil // drop overhead
+		rr := r
+		rr.Extra = nil
 		byDev[r.DeviceID] = append(byDev[r.DeviceID], rr)
 		if r.Temperature != nil {
 			temps = append(temps, *r.Temperature)
@@ -29,7 +26,6 @@ func aggregate(zone string, epoch EpochID, readings []Reading, zThresh float64) 
 			energies = append(energies, *r.EnergyKWh)
 		}
 	}
-
 	summary := map[string]float64{}
 	if len(temps) > 0 {
 		summary["avgTemp"] = mean(temps)
@@ -40,21 +36,13 @@ func aggregate(zone string, epoch EpochID, readings []Reading, zThresh float64) 
 	if len(energies) > 0 {
 		summary["avgEnergyKWh"] = mean(energies)
 	}
-
-	return AggregatedEpoch{
-		ZoneID:     zone,
-		Epoch:      epoch,
-		ByDevice:   byDev,
-		Summary:    summary,
-		ProducedAt: time.Now(),
-	}
+	return AggregatedEpoch{ZoneID: zone, Epoch: epoch, ByDevice: byDev, Summary: summary, ProducedAt: time.Now()}
 }
 
 func removeOutliers(rs []Reading, z float64) []Reading {
 	if z <= 0 {
 		return rs
 	}
-	// compute field-wise mean/std
 	var temps, powers, energies []float64
 	for _, r := range rs {
 		if r.Temperature != nil {
@@ -70,24 +58,17 @@ func removeOutliers(rs []Reading, z float64) []Reading {
 	mt, st := meanStd(temps)
 	mp, sp := meanStd(powers)
 	me, se := meanStd(energies)
-
 	out := make([]Reading, 0, len(rs))
 	for _, r := range rs {
 		ok := true
-		if r.Temperature != nil && st > 0 {
-			if ((*r.Temperature-mt)/st) > z || ((mt-*r.Temperature)/st) > z {
-				ok = false
-			}
+		if r.Temperature != nil && st > 0 && math.Abs((*r.Temperature-mt)/st) > z {
+			ok = false
 		}
-		if r.PowerW != nil && sp > 0 {
-			if ((*r.PowerW-mp)/sp) > z || ((mp-*r.PowerW)/sp) > z {
-				ok = false
-			}
+		if r.PowerW != nil && sp > 0 && math.Abs((*r.PowerW-mp)/sp) > z {
+			ok = false
 		}
-		if r.EnergyKWh != nil && se > 0 {
-			if ((*r.EnergyKWh-me)/se) > z || ((me-*r.EnergyKWh)/se) > z {
-				ok = false
-			}
+		if r.EnergyKWh != nil && se > 0 && math.Abs((*r.EnergyKWh-me)/se) > z {
+			ok = false
 		}
 		if ok {
 			out = append(out, r)
@@ -106,7 +87,6 @@ func mean(a []float64) float64 {
 	}
 	return s / float64(len(a))
 }
-
 func meanStd(a []float64) (float64, float64) {
 	if len(a) == 0 {
 		return 0, 0
