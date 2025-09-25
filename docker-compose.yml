@@ -14,11 +14,11 @@ services:
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@kafka:9093
       - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      #- KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
       - KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR=1
       - KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
       - KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR=1
-      - KAFKA_CFG_NUM_PARTITIONS=6
+      #- KAFKA_CFG_NUM_PARTITIONS=6
       - ALLOW_PLAINTEXT_LISTENER=yes
       # Optional: speed up local boots
       - KAFKA_HEAP_OPTS=-Xms256m -Xmx256m
@@ -61,6 +61,8 @@ services:
     restart: unless-stopped
     depends_on:
       kafka:
+        condition: service_healthy
+      zone-simulator:
         condition: service_healthy
     environment:
       AGGREGATOR_PROPS: /app/aggregator.properties
