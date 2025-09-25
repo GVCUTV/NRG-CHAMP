@@ -1,4 +1,4 @@
-// Package internal v6
+// Package internal v8
 // file: internal/kafka_adapters.go
 package internal
 
@@ -33,7 +33,7 @@ func (c *KafkaGoConsumer) Partitions(ctx context.Context, topic string) ([]int, 
 	defer func(conn *kafka.Conn) {
 		err := conn.Close()
 		if err != nil {
-			c.log.Warn("kafka_conn_close_failed", "err", err)
+			c.log.Error("kafka_conn_close_err", "brokers", c.brokers, "err", err)
 		}
 	}(conn)
 	parts, err := conn.ReadPartitions(topic)
@@ -54,18 +54,11 @@ func (c *KafkaGoConsumer) ReadFromPartition(ctx context.Context, topic string, p
 	if start < 0 {
 		start = kafka.FirstOffset
 	}
-	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:   c.brokers,
-		Topic:     topic,
-		Partition: partition,
-		MinBytes:  1,
-		MaxBytes:  10e6,
-		// No GroupID — we manage offsets ourselves
-	})
+	r := kafka.NewReader(kafka.ReaderConfig{Brokers: c.brokers, Topic: topic, Partition: partition, MinBytes: 1, MaxBytes: 10e6})
 	defer func(r *kafka.Reader) {
 		err := r.Close()
 		if err != nil {
-			c.log.Warn("kafka_reader_close_failed", "topic", topic, "partition", partition, "err", err)
+			c.log.Error("kafka_reader_close_err", "topic", topic, "partition", partition, "err", err)
 		}
 	}(r)
 	if err := r.SetOffset(start); err != nil {
@@ -73,71 +66,53 @@ func (c *KafkaGoConsumer) ReadFromPartition(ctx context.Context, topic string, p
 	}
 
 	var parsed []Reading
-	var lastCommitted = start - 1
-	var nextOffset = start
-	var sawNext = false
+	lastCommitted := start - 1
+	nextOffset := start
+	sawNext := false
 
 	for i := 0; i < max; i++ {
 		m, err := r.FetchMessage(ctx)
 		if err != nil {
-			// likely timeout / empty
-			c.log.Error("kafka_fetch_failed", "topic", topic, "partition", partition, "err", err)
 			break
 		}
 		msgTime := m.Time
 		msgEpoch := msgTime.UnixMilli() / epoch.Len.Milliseconds()
 
-		c.log.Info("time", "msgEpoch", msgEpoch, "epoch.Index", epoch.Index)
-
 		if msgEpoch > epoch.Index {
-			// next epoch: leave unread
 			nextOffset = m.Offset
 			sawNext = true
 			break
 		}
 		if msgEpoch < epoch.Index {
-			// late message: skip but advance local offset
 			lastCommitted = m.Offset
 			nextOffset = m.Offset + 1
 			continue
 		}
 
-		// msg in current epoch
-		rec, ok := decodeReading(m.Value, topic, msgTime)
+		rec, ok := decodeReadingNewSchema(m.Value, topic, msgTime)
 		if ok {
 			parsed = append(parsed, rec)
 		}
 		lastCommitted = m.Offset
 		nextOffset = m.Offset + 1
 	}
-	// persist last processed
 	c.offsets.Set(topic, partition, lastCommitted)
 	return parsed, lastCommitted, nextOffset, sawNext, nil
 }
 
-// decodeReading parses the specified JSON schema.
-func decodeReading(b []byte, topic string, brokerTS time.Time) (Reading, bool) {
+// decodeReadingNewSchema parses the specified JSON schema.
+func decodeReadingNewSchema(b []byte, topic string, brokerTS time.Time) (Reading, bool) {
 	var m map[string]any
 	if err := json.Unmarshal(b, &m); err != nil {
 		return Reading{}, false
 	}
-	// Required top-level fields
 	dev, _ := m["deviceId"].(string)
 	zone, _ := m["zoneId"].(string)
 	dtype, _ := m["deviceType"].(string)
 	ts := parseTimestamp(m["timestamp"], brokerTS)
-
-	// reading object varies by deviceType
 	readingObj, _ := m["reading"].(map[string]any)
 
-	r := Reading{
-		DeviceID:   dev,
-		ZoneID:     fallback(zone, topic),
-		DeviceType: dtype,
-		Timestamp:  ts,
-		Extra:      nil,
-	}
-
+	r := Reading{DeviceID: dev, ZoneID: fallback(zone, topic), DeviceType: dtype, Timestamp: ts, Extra: nil}
 	switch dtype {
 	case "temp_sensor":
 		if v, ok := toFloat(readingObj["tempC"]); ok {
@@ -153,8 +128,6 @@ func decodeReading(b []byte, topic string, brokerTS time.Time) (Reading, bool) {
 		if v, ok := toFloat(readingObj["energyKWh"]); ok {
 			r.EnergyKWh = &v
 		}
-	default:
-		// unknown deviceType: keep minimal info
 	}
 	return r, true
 }
@@ -185,18 +158,12 @@ func toFloat(a any) (float64, bool) {
 func parseTimestamp(v any, fallbackTS time.Time) time.Time {
 	switch t := v.(type) {
 	case string:
-		layouts := []string{
-			time.RFC3339Nano,
-			time.RFC3339,
-			"2006-01-02T15:04:05.000Z07:00",
-			"2006-01-02 15:04:05Z07:00",
-		}
+		layouts := []string{time.RFC3339Nano, time.RFC3339, "2006-01-02T15:04:05.000Z07:00", "2006-01-02 15:04:05Z07:00"}
 		for _, l := range layouts {
 			if ts, err := time.Parse(l, t); err == nil {
 				return ts
 			}
 		}
-		// try millis as a numeric string
 		if ms, err := json.Number(t).Int64(); err == nil {
 			return time.UnixMilli(ms)
 		}
@@ -214,36 +181,20 @@ func parseTimestamp(v any, fallbackTS time.Time) time.Time {
 
 // --- Producer implementation using kafka-go ---
 
-type writerAdapter struct {
-	w *kafka.Writer
-}
+type writerAdapter struct{ w *kafka.Writer }
 
 func (wa *writerAdapter) Send(ctx context.Context, topic string, key, value []byte) error {
-	return wa.w.WriteMessages(ctx, kafka.Message{
-		Topic: topic,
-		Key:   key,
-		Value: value,
-		Time:  time.Now(),
-	})
+	return wa.w.WriteMessages(ctx, kafka.Message{Topic: topic, Key: key, Value: value, Time: time.Now()})
 }
 
-// DefaultCBFactory default CB factory (no-op CB; replace with real CB in prod)
 type DefaultCBFactory struct{}
 
 func NewDefaultCBFactory() *DefaultCBFactory { return &DefaultCBFactory{} }
 func (f *DefaultCBFactory) NewKafkaProducer(_ string, brokers []string) CBWrappedProducer {
-	w := &kafka.Writer{
-		Addr:                   kafka.TCP(brokers...),
-		Async:                  false,
-		Balancer:               &kafka.Hash{},
-		RequiredAcks:           kafka.RequireAll,
-		BatchTimeout:           5 * time.Millisecond,
-		AllowAutoTopicCreation: false,
-	}
+	w := &kafka.Writer{Addr: kafka.TCP(brokers...), Async: false, Balancer: &kafka.Hash{}, RequiredAcks: kafka.RequireAll, BatchTimeout: 5 * time.Millisecond, AllowAutoTopicCreation: false}
 	return &writerAdapter{w: w}
 }
 
-// MAPEWriter Writers
 type MAPEWriter struct {
 	prod  CBWrappedProducer
 	topic string
@@ -286,5 +237,3 @@ func fallback(s, fb string) string {
 	}
 	return fb
 }
-
-// Hash helper (if needed)

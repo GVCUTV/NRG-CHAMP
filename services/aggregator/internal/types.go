@@ -1,4 +1,4 @@
-// Package internal v6
+// Package internal v8
 // file: internal/types.go
 package internal
 
@@ -18,17 +18,15 @@ type EpochID struct {
 
 // Reading represents a validated device measurement with minimal overhead.
 type Reading struct {
-	DeviceID   string    `json:"deviceId"`
-	ZoneID     string    `json:"zoneId"`
-	DeviceType string    `json:"deviceType"`
-	Timestamp  time.Time `json:"timestamp"`
-	// Sensors / Actuators
-	Temperature   *float64 `json:"temperature,omitempty"`   // tempC for temp_sensor
-	ActuatorState *string  `json:"actuatorState,omitempty"` // ON/OFF or 0|25|50|75|100
-	PowerW        *float64 `json:"powerW,omitempty"`
-	EnergyKWh     *float64 `json:"energyKWh,omitempty"`
-	// Extra is dropped when writing aggregated payloads (communication overhead removed).
-	Extra map[string]any `json:"-"`
+	DeviceID      string         `json:"deviceId"`
+	ZoneID        string         `json:"zoneId"`
+	DeviceType    string         `json:"deviceType"`
+	Timestamp     time.Time      `json:"timestamp"`
+	Temperature   *float64       `json:"temperature,omitempty"`   // tempC for temp_sensor
+	ActuatorState *string        `json:"actuatorState,omitempty"` // ON/OFF or 0/25/50/75/100
+	PowerW        *float64       `json:"powerW,omitempty"`
+	EnergyKWh     *float64       `json:"energyKWh,omitempty"`
+	Extra         map[string]any `json:"-"` // removed in aggregated payloads
 }
 
 // AggregatedEpoch groups readings for a zone within one epoch.
@@ -36,7 +34,7 @@ type AggregatedEpoch struct {
 	ZoneID     string               `json:"zoneId"`
 	Epoch      EpochID              `json:"epoch"`
 	ByDevice   map[string][]Reading `json:"byDevice"`
-	Summary    map[string]float64   `json:"summary"` // e.g., avgTemp, avgPower
+	Summary    map[string]float64   `json:"summary"` // e.g., avgTemp, avgPowerW
 	ProducedAt time.Time            `json:"producedAt"`
 }
 

@@ -1,9 +1,10 @@
-// v6
+// Package internal v8
 // file: internal/props.go
 package internal
 
 import (
 	"bufio"
+	log "log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -26,18 +27,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{
-		Brokers:         []string{"kafka:9092"},
-		Epoch:           500 * time.Millisecond,
-		MaxPerPartition: 1000,
-		OffsetsPath:     filepath.Join("data", "offsets.json"),
-		MAPETopic:       "agg-to-mape",
-		LedgerTopicTmpl: "ledger-{zone}",
-		LedgerPartAgg:   0,
-		LedgerPartMAPE:  1,
-		OutlierZ:        4.0,
-		LogPath:         filepath.Join("data", "aggregator.log"),
-	}
+	return Config{Brokers: []string{"kafka:9092"}, Epoch: 500 * time.Millisecond, MaxPerPartition: 1000, OffsetsPath: filepath.Join("data", "offsets.json"), MAPETopic: "agg-to-mape", LedgerTopicTmpl: "ledger-{zone}", LedgerPartAgg: 0, LedgerPartMAPE: 1, OutlierZ: 4.0, LogPath: filepath.Join("data", "aggregator.log")}
 }
 
 func LoadProps(path string) Config {
@@ -49,7 +39,7 @@ func LoadProps(path string) Config {
 	defer func(f *os.File) {
 		err := f.Close()
 		if err != nil {
-			// ignore
+			log.Error("close_failed", "path", path, "err", err)
 		}
 	}(f)
 	sc := bufio.NewScanner(f)
@@ -62,8 +52,7 @@ func LoadProps(path string) Config {
 		if len(kv) != 2 {
 			continue
 		}
-		k := strings.TrimSpace(kv[0])
-		v := strings.TrimSpace(kv[1])
+		k, v := strings.TrimSpace(kv[0]), strings.TrimSpace(kv[1])
 		switch k {
 		case "brokers":
 			cfg.Brokers = splitCSV(v)

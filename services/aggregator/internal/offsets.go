@@ -1,4 +1,4 @@
-// Package internal v6
+// Package internal v8
 // file: internal/offsets.go
 package internal
 
@@ -13,7 +13,7 @@ import (
 type Offsets struct {
 	path string
 	mu   sync.Mutex
-	Data map[string]map[int]int64 `json:"data"` // topic -> partition -> lastCommittedOffset
+	Data map[string]map[int]int64 `json:"data"`
 }
 
 func NewOffsets(path string) *Offsets {
