@@ -4,28 +4,28 @@ package main
 
 import (
 	"context"
-	"log
+	"log"
+	"nrgchamp/mape/internal"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"nrgchamp/mape/internal/config"
-	"nrgchamp/mape/internal/httpapi"
-	"nrgchamp/mape/internal/kafkaio"
-	"nrgchamp/mape/internal/logging"
-	"nrgchamp/mape/internal/mape"
 )
 
 func main() {
 	// Initialize structured logging to both file and stdout via slog.
-	lg, lf := logging.Init()
-	defer lf.Close()
+	lg, lf := internal.Init()
+	defer func(lf *os.File) {
+		err := lf.Close()
+		if err != nil {
+			log.Printf("error closing log file: %v", err)
+		}
+	}(lf)
 
 	lg.Info("MAPE service starting")
 
 	// Load configuration & properties
-	cfg, err := config.LoadEnvAndFiles()
+	cfg, err := internal.LoadEnvAndFiles()
 	if err != nil {
 		lg.Error("failed to load config", "error", err)
 		os.Exit(1)
@@ -33,7 +33,7 @@ func main() {
 	lg.Info("configuration loaded", "zones", cfg.Zones)
 
 	// Build Kafka clients (readers/writers)
-	kio, err := kafkaio.New(cfg, lg)
+	kio, err := internal.New(cfg, lg)
 	if err != nil {
 		lg.Error("kafka setup error", "error", err)
 		os.Exit(1)
@@ -41,10 +41,10 @@ func main() {
 	defer kio.Close()
 
 	// Create MAPE engine
-	engine := mape.NewEngine(cfg, lg, kio)
+	engine := internal.NewEngine(cfg, lg, kio)
 
 	// HTTP server (health, status, config reload)
-	srv := httpapi.NewServer(cfg, lg, engine)
+	srv := internal.NewServer(cfg, lg, engine)
 	go func() {
 		if err := srv.Start(); err != nil {
 			lg.Error("http server stopped", "error", err)
