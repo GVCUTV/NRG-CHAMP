@@ -53,9 +53,7 @@ services:
     networks: [nrg-net]
 
   aggregator:
-    build:
-      context: ./services/aggregator
-      dockerfile: Dockerfile
+    build: ./services/aggregator
     image: nrg-champ/aggregator:latest
     container_name: aggregator
     restart: unless-stopped
@@ -73,36 +71,37 @@ services:
       - "8081:8080"
     networks: [nrg-net]
 
-#  mape-full:
-#    build:
-#      context: ./mape/full
-#    image: nrg-champ/mape-full:local
-#    container_name: mape-full
-#    environment:
-#      - ENV=dev
-#      - LISTEN_ADDR=:8090
-#      - KAFKA_BROKERS=kafka:9092
-#      - TOPIC_PREFIX=device.readings
-#      - COMMAND_TOPIC_PREFIX=device.commands
-#      - CONSUMER_GROUP=mape-full
-#      - CONTROL_INTERVAL=5s
-#      - DEADBAND_C=0.4
-#      - KP=12
-#      - MAX_FAN_PCT=100
-#      - TARGETS_FILE=/app/config/targets.properties
-#      - TARGETS_RELOAD_EVERY=15s
-#      - DEFAULT_TARGET_C=22.0
-#      - EXECUTE_MODE=http
-#      - zone_HTTP_BASE=http://zone-simulator:8080
-#      - LOG_LEVEL=INFO
-#      - LOG_FILE=/var/log/mape/mape.log
-#    volumes:
-#      - ./mape/full/config:/app/config:ro
-#    ports:
-#      - "8090:8090"
-#    depends_on:
-#      - kafka
-#    restart: unless-stopped
+  mape:
+    build: ./services/mape
+    image: nrg-champ/mape:dev
+    container_name: mape
+    environment:
+      - ENV=dev
+      - LISTEN_ADDR=:8090
+      - KAFKA_BROKERS=kafka:9092
+      - TOPIC_PREFIX=device.readings
+      - COMMAND_TOPIC_PREFIX=device.commands
+      - CONSUMER_GROUP=mape
+      - CONTROL_INTERVAL=5s
+      - DEADBAND_C=0.4
+      - KP=12
+      - MAX_FAN_PCT=100
+      - TARGETS_FILE=/app/config/targets.properties
+      - TARGETS_RELOAD_EVERY=15s
+      - DEFAULT_TARGET_C=22.0
+      - EXECUTE_MODE=http
+      - zone_HTTP_BASE=http://zone-simulator:8080
+      - LOG_LEVEL=INFO
+      - LOG_FILE=/var/log/mape/mape.log
+    volumes:
+      - ./services/mape/mape.properties:/app/mape.properties:ro
+    ports:
+      - "8090:8080"
+    networks: [nrg-net]
+    depends_on:
+      aggregator:
+        condition: service_healthy
+    restart: unless-stopped
 
 #  ledger:
 #    build: .
