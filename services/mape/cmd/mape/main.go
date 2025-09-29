@@ -1,82 +1,58 @@
-// v0
+// v7
 // main.go
 package main
 
 import (
 	"context"
-	"log"
-	"nrgchamp/mape/internal"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"nrgchamp/mape/internal"
 )
 
 func main() {
-	// Initialize structured logging to both file and stdout via slog.
-	lg, lf := internal.Init()
+	lg, lf := internal.InitLogger()
 	defer func(lf *os.File) {
 		err := lf.Close()
 		if err != nil {
-			log.Printf("error closing log file: %v", err)
+			lg.Error("log file close", "error", err)
 		}
 	}(lf)
+	lg.Info("MAPE v7 starting (updated aggregator schema)")
 
-	lg.Info("MAPE service starting")
-
-	// Load configuration & properties
 	cfg, err := internal.LoadEnvAndFiles()
 	if err != nil {
-		lg.Error("failed to load config", "error", err)
+		lg.Error("config", "error", err)
 		os.Exit(1)
 	}
-	lg.Info("configuration loaded", "zones", cfg.Zones)
+	lg.Info("config loaded", "zones", cfg.Zones, "brokers", cfg.KafkaBrokers)
 
-	// Build Kafka clients (readers/writers)
-	kio, err := internal.New(cfg, lg)
+	io, err := internal.NewKafkaIO(cfg, lg)
 	if err != nil {
-		lg.Error("kafka setup error", "error", err)
+		lg.Error("kafka", "error", err)
 		os.Exit(1)
 	}
-	defer kio.Close()
+	defer io.Close()
 
-	// Create MAPE engine
-	engine := internal.NewEngine(cfg, lg, kio)
-
-	// HTTP server (health, status, config reload)
-	srv := internal.NewServer(cfg, lg, engine)
+	srv := internal.NewHTTPServer(cfg, lg)
 	go func() {
 		if err := srv.Start(); err != nil {
-			lg.Error("http server stopped", "error", err)
+			lg.Error("http", "error", err)
 		}
 	}()
 
-	// Orchestrate graceful shutdown
+	eng := internal.NewEngine(cfg, lg, io)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	go eng.Run(ctx)
 
-	// Run MAPE main loop in a goroutine.
-	go engine.Run(ctx)
-
-	// OS signals
 	sigCh := make(chan os.Signal, 2)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	s := <-sigCh
-	lg.Info("shutdown signal received", "signal", s.String())
-
-	// Stop the HTTP server with timeout
-	shCtx, shCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer shCancel()
-	if err := srv.Stop(shCtx); err != nil {
-		lg.Error("http server graceful stop failed", "error", err)
-	}
-
-	// Cancel MAPE loop
-	cancel()
-	// Small wait to let goroutines wrap up
-	time.Sleep(500 * time.Millisecond)
-
-	lg.Info("MAPE service exited cleanly")
-	// Ensure legacy log package doesn't spam
-	log.SetOutput(lf) // no-op, just keep file handle in use until end
+	<-sigCh
+	sh, c := context.WithTimeout(context.Background(), 5*time.Second)
+	defer c()
+	_ = srv.Stop(sh)
+	lg.Info("MAPE v7 stopped")
 }
