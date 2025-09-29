@@ -15,7 +15,8 @@ COPY --from=builder /app/sim.properties /app/sim.properties
 ENV SIM_PROPERTIES=/app/sim.properties
 # Optional defaults
 ENV KAFKA_BROKERS=kafka:9092
-ENV TOPIC_PREFIX=device.readings
+ENV TOPIC_READINGS_PREFIX=device.readings
+ENV TOPIC_COMMANDS_PREFIX=device.commands
 USER appuser
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=2s --retries=5 CMD wget -qO- http://127.0.0.1:8080/health || exit 1
