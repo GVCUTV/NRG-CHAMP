@@ -1,25 +1,34 @@
-// v2
+// v7
 // engine.go
 package internal
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"math"
 	"time"
 )
 
 type Engine struct {
 	cfg   *AppConfig
 	lg    *slog.Logger
-	io    *IO
+	io    *KafkaIO
+	mon   *Monitor
+	an    *Analyze
+	pln   *Plan
+	exe   *Execute
 	stats Stats
 }
-type Stats struct{ Loops, MessagesIn, CommandsOut, LedgerWrites int64 }
 
-func NewEngine(cfg *AppConfig, lg *slog.Logger, io *IO) *Engine {
-	return &Engine{cfg: cfg, lg: lg, io: io}
+var engineRef *Engine
+
+func NewEngine(cfg *AppConfig, lg *slog.Logger, io *KafkaIO) *Engine {
+	e := &Engine{cfg: cfg, lg: lg, io: io}
+	e.mon = NewMonitor(cfg, lg, io)
+	e.an = NewAnalyze(cfg, lg)
+	e.pln = NewPlan(cfg, lg)
+	e.exe = NewExecute(lg, io)
+	engineRef = e
+	return e
 }
 
 func (e *Engine) Run(ctx context.Context) {
@@ -33,18 +42,19 @@ func (e *Engine) Run(ctx context.Context) {
 		default:
 		}
 		for _, zone := range e.cfg.Zones {
-			latest, epoch, ok, err := e.io.DrainZonePartitionLatest(ctx, zone)
+			read, ok, err := e.mon.Latest(ctx, zone)
 			if err != nil {
-				e.lg.Error("drain", "zone", zone, "err", err)
+				e.lg.Error("monitor error", "zone", zone, "error", err)
 				continue
 			}
 			if !ok {
 				continue
 			}
 			e.stats.MessagesIn++
-			cmds, led := e.planForZone(zone, latest, epoch)
-			if err := e.io.PublishCommandsAndLedger(ctx, zone, cmds, led); err != nil {
-				e.lg.Error("publish", "zone", zone, "err", err)
+			res := e.an.Run(zone, read)
+			cmds, led := e.pln.Build(zone, read.EpochIndex, read.EpochStart, read.EpochEnd, res)
+			if err := e.exe.Do(ctx, zone, cmds, led); err != nil {
+				e.lg.Error("execute error", "zone", zone, "error", err)
 				continue
 			}
 			e.stats.CommandsOut += int64(len(cmds))
@@ -55,62 +65,9 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 }
 
-func (e *Engine) planForZone(zone string, latest Reading, epoch int64) ([]PlanCommand, LedgerEvent) {
-	t := e.cfg.ZoneTargets[zone]
-	h := e.cfg.ZoneHysteresis[zone]
-	var temp *float64
-	if m, ok := latest.Reading.(map[string]any); ok {
-		if v, ok := m["tempC"]; ok {
-			switch x := v.(type) {
-			case float64:
-				temp = &x
-			}
-		}
+func globalStats() Stats {
+	if engineRef == nil {
+		return Stats{}
 	}
-	mode := "OFF"
-	fan := 0
-	reason := "within hysteresis"
-	delta := 0.0
-	if temp != nil {
-		delta = *temp - t
-		if delta > h {
-			mode = "COOL"
-			fan = e.pickFan(math.Abs(delta))
-			reason = fmt.Sprintf("too hot by %.2fC", delta)
-		} else if delta < -h {
-			mode = "HEAT"
-			fan = e.pickFan(math.Abs(delta))
-			reason = fmt.Sprintf("too cold by %.2fC", -delta)
-		}
-	}
-	cmds := []PlanCommand{
-		{ZoneID: zone, ActuatorID: "heating.1", Mode: ifMode(mode, "HEAT"), FanPercent: ifFan(mode, "HEAT", fan), Reason: reason, EpochMs: epoch, IssuedAt: time.Now().UnixMilli()},
-		{ZoneID: zone, ActuatorID: "cooling.1", Mode: ifMode(mode, "COOL"), FanPercent: ifFan(mode, "COOL", fan), Reason: reason, EpochMs: epoch, IssuedAt: time.Now().UnixMilli()},
-	}
-	led := LedgerEvent{EpochMs: epoch, ZoneID: zone, Planned: fmt.Sprintf("mode=%s fan=%d reason=%s", mode, fan, reason), TargetC: t, HystC: h, DeltaC: delta, Fan: fan, Timestamp: time.Now().UnixMilli()}
-	return cmds, led
+	return engineRef.stats
 }
-func (e *Engine) pickFan(x float64) int {
-	for i, s := range e.cfg.FanSteps {
-		if x <= s {
-			return e.cfg.FanSpeeds[i]
-		}
-	}
-	if n := len(e.cfg.FanSpeeds); n > 0 {
-		return e.cfg.FanSpeeds[n-1]
-	}
-	return 0
-}
-func ifMode(sel, want string) string {
-	if sel == want {
-		return want
-	}
-	return "OFF"
-}
-func ifFan(sel, want string, fan int) int {
-	if sel == want {
-		return fan
-	}
-	return 0
-}
-func (e *Engine) Stats() Stats { return e.stats }

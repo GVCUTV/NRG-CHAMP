@@ -1,0 +1,63 @@
+// v7
+// analyze.go
+package internal
+
+import (
+	"fmt"
+	"log/slog"
+	"math"
+)
+
+type Analyze struct {
+	cfg *AppConfig
+	lg  *slog.Logger
+}
+
+type AnalysisResult struct {
+	HasTemp bool
+	TempC   float64
+	Target  float64
+	Hyst    float64
+	Delta   float64
+	Action  string // HEAT/COOL/OFF
+	Fan     int
+	Reason  string
+}
+
+func NewAnalyze(cfg *AppConfig, lg *slog.Logger) *Analyze { return &Analyze{cfg: cfg, lg: lg} }
+
+// Run decides the action based on the zone's avg temperature from the aggregator summary.
+func (a *Analyze) Run(zone string, read Reading) AnalysisResult {
+	t := a.cfg.ZoneTargets[zone]
+	h := a.cfg.ZoneHysteresis[zone]
+	res := AnalysisResult{Target: t, Hyst: h, HasTemp: true, TempC: read.AvgTempC}
+	res.Delta = res.TempC - t
+	if res.Delta > h {
+		res.Action = "COOL"
+		res.Fan = pickFan(math.Abs(res.Delta), a.cfg.FanSteps, a.cfg.FanSpeeds)
+		res.Reason = fmt.Sprintf("too hot by %.2fC", res.Delta)
+		return res
+	}
+	if res.Delta < -h {
+		res.Action = "HEAT"
+		res.Fan = pickFan(math.Abs(res.Delta), a.cfg.FanSteps, a.cfg.FanSpeeds)
+		res.Reason = fmt.Sprintf("too cold by %.2fC", -res.Delta)
+		return res
+	}
+	res.Action = "OFF"
+	res.Fan = 0
+	res.Reason = "within hysteresis"
+	return res
+}
+
+func pickFan(absDelta float64, steps []float64, speeds []int) int {
+	for i, s := range steps {
+		if absDelta <= s {
+			return speeds[i]
+		}
+	}
+	if n := len(speeds); n > 0 {
+		return speeds[n-1]
+	}
+	return 0
+}
