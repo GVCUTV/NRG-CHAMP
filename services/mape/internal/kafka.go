@@ -1,4 +1,4 @@
-// v7
+// Package internal v7
 // kafka.go
 package internal
 
@@ -127,6 +127,8 @@ func (ioh *KafkaIO) DrainZonePartitionLatest(ctx context.Context, zone string) (
 		if err := json.Unmarshal(msg.Value, &rep); err != nil {
 			ioh.lg.Error("bad json", "zone", zone, "error", err)
 			continue
+		} else {
+			ioh.lg.Info("reading", "summary", rep.Summary)
 		}
 		latest = rep
 		got = true

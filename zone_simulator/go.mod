@@ -1,8 +1,10 @@
-module it.uniroma2.dicii/nrg-champ/room-simulator
+// v1
+// go.mod
+module zone_simulator
 
-go 1.23
+go 1.21
 
-require github.com/segmentio/kafka-go v0.4.47
+require github.com/segmentio/kafka-go v0.4.45
 
 require (
 	github.com/klauspost/compress v1.15.9 // indirect

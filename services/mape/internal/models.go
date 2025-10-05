@@ -1,8 +1,8 @@
-// v7
+// Package internal v7
 // models.go
 package internal
 
-// Aggregator -> MAPE message schema (sample you shared).
+// Epoch Aggregator -> MAPE message schema (sample you shared).
 // Example payload: agg-to-mape.json. :contentReference[oaicite:0]{index=0}
 type Epoch struct {
 	Start string `json:"start"` // RFC3339
@@ -25,7 +25,7 @@ type AggregatedReport struct {
 	ProducedAt string                      `json:"producedAt"` // RFC3339
 }
 
-// Internal derived reading passed across phases.
+// Reading Internal derived reading passed across phases.
 type Reading struct {
 	ZoneID     string
 	EpochIndex int64
