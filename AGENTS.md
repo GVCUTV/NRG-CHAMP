@@ -13,9 +13,9 @@
 - **Modify only** what the prompt explicitly defines. Never alter unrelated files or code.
 - If you must adjust surrounding code to make the project compile or run, keep the modification **minimal** and document it in your PR.
 - If a rule is broken for valid reasons, **report it** in the PR body or summary:
-  - which rule was broken,
-  - how, and
-  - why the exception was necessary.
+    - which rule was broken,
+    - how, and
+    - why the exception was necessary.
 
 ---
 
@@ -44,8 +44,8 @@
 
 - Code must be **fully commented** in natural, human-like style (never mention AI).
 - At the end of the PR body, include a short **Design Rationale** section describing:
-  - Why this approach was chosen
-  - Any trade-offs or limitations considered
+    - Why this approach was chosen
+    - Any trade-offs or limitations considered
 
 ---
 
@@ -67,8 +67,8 @@
 ## 7) Docker, build & runtime policy
 
 - **Dockerfiles** must follow this convention:
-  - **Build stage:** `golang:1.23-alpine`
-  - **Runtime stage:** `alpine:3.20`
+    - **Build stage:** `golang:1.23-alpine`
+    - **Runtime stage:** `alpine:3.20`
 - If a health-check endpoint is required, implement it at `GET /health` returning HTTP 200 with a minimal JSON or text payload.
 
 ---
@@ -76,10 +76,10 @@
 ## 8) HTTP endpoint discipline
 
 - Each endpoint must accept **only** the correct HTTP method:
-  - `GET` for reads/status
-  - `POST` for create/execute commands
-  - `PUT` / `PATCH` for configuration updates
-  - `DELETE` for deletions
+    - `GET` for reads/status
+    - `POST` for create/execute commands
+    - `PUT` / `PATCH` for configuration updates
+    - `DELETE` for deletions
 - Reject all other methods with appropriate status codes.
 
 ---
@@ -108,12 +108,12 @@ A Codex task is considered **complete** only if all of the following hold:
 ## 11) Documentation awareness
 
 - Before editing or adding code, **read** the relevant documentation:
-  - `docs/project_documentation.md`
-  - `docs/ragionamenti.md`
-  - any relevant subfile under `docs/`
+    - `docs/project_documentation.md`
+    - `docs/ragionamenti.md`
+    - any relevant subfile under `docs/`
 - If proposed changes **conflict** with documentation, Codex must:
-  1. Flag a **“Design Conflict”** in the PR.
-  2. Request confirmation from the user before proceeding further.
+    1. Flag a **“Design Conflict”** in the PR.
+    2. Request confirmation from the user before proceeding further.
 - Never override documentation assumptions silently.
 
 ---
@@ -121,8 +121,8 @@ A Codex task is considered **complete** only if all of the following hold:
 ## 12) Rule violation & conflict reporting
 
 - If Codex cannot satisfy all constraints due to limitations (e.g., missing stdlib feature, dependency need, conflicting rule), it must:
-  1. Stop and describe the conflict in PR comments.
-  2. Suggest possible resolutions or alternatives.
+    1. Stop and describe the conflict in PR comments.
+    2. Suggest possible resolutions or alternatives.
 
 ---
 
@@ -138,9 +138,9 @@ A Codex task is considered **complete** only if all of the following hold:
 - **PR title format:** `[Service|Module] — <short action>: <goal>`  
   Example: `aggregator — add slog and /health handler`
 - **PR body must include:**
-  - Diff Summary & Notes
-  - Design Rationale
-  - Impacts, risks, migration notes (if any)
+    - Diff Summary & Notes
+    - Design Rationale
+    - Impacts, risks, migration notes (if any)
 - **Commit messages:** imperative style (e.g., “Add logging middleware”), one logical change per commit.
 
 ---
@@ -148,9 +148,9 @@ A Codex task is considered **complete** only if all of the following hold:
 ## 15) Limitations & escalation
 
 - If a task cannot be completed within current Codex capabilities (e.g., missing environment tools, blocked dependency, ambiguous design), Codex must:
-  - Halt the task,
-  - State the limitation explicitly, and
-  - Suggest how the user or GPT could revise the prompt.
+    - Halt the task,
+    - State the limitation explicitly, and
+    - Suggest how the user or GPT could revise the prompt.
 
 ---
 
@@ -165,6 +165,14 @@ A Codex task is considered **complete** only if all of the following hold:
 -  Never edit beyond scope or modify unrelated code.
 -  Never use non-standard libraries without explicit permission.
 -  Never silently ignore contradictions with project documentation.
+
+---
+
+## 17) Branching rules
+- Always use the existing branch named `codex` for all pushes.
+- Do **not** create a new branch for each task.
+- Commit all Codex-generated changes to the `codex` branch.
+- If the branch does not exist, create it once and reuse it.
 
 ---
 
