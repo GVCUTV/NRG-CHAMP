@@ -1,4 +1,4 @@
-// v7
+// v8
 // analyze.go
 package internal
 
@@ -14,14 +14,17 @@ type Analyze struct {
 }
 
 type AnalysisResult struct {
-	HasTemp bool
-	TempC   float64
-	Target  float64
-	Hyst    float64
-	Delta   float64
-	Action  string // HEAT/COOL/OFF
-	Fan     int
-	Reason  string
+	HasTemp            bool
+	TempC              float64
+	Target             float64
+	Hyst               float64
+	Delta              float64
+	Action             string // HEAT/COOL/OFF
+	Fan                int
+	Reason             string
+	ZoneEnergyKWhEpoch float64
+	ZoneEnergySource   string
+	ActuatorEnergyKWh  map[string]float64
 }
 
 func NewAnalyze(cfg *AppConfig, lg *slog.Logger) *Analyze { return &Analyze{cfg: cfg, lg: lg} }
@@ -30,7 +33,7 @@ func NewAnalyze(cfg *AppConfig, lg *slog.Logger) *Analyze { return &Analyze{cfg:
 func (a *Analyze) Run(zone string, read Reading) AnalysisResult {
 	t := a.cfg.ZoneTargets[zone]
 	h := a.cfg.ZoneHysteresis[zone]
-	res := AnalysisResult{Target: t, Hyst: h, HasTemp: true, TempC: read.AvgTempC}
+	res := AnalysisResult{Target: t, Hyst: h, HasTemp: true, TempC: read.AvgTempC, ZoneEnergyKWhEpoch: read.ZoneEnergyKWhEpoch, ZoneEnergySource: read.ZoneEnergySource, ActuatorEnergyKWh: cloneEnergyMap(read.ActuatorEnergyKWh)}
 	res.Delta = res.TempC - t
 	if res.Delta > h {
 		res.Action = "COOL"
@@ -60,4 +63,15 @@ func pickFan(absDelta float64, steps []float64, speeds []int) int {
 		return speeds[n-1]
 	}
 	return 0
+}
+
+func cloneEnergyMap(src map[string]float64) map[string]float64 {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]float64, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }

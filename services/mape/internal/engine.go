@@ -1,4 +1,4 @@
-// v7
+// v8
 // engine.go
 package internal
 
@@ -27,6 +27,8 @@ func NewEngine(cfg *AppConfig, lg *slog.Logger, io *KafkaIO) *Engine {
 	e.an = NewAnalyze(cfg, lg)
 	e.pln = NewPlan(cfg, lg)
 	e.exe = NewExecute(lg, io)
+	e.stats.ZoneEnergy = map[string]float64{}
+	e.stats.EnergyField = map[string]string{}
 	engineRef = e
 	return e
 }
@@ -51,6 +53,14 @@ func (e *Engine) Run(ctx context.Context) {
 				continue
 			}
 			e.stats.MessagesIn++
+			if e.stats.ZoneEnergy == nil {
+				e.stats.ZoneEnergy = map[string]float64{}
+			}
+			if e.stats.EnergyField == nil {
+				e.stats.EnergyField = map[string]string{}
+			}
+			e.stats.ZoneEnergy[zone] = read.ZoneEnergyKWhEpoch
+			e.stats.EnergyField[zone] = read.ZoneEnergySource
 			res := e.an.Run(zone, read)
 			cmds, led := e.pln.Build(zone, read.EpochIndex, read.EpochStart, read.EpochEnd, res)
 			if err := e.exe.Do(ctx, zone, cmds, led); err != nil {
