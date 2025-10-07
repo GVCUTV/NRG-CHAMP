@@ -1,4 +1,4 @@
-// Package internal v8
+// Package internal v9
 // file: internal/kafka_adapters.go
 package internal
 
@@ -122,8 +122,14 @@ func decodeReadingNewSchema(b []byte, topic string, brokerTS time.Time) (Reading
 		if s, ok := readingObj["state"].(string); ok {
 			r.ActuatorState = &s
 		}
-		if v, ok := toFloat(readingObj["powerW"]); ok {
+		if v, ok := toFloat(readingObj["powerKW"]); ok {
+			r.PowerKW = &v
+			w := v * 1000
+			r.PowerW = &w
+		} else if v, ok := toFloat(readingObj["powerW"]); ok {
 			r.PowerW = &v
+			kw := v / 1000
+			r.PowerKW = &kw
 		}
 		if v, ok := toFloat(readingObj["energyKWh"]); ok {
 			r.EnergyKWh = &v

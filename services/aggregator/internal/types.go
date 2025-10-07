@@ -1,4 +1,4 @@
-// Package internal v8
+// Package internal v9
 // file: internal/types.go
 package internal
 
@@ -25,17 +25,20 @@ type Reading struct {
 	Temperature   *float64       `json:"temperature,omitempty"`   // tempC for temp_sensor
 	ActuatorState *string        `json:"actuatorState,omitempty"` // ON/OFF or 0/25/50/75/100
 	PowerW        *float64       `json:"powerW,omitempty"`
+	PowerKW       *float64       `json:"powerKW,omitempty"`
 	EnergyKWh     *float64       `json:"energyKWh,omitempty"`
 	Extra         map[string]any `json:"-"` // removed in aggregated payloads
 }
 
 // AggregatedEpoch groups readings for a zone within one epoch.
 type AggregatedEpoch struct {
-	ZoneID     string               `json:"zoneId"`
-	Epoch      EpochID              `json:"epoch"`
-	ByDevice   map[string][]Reading `json:"byDevice"`
-	Summary    map[string]float64   `json:"summary"` // e.g., avgTemp, avgPowerW
-	ProducedAt time.Time            `json:"producedAt"`
+	ZoneID                 string               `json:"zoneId"`
+	Epoch                  EpochID              `json:"epoch"`
+	ByDevice               map[string][]Reading `json:"byDevice"`
+	Summary                map[string]float64   `json:"summary"` // e.g., avgTemp, avgPowerW
+	ProducedAt             time.Time            `json:"producedAt"`
+	ActuatorEnergyKWhEpoch map[string]float64   `json:"actuatorEnergyKWhEpoch,omitempty"`
+	ZoneEnergyKWhEpoch     float64              `json:"zoneEnergyKWhEpoch,omitempty"`
 }
 
 // Service wires everything.
