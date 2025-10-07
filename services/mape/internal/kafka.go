@@ -1,4 +1,4 @@
-// Package internal v7
+// Package internal v8
 // kafka.go
 package internal
 
@@ -128,7 +128,7 @@ func (ioh *KafkaIO) DrainZonePartitionLatest(ctx context.Context, zone string) (
 			ioh.lg.Error("bad json", "zone", zone, "error", err)
 			continue
 		} else {
-			ioh.lg.Info("reading", "summary", rep.Summary)
+			ioh.lg.Info("reading", "zone", zone, "epoch", rep.Epoch.Index, "zone_energy_kwh_epoch", rep.ZoneEnergyKWhEpoch, "actuators_energy_entries", len(rep.ActuatorEnergyKWhEpoch))
 		}
 		latest = rep
 		got = true
@@ -139,13 +139,36 @@ func (ioh *KafkaIO) DrainZonePartitionLatest(ctx context.Context, zone string) (
 	if !got {
 		return Reading{}, false, nil
 	}
+	zoneEnergy := latest.ZoneEnergyKWhEpoch
+	energySource := "epoch.zoneEnergyKWhEpoch"
+	if latest.ActuatorEnergyKWhEpoch == nil {
+		switch {
+		case latest.Summary.ZoneEpoch != nil:
+			zoneEnergy = *latest.Summary.ZoneEpoch
+			energySource = "summary.zoneEnergyKWhEpoch"
+		case latest.Summary.ZoneEnergy != nil:
+			zoneEnergy = *latest.Summary.ZoneEnergy
+			energySource = "summary.zoneEnergyKWh (legacy cumulative)"
+			ioh.lg.Warn("legacy energy fallback", "zone", zone, "source", energySource, "value", zoneEnergy)
+		case latest.Summary.AvgEnergyKWh > 0:
+			zoneEnergy = latest.Summary.AvgEnergyKWh
+			energySource = "summary.avgEnergyKWh (legacy)"
+			ioh.lg.Warn("legacy energy fallback", "zone", zone, "source", energySource, "value", zoneEnergy)
+		default:
+			energySource = "missing"
+			ioh.lg.Warn("energy missing", "zone", zone, "epoch", latest.Epoch.Index)
+		}
+	}
 	read := Reading{
-		ZoneID:     latest.ZoneID,
-		EpochIndex: latest.Epoch.Index,
-		EpochStart: latest.Epoch.Start,
-		EpochEnd:   latest.Epoch.End,
-		AvgTempC:   latest.Summary.AvgTemp,
-		Raw:        latest,
+		ZoneID:             latest.ZoneID,
+		EpochIndex:         latest.Epoch.Index,
+		EpochStart:         latest.Epoch.Start,
+		EpochEnd:           latest.Epoch.End,
+		AvgTempC:           latest.Summary.AvgTemp,
+		ZoneEnergyKWhEpoch: zoneEnergy,
+		ZoneEnergySource:   energySource,
+		ActuatorEnergyKWh:  cloneEnergyMap(latest.ActuatorEnergyKWhEpoch),
+		Raw:                latest,
 	}
 	return read, true, nil
 }

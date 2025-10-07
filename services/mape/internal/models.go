@@ -1,4 +1,4 @@
-// Package internal v7
+// Package internal v8
 // models.go
 package internal
 
@@ -12,27 +12,34 @@ type Epoch struct {
 }
 
 type Summary struct {
-	AvgEnergyKWh float64 `json:"avgEnergyKWh"`
-	AvgPowerW    float64 `json:"avgPowerW"`
-	AvgTemp      float64 `json:"avgTemp"`
+	AvgEnergyKWh float64  `json:"avgEnergyKWh"`
+	AvgPowerW    float64  `json:"avgPowerW"`
+	AvgTemp      float64  `json:"avgTemp"`
+	ZoneEnergy   *float64 `json:"zoneEnergyKWh,omitempty"`
+	ZoneEpoch    *float64 `json:"zoneEnergyKWhEpoch,omitempty"`
 }
 
 type AggregatedReport struct {
-	ZoneID     string                      `json:"zoneId"`
-	Epoch      Epoch                       `json:"epoch"`
-	ByDevice   map[string][]map[string]any `json:"byDevice"`
-	Summary    Summary                     `json:"summary"`
-	ProducedAt string                      `json:"producedAt"` // RFC3339
+	ZoneID                 string                      `json:"zoneId"`
+	Epoch                  Epoch                       `json:"epoch"`
+	ByDevice               map[string][]map[string]any `json:"byDevice"`
+	Summary                Summary                     `json:"summary"`
+	ProducedAt             string                      `json:"producedAt"` // RFC3339
+	ZoneEnergyKWhEpoch     float64                     `json:"zoneEnergyKWhEpoch,omitempty"`
+	ActuatorEnergyKWhEpoch map[string]float64          `json:"actuatorEnergyKWhEpoch,omitempty"`
 }
 
 // Reading Internal derived reading passed across phases.
 type Reading struct {
-	ZoneID     string
-	EpochIndex int64
-	EpochStart string
-	EpochEnd   string
-	AvgTempC   float64
-	Raw        AggregatedReport
+	ZoneID             string
+	EpochIndex         int64
+	EpochStart         string
+	EpochEnd           string
+	AvgTempC           float64
+	ZoneEnergyKWhEpoch float64
+	ZoneEnergySource   string
+	ActuatorEnergyKWh  map[string]float64
+	Raw                AggregatedReport
 }
 
 type PlanCommand struct {
@@ -46,23 +53,28 @@ type PlanCommand struct {
 }
 
 type LedgerEvent struct {
-	EpochIndex int64   `json:"epochIndex"`
-	ZoneID     string  `json:"zoneId"`
-	Planned    string  `json:"planned"`
-	TargetC    float64 `json:"targetC"`
-	HystC      float64 `json:"hysteresisC"`
-	DeltaC     float64 `json:"deltaC"`
-	Fan        int     `json:"fan"`
-	Start      string  `json:"epochStart"`
-	End        string  `json:"epochEnd"`
-	Timestamp  int64   `json:"timestamp"`
+	EpochIndex int64              `json:"epochIndex"`
+	ZoneID     string             `json:"zoneId"`
+	Planned    string             `json:"planned"`
+	TargetC    float64            `json:"targetC"`
+	HystC      float64            `json:"hysteresisC"`
+	DeltaC     float64            `json:"deltaC"`
+	Fan        int                `json:"fan"`
+	Start      string             `json:"epochStart"`
+	End        string             `json:"epochEnd"`
+	Timestamp  int64              `json:"timestamp"`
+	ZoneEnergy float64            `json:"zoneEnergyKWhEpoch,omitempty"`
+	EnergyFrom string             `json:"energySource,omitempty"`
+	ActEnergy  map[string]float64 `json:"actuatorEnergyKWhEpoch,omitempty"`
 }
 
 type Stats struct {
-	Loops        int64 `json:"loops"`
-	MessagesIn   int64 `json:"messagesIn"`
-	CommandsOut  int64 `json:"commandsOut"`
-	LedgerWrites int64 `json:"ledgerWrites"`
+	Loops        int64              `json:"loops"`
+	MessagesIn   int64              `json:"messagesIn"`
+	CommandsOut  int64              `json:"commandsOut"`
+	LedgerWrites int64              `json:"ledgerWrites"`
+	ZoneEnergy   map[string]float64 `json:"lastZoneEnergyKWhEpoch,omitempty"`
+	EnergyField  map[string]string  `json:"energyField,omitempty"`
 }
 
 // Per-zone actuators, grouped by function.

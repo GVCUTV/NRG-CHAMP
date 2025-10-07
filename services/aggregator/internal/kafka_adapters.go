@@ -1,4 +1,4 @@
-// Package internal v8
+// Package internal v9
 // file: internal/kafka_adapters.go
 package internal
 
@@ -49,7 +49,7 @@ func (c *KafkaGoConsumer) Partitions(ctx context.Context, topic string) ([]int, 
 	return out, nil
 }
 
-func (c *KafkaGoConsumer) ReadFromPartition(ctx context.Context, topic string, partition int, epoch EpochID, max int) ([]Reading, int64, int64, bool, error) {
+func (c *KafkaGoConsumer) ReadFromPartition(ctx context.Context, topic string, partition int, epoch EpochID, max int) ([]Reading, int, int64, int64, bool, error) {
 	start := c.offsets.Get(topic, partition) + 1
 	if start < 0 {
 		start = kafka.FirstOffset
@@ -62,10 +62,11 @@ func (c *KafkaGoConsumer) ReadFromPartition(ctx context.Context, topic string, p
 		}
 	}(r)
 	if err := r.SetOffset(start); err != nil {
-		return nil, start - 1, start, false, err
+		return nil, 0, start - 1, start, false, err
 	}
 
 	var parsed []Reading
+	rawCount := 0
 	lastCommitted := start - 1
 	nextOffset := start
 	sawNext := false
@@ -75,6 +76,7 @@ func (c *KafkaGoConsumer) ReadFromPartition(ctx context.Context, topic string, p
 		if err != nil {
 			break
 		}
+		rawCount++
 		msgTime := m.Time
 		msgEpoch := msgTime.UnixMilli() / epoch.Len.Milliseconds()
 
@@ -89,7 +91,7 @@ func (c *KafkaGoConsumer) ReadFromPartition(ctx context.Context, topic string, p
 			continue
 		}
 
-		rec, ok := decodeReadingNewSchema(m.Value, topic, msgTime)
+		rec, ok := decodeReadingNewSchema(c.log, topic, m.Value, msgTime)
 		if ok {
 			parsed = append(parsed, rec)
 		}
@@ -97,13 +99,14 @@ func (c *KafkaGoConsumer) ReadFromPartition(ctx context.Context, topic string, p
 		nextOffset = m.Offset + 1
 	}
 	c.offsets.Set(topic, partition, lastCommitted)
-	return parsed, lastCommitted, nextOffset, sawNext, nil
+	return parsed, rawCount, lastCommitted, nextOffset, sawNext, nil
 }
 
 // decodeReadingNewSchema parses the specified JSON schema.
-func decodeReadingNewSchema(b []byte, topic string, brokerTS time.Time) (Reading, bool) {
+func decodeReadingNewSchema(log *slog.Logger, topic string, b []byte, brokerTS time.Time) (Reading, bool) {
 	var m map[string]any
 	if err := json.Unmarshal(b, &m); err != nil {
+		log.Info("decode_reading_err", "topic", topic, "err", err, "payload", truncatePayload(b, 200))
 		return Reading{}, false
 	}
 	dev, _ := m["deviceId"].(string)
@@ -112,23 +115,55 @@ func decodeReadingNewSchema(b []byte, topic string, brokerTS time.Time) (Reading
 	ts := parseTimestamp(m["timestamp"], brokerTS)
 	readingObj, _ := m["reading"].(map[string]any)
 
-	r := Reading{DeviceID: dev, ZoneID: fallback(zone, topic), DeviceType: dtype, Timestamp: ts, Extra: nil}
+	z := zone
+	if z == "" {
+		z = extractZoneFromTopic(topic)
+	}
+
+	r := Reading{DeviceID: dev, ZoneID: z, DeviceType: dtype, Timestamp: ts, Extra: nil}
+	hasData := false
 	switch dtype {
 	case "temp_sensor":
-		if v, ok := toFloat(readingObj["tempC"]); ok {
-			r.Temperature = &v
+		if readingObj != nil {
+			if v, ok := toFloat(readingObj["tempC"]); ok {
+				r.Temperature = &v
+				hasData = true
+			}
 		}
 	case "act_heating", "act_cooling", "act_ventilation":
-		if s, ok := readingObj["state"].(string); ok {
-			r.ActuatorState = &s
+		if readingObj != nil {
+			if s, ok := readingObj["state"].(string); ok {
+				r.ActuatorState = &s
+				hasData = true
+			}
+			if v, ok := toFloat(readingObj["powerKW"]); ok {
+				r.PowerKW = &v
+				w := v * 1000
+				r.PowerW = &w
+				hasData = true
+			} else if v, ok := toFloat(readingObj["powerW"]); ok {
+				r.PowerW = &v
+				kw := v / 1000
+				r.PowerKW = &kw
+				hasData = true
+			}
+			if v, ok := toFloat(readingObj["energyKWh"]); ok {
+				r.EnergyKWh = &v
+				hasData = true
+			}
 		}
-		if v, ok := toFloat(readingObj["powerW"]); ok {
-			r.PowerW = &v
-		}
-		if v, ok := toFloat(readingObj["energyKWh"]); ok {
-			r.EnergyKWh = &v
+	default:
+		if readingObj != nil && len(readingObj) > 0 {
+			r.Extra = readingObj
+			hasData = true
 		}
 	}
+
+	if !hasData {
+		log.Info("decode_reading_empty", "topic", topic, "deviceType", dtype, "payload", truncatePayload(b, 200))
+		return Reading{}, false
+	}
+
 	return r, true
 }
 
@@ -231,9 +266,14 @@ func (w *LedgerWriter) Send(ctx context.Context, zone string, epoch AggregatedEp
 	return w.prod.Send(ctx, topic, key, b)
 }
 
-func fallback(s, fb string) string {
-	if s != "" {
+func truncatePayload(b []byte, max int) string {
+	s := string(b)
+	if len(s) <= max {
 		return s
 	}
-	return fb
+	runes := []rune(s)
+	if len(runes) <= max {
+		return string(runes)
+	}
+	return string(runes[:max]) + "…"
 }

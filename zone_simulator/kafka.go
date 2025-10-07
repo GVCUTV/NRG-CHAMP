@@ -1,4 +1,4 @@
-// v1
+// v3
 // kafka.go
 
 package main
@@ -7,8 +7,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"hash/crc32"
 	"log/slog"
+	"sort"
 	"strconv"
 	"time"
 
@@ -27,9 +27,8 @@ type TempReading struct {
 	TempC float64 `json:"tempC"`
 }
 type ActuatorReading struct {
-	State     string  `json:"state"`
-	PowerW    float64 `json:"powerW"`
-	EnergyKWh float64 `json:"energyKWh"`
+	State   string  `json:"state"`
+	PowerKW float64 `json:"powerKW"`
 }
 
 type ActuatorCommand struct {
@@ -94,23 +93,19 @@ func (s *Simulator) startPartitionConsumerForDevice(ctx context.Context, deviceI
 		s.log.Error("read partitions failed", "topic", topic, "err", err)
 		return
 	}
-	uniq := map[int]struct{}{}
-	for _, p := range parts {
-		uniq[p.ID] = struct{}{}
-	}
-	ids := make([]int, 0, len(uniq))
-	for id := range uniq {
-		ids = append(ids, id)
-	}
+	ids := uniquePartitionIDs(parts)
 	if len(ids) == 0 {
 		s.log.Error("no partitions")
 		return
 	}
 
-	crc := crc32.ChecksumIEEE([]byte(deviceID))
-	idx := int(crc % uint32(len(ids)))
+	sort.Ints(ids)
+
+	h := murmur2JavaCompat([]byte(deviceID)) & 0x7fffffff
+	idx := int(h % uint32(len(ids)))
 	partition := ids[idx]
-	s.log.Info("consumer assigned", "deviceId", deviceID, "partition", partition, "topic", topic)
+
+	s.log.Info("commands consumer select", "deviceId", deviceID, "topic", topic, "partitions", ids, "selectedIdx", idx, "partition", partition)
 
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:   s.cfg.KafkaBrokers,
