@@ -60,6 +60,7 @@ func runEpoch(ctx context.Context, log *slog.Logger, cfg Config, io IO, ep Epoch
 	log.Info("epoch_start", "index", ep.Index, "start", ep.Start, "end", ep.End, "len_ms", ep.Len.Milliseconds())
 	for ti, topic := range cfg.Topics {
 		log.Info("topic_rr", "step", ti, "topic", topic)
+		zone := extractZoneFromTopic(topic)
 		parts, err := io.Consumer.Partitions(ctx, topic)
 		if err != nil {
 			log.Error("partitions_err", "topic", topic, "err", err)
@@ -68,28 +69,30 @@ func runEpoch(ctx context.Context, log *slog.Logger, cfg Config, io IO, ep Epoch
 		var allReadings []Reading
 		for pi, part := range parts {
 			log.Info("partition_rr", "topic", topic, "step", pi, "partition", part)
-			rs, _, _, sawNext, err := io.Consumer.ReadFromPartition(ctx, topic, part, ep, cfg.MaxPerPartition)
+			rs, raw, _, _, sawNext, err := io.Consumer.ReadFromPartition(ctx, topic, part, ep, cfg.MaxPerPartition)
 			if err != nil {
 				log.Error("read_partition_err", "topic", topic, "partition", part, "err", err)
 				return err
 			}
+			log.Info("kafka_read_raw", "topic", topic, "partition", part, "n", raw)
+			log.Info("kafka_decoded", "topic", topic, "partition", part, "n", len(rs))
 			allReadings = append(allReadings, rs...)
 			if sawNext {
 				continue
 			}
 		}
-		agg := aggregate(topic, ep, allReadings, cfg.OutlierZ, energyState)
-		if err := io.Producer.SendToMAPE(ctx, topic, agg); err != nil {
-			log.Error("produce_mape_err", "topic", topic, "err", err)
+		agg := aggregate(zone, ep, allReadings, cfg.OutlierZ, energyState)
+		if err := io.Producer.SendToMAPE(ctx, zone, agg); err != nil {
+			log.Error("produce_mape_err", "topic", topic, "zone", zone, "err", err)
 			return err
 		} else {
-			log.Info("produce_mape_ok", "topic", topic, "epoch", ep.Index, "count", len(allReadings))
+			log.Info("produce_mape_ok", "topic", topic, "zone", zone, "epoch", ep.Index, "count", len(allReadings))
 		}
-		if err := io.Producer.SendToLedger(ctx, topic, agg); err != nil {
-			log.Error("produce_ledger_err", "topic", topic, "err", err)
+		if err := io.Producer.SendToLedger(ctx, zone, agg); err != nil {
+			log.Error("produce_ledger_err", "topic", topic, "zone", zone, "err", err)
 			return err
 		} else {
-			log.Info("produce_ledger_ok", "topic", topic, "epoch", ep.Index, "count", len(allReadings))
+			log.Info("produce_ledger_ok", "topic", topic, "zone", zone, "epoch", ep.Index, "count", len(allReadings))
 		}
 	}
 	log.Info("epoch_end", "index", ep.Index)
