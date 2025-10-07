@@ -103,17 +103,35 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-#  ledger:
-#    build: .
-#    container_name: nrg-ledger
-#    ports:
-#      - "8083:8083"
-#    volumes:
-#      - ./data:/app/data
-#      - ./logs:/app/logs
-#    command: [ "-addr", ":8083", "-data", "/app/data", "-logs", "/app/logs" ]
-#    restart: unless-stopped
-#
+  ledger:
+    image: nrg-champ/ledger:dev
+    build:
+      context: ./services/ledger
+      dockerfile: Dockerfile
+    container_name: nrg-ledger
+    environment:
+      - LEDGER_ADDR=:8083
+      - LEDGER_DATA=/app/data
+      - LEDGER_LOGS=/app/logs
+      - LEDGER_KAFKA_BROKERS=kafka:9092
+      - LEDGER_GROUP_ID=ledger-service
+      - LEDGER_TOPIC_TEMPLATE=ledger-{zone}
+      - LEDGER_ZONES=zone-A   # <- set the zones you actually want to consume
+      - LEDGER_EPOCH_GRACE_MS=2000
+      - LEDGER_BUFFER_MAX_EPOCHS=200
+      - LEDGER_PARTITION_AGGREGATOR=0
+      - LEDGER_PARTITION_MAPE=1
+    ports:
+      - "8083:8083"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks: [ nrg-net ]
+
 #  assessment:
 #    build:
 #      context: ..

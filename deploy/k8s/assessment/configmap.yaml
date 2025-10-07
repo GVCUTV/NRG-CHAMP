@@ -1,5 +1,5 @@
-// v0
-// k8s/assessment/configmap.yaml
+# v0
+# k8s/assessment/configmap.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:

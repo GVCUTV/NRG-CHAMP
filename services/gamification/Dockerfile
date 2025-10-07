@@ -1,5 +1,5 @@
-// v0
-// Dockerfile
+# v0
+# Dockerfile
 # Build stage
 FROM golang:1.22-alpine AS build
 WORKDIR /app
