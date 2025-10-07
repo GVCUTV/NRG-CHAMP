@@ -1,4 +1,4 @@
-// v2
+// v3
 // main.go
 package main
 
@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -30,12 +31,26 @@ func main() {
 	groupID := flag.String("consumer-group", "ledger-service", "Kafka consumer group identifier for ledger ingestion")
 	partAgg := flag.Int("partition-aggregator", 0, "Kafka partition index carrying aggregator payloads")
 	partMape := flag.Int("partition-mape", 1, "Kafka partition index carrying MAPE payloads")
+	graceMS := flag.Int("epoch-grace-ms", 2000, "Milliseconds to wait for counterpart before imputing")
+	bufferMax := flag.Int("buffer-max-epochs", 200, "Maximum number of finalized epochs kept for deduplication")
 	flag.Parse()
 
-	if err := os.MkdirAll(*logDir, 0o755); err != nil {
+	addrVal := envOrDefault("LEDGER_ADDR", *addr)
+	dataDirVal := envOrDefault("LEDGER_DATA", *dataDir)
+	logDirVal := envOrDefault("LEDGER_LOGS", *logDir)
+	brokersVal := envOrDefault("LEDGER_KAFKA_BROKERS", *brokersFlag)
+	topicTemplateVal := envOrDefault("LEDGER_TOPIC_TEMPLATE", *topicTemplate)
+	zonesVal := envOrDefault("LEDGER_ZONES", *zonesFlag)
+	groupIDVal := envOrDefault("LEDGER_GROUP_ID", *groupID)
+	partAggVal := envOrInt("LEDGER_PARTITION_AGGREGATOR", *partAgg)
+	partMapeVal := envOrInt("LEDGER_PARTITION_MAPE", *partMape)
+	graceMSVal := envOrInt("LEDGER_EPOCH_GRACE_MS", *graceMS)
+	bufferMaxVal := envOrInt("LEDGER_BUFFER_MAX_EPOCHS", *bufferMax)
+
+	if err := os.MkdirAll(logDirVal, 0o755); err != nil {
 		panic(err)
 	}
-	logPath := filepath.Join(*logDir, "ledger.log")
+	logPath := filepath.Join(logDirVal, "ledger.log")
 	lf, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		panic(err)
@@ -47,25 +62,35 @@ func main() {
 	logger := slog.New(&teeHandler{handlers: []slog.Handler{mw, fw}})
 	slog.SetDefault(logger)
 
-	if err := os.MkdirAll(*dataDir, 0o755); err != nil {
+	if err := os.MkdirAll(dataDirVal, 0o755); err != nil {
 		logger.Error("mkdir", slog.Any("err", err))
 		os.Exit(1)
 	}
-	st, err := storage.NewFileLedger(filepath.Join(*dataDir, "ledger.jsonl"), logger)
+	st, err := storage.NewFileLedger(filepath.Join(dataDirVal, "ledger.jsonl"), logger)
 	if err != nil {
 		logger.Error("storage", slog.Any("err", err))
 		os.Exit(1)
 	}
 
-	brokers := splitAndTrim(*brokersFlag)
+	brokers := splitAndTrim(brokersVal)
 	if len(brokers) == 0 {
 		logger.Error("config", slog.String("error", "at least one kafka broker must be provided"))
 		os.Exit(1)
 	}
-	zones := splitAndTrim(*zonesFlag)
+	zones := splitAndTrim(zonesVal)
 	if len(zones) == 0 {
 		logger.Error("config", slog.String("error", "at least one zone must be configured"))
 		os.Exit(1)
+	}
+
+	grace := time.Duration(graceMSVal) * time.Millisecond
+	if grace <= 0 {
+		logger.Warn("config", slog.String("warning", "epoch grace must be positive, using default 2s"))
+		grace = 2 * time.Second
+	}
+	if bufferMaxVal <= 0 {
+		logger.Warn("config", slog.String("warning", "buffer max epochs must be positive, using default 200"))
+		bufferMaxVal = 200
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -73,12 +98,15 @@ func main() {
 
 	ingestCfg := ingest.Config{
 		Brokers:             brokers,
-		GroupID:             *groupID,
-		TopicTemplate:       *topicTemplate,
+		GroupID:             groupIDVal,
+		TopicTemplate:       topicTemplateVal,
 		Zones:               zones,
-		PartitionAggregator: *partAgg,
-		PartitionMAPE:       *partMape,
+		PartitionAggregator: partAggVal,
+		PartitionMAPE:       partMapeVal,
+		GracePeriod:         grace,
+		BufferMaxEpochs:     bufferMaxVal,
 	}
+	logger.Info("ingest_config", slog.String("brokers", strings.Join(brokers, ",")), slog.String("groupID", groupIDVal), slog.String("topicTemplate", topicTemplateVal), slog.String("zones", strings.Join(zones, ",")), slog.Duration("grace", grace), slog.Int("bufferMaxEpochs", bufferMaxVal), slog.Int("partitionAggregator", partAggVal), slog.Int("partitionMape", partMapeVal))
 	mgr, err := ingest.Start(ctx, ingestCfg, st, logger)
 	if err != nil {
 		logger.Error("ingest_start", slog.Any("err", err))
@@ -88,7 +116,7 @@ func main() {
 	mux := http.NewServeMux()
 	api.RegisterRoutes(mux, st, logger)
 
-	srv := &http.Server{Addr: *addr, Handler: loggingMiddleware(logger, mux), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
+	srv := &http.Server{Addr: addrVal, Handler: loggingMiddleware(logger, mux), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
 
 	go func() {
 		c := make(chan os.Signal, 1)
@@ -179,4 +207,22 @@ func splitAndTrim(input string) []string {
 		}
 	}
 	return out
+}
+
+// envOrDefault returns the environment value for key if set, otherwise fallback.
+func envOrDefault(key, fallback string) string {
+	if v, ok := os.LookupEnv(key); ok && strings.TrimSpace(v) != "" {
+		return v
+	}
+	return fallback
+}
+
+// envOrInt returns the integer parsed from an environment variable or fallback on failure.
+func envOrInt(key string, fallback int) int {
+	if v, ok := os.LookupEnv(key); ok {
+		if parsed, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+			return parsed
+		}
+	}
+	return fallback
 }
