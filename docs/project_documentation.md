@@ -1,4 +1,4 @@
-// v2
+// v3
 // docs/project_documentation.md
 # NRG CHAMP
 
@@ -171,6 +171,13 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
   * Establish continuous integration and deployment pipelines for regular updates and maintenance.
 * **Monitoring Tools:**
   * Deploy monitoring and alerting systems to track system health and performance metrics.
+
+### 2.3.4. Kafka Topic Bootstrap and Validation
+
+* **Dedicated Topic Initializer:**
+  * The `services/topic-init` utility (wired as a one-shot Compose service) creates and validates every `zone.ledger.{zoneId}` topic before other workloads start. Topics are provisioned with exactly two partitions and the replication factor defined through `LEDGER_TOPIC_REPLICATION`.
+* **Service-Level Guards:**
+  * Aggregator, MAPE, and Ledger services verify the partition count for their target ledger topics during startup. Any mismatch or missing topic triggers a fatal error with clear logs so operators can rerun the topic initializer before proceeding.
 
 ---
 
