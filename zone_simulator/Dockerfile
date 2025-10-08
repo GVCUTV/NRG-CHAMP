@@ -1,19 +1,19 @@
-# v1
-# Dockerfile
+# // v2
+# // file: zone_simulator/Dockerfile
 # Room Simulator (merged sensors+actuators -> Kafka)
 FROM golang:1.23-alpine AS zs_builder_base
 WORKDIR /app
 FROM golang:1.23-alpine AS zs_builder
 WORKDIR /app
 COPY zone_simulator/go.mod zone_simulator/go.sum ./
-COPY circuit_breaker ./circuit_breaker
+COPY circuit_breaker /circuit_breaker
 COPY zone_simulator/*.go ./
 COPY zone_simulator/sim.properties ./
 # Popola correttamente go.sum (inclusi transitivi di circuit_breaker)
 RUN --mount=type=cache,target=/go/pkg/mod go mod download && go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -o zone-simulator ./
 
-FROM alpine:3.20
+FROM alpine:3.20 AS zs_runtime
 WORKDIR /app
 RUN adduser -D -H appuser
 COPY --from=zs_builder /app/zone-simulator /app/zone-simulator
