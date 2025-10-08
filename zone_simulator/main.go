@@ -1,4 +1,4 @@
-// v4
+// v5
 // main.go
 
 package main
@@ -49,7 +49,7 @@ func main() {
 	}
 
 	topic := cfg.TopicReadingPrefix + "." + cfg.ZoneID
-	writer := newKafkaWriter(cfg.KafkaBrokers, topic)
+	writer := newKafkaWriter(logger, cfg.KafkaBrokers, topic)
 	logger.Info("kafka writer ready", "topic", topic, "brokers", cfg.KafkaBrokers)
 
 	ctx, cancel := context.WithCancel(context.Background())

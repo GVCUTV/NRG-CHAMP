@@ -1,4 +1,4 @@
-# v0
+# v1
 # configmap.yaml
 apiVersion: v1
 kind: ConfigMap
@@ -24,3 +24,9 @@ data:
     fan_power_w_50=100
     fan_power_w_75=150
     fan_power_w_100=200
+  CB_ENABLED: "false"
+  CB_KAFKA_FAILURE_THRESHOLD: "5"
+  CB_KAFKA_SUCCESS_THRESHOLD: "2"
+  CB_KAFKA_OPEN_SECONDS: "30"
+  CB_KAFKA_TIMEOUT_MS: "3000"
+  CB_KAFKA_BACKOFF_MS: "200"
