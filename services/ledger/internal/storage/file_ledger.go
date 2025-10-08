@@ -1,4 +1,4 @@
-// v2
+// v3
 // internal/storage/file_ledger.go
 package storage
 
@@ -35,6 +35,7 @@ type FileLedger struct {
 	lastHeight     int64
 	lastHeaderHash string
 	events         []*models.Event
+	transactions   []*models.Transaction
 }
 
 func NewFileLedger(path string, log *slog.Logger) (*FileLedger, error) {
@@ -59,6 +60,7 @@ func (fl *FileLedger) load() error {
 		return err
 	}
 	fl.events = nil
+	fl.transactions = nil
 	fl.lastID = 0
 	fl.lastHash = ""
 	fl.lastHeaderHash = ""
@@ -84,16 +86,23 @@ func (fl *FileLedger) load() error {
 				if tx == nil {
 					return fmt.Errorf("line %d: block transaction is nil", line)
 				}
-				if err := fl.validateEventChain(tx); err != nil {
+				if err := fl.validateTransactionChain(tx); err != nil {
 					return fmt.Errorf("line %d: %w", line, err)
 				}
-				tx.Timestamp = tx.Timestamp.UTC()
-				stored := cloneEvent(tx)
-				fl.events = append(fl.events, stored)
-				if stored.ID > fl.lastID {
-					fl.lastID = stored.ID
+				storedTx := tx.Clone()
+				if storedTx == nil {
+					return fmt.Errorf("line %d: failed to clone transaction", line)
 				}
-				fl.lastHash = stored.Hash
+				ev, err := transactionToEvent(storedTx)
+				if err != nil {
+					return fmt.Errorf("line %d: %w", line, err)
+				}
+				fl.transactions = append(fl.transactions, storedTx)
+				fl.events = append(fl.events, cloneEvent(ev))
+				if storedTx.ID > fl.lastID {
+					fl.lastID = storedTx.ID
+				}
+				fl.lastHash = storedTx.Hash
 			}
 			fl.lastHeaderHash = blk.Header.HeaderHash
 			fl.lastHeight = blk.Header.Height
@@ -127,30 +136,34 @@ func (fl *FileLedger) load() error {
 	return nil
 }
 
-func (fl *FileLedger) Append(ev *models.Event) (*models.Event, error) {
+func (fl *FileLedger) Append(tx *models.Transaction) (*models.Transaction, error) {
 	fl.mu.Lock()
 	defer fl.mu.Unlock()
+	if tx == nil {
+		return nil, fmt.Errorf("transaction must not be nil")
+	}
+	if tx.SchemaVersion != models.TransactionSchemaVersionV1 {
+		return nil, fmt.Errorf("unsupported transaction schema version %q", tx.SchemaVersion)
+	}
 	fl.lastID++
-	ev.ID = fl.lastID
-	if ev.Timestamp.IsZero() {
-		ev.Timestamp = time.Now().UTC()
+	tx.ID = fl.lastID
+	if tx.MatchedAt.IsZero() {
+		tx.MatchedAt = time.Now().UTC()
 	} else {
-		ev.Timestamp = ev.Timestamp.UTC()
+		tx.MatchedAt = tx.MatchedAt.UTC()
 	}
-	ev.PrevHash = fl.lastHash
-	if len(fl.events) == 0 {
-		if ev.PrevHash != "" {
-			return nil, fmt.Errorf("prevHash mismatch id=%d", ev.ID)
-		}
-	} else if ev.PrevHash != fl.lastHash {
-		return nil, fmt.Errorf("prevHash mismatch id=%d", ev.ID)
-	}
-	h, err := ev.ComputeHash()
+	tx.AggregatorReceivedAt = tx.AggregatorReceivedAt.UTC()
+	tx.MAPEReceivedAt = tx.MAPEReceivedAt.UTC()
+	tx.PrevHash = fl.lastHash
+	hash, err := tx.ComputeHash()
 	if err != nil {
 		return nil, err
 	}
-	ev.Hash = h
-	stored := cloneEvent(ev)
+	tx.Hash = hash
+	stored := tx.Clone()
+	if stored == nil {
+		return nil, fmt.Errorf("failed to clone transaction")
+	}
 	block := models.BlockV2{
 		Header: models.BlockHeaderV2{
 			Version:        models.BlockVersionV2,
@@ -159,7 +172,7 @@ func (fl *FileLedger) Append(ev *models.Event) (*models.Event, error) {
 			Timestamp:      time.Now().UTC(),
 			Nonce:          "",
 		},
-		Data: models.BlockDataV2{Transactions: []*models.Event{stored}},
+		Data: models.BlockDataV2{Transactions: []*models.Transaction{stored}},
 	}
 	dataHash, err := models.ComputeDataHashV2(block.Data.Transactions)
 	if err != nil {
@@ -187,12 +200,17 @@ func (fl *FileLedger) Append(ev *models.Event) (*models.Event, error) {
 	if err := fl.file.Sync(); err != nil {
 		return nil, err
 	}
+	ev, err := transactionToEvent(stored)
+	if err != nil {
+		return nil, err
+	}
 	fl.lastHash = stored.Hash
 	fl.lastHeaderHash = block.Header.HeaderHash
 	fl.lastHeight = block.Header.Height
-	fl.events = append(fl.events, stored)
-	fl.log.Info("appended block", slog.Int64("height", block.Header.Height), slog.String("headerHash", block.Header.HeaderHash), slog.Int64("eventID", stored.ID))
-	return cloneEvent(stored), nil
+	fl.transactions = append(fl.transactions, stored)
+	fl.events = append(fl.events, cloneEvent(ev))
+	fl.log.Info("appended block", slog.Int64("height", block.Header.Height), slog.String("headerHash", block.Header.HeaderHash), slog.Int64("transactionID", stored.ID))
+	return stored.Clone(), nil
 }
 
 func (fl *FileLedger) GetByID(id int64) (*models.Event, error) {
@@ -400,6 +418,28 @@ func (fl *FileLedger) validateEventChain(ev *models.Event) error {
 	return nil
 }
 
+func (fl *FileLedger) validateTransactionChain(tx *models.Transaction) error {
+	if tx == nil {
+		return errors.New("nil transaction")
+	}
+	expectedPrev := fl.lastHash
+	if len(fl.events) == 0 && len(fl.transactions) == 0 {
+		if tx.PrevHash != "" {
+			return fmt.Errorf("prevHash mismatch id=%d", tx.ID)
+		}
+	} else if tx.PrevHash != expectedPrev {
+		return fmt.Errorf("prevHash mismatch id=%d", tx.ID)
+	}
+	h, err := tx.ComputeHash()
+	if err != nil {
+		return err
+	}
+	if h != tx.Hash {
+		return fmt.Errorf("hash mismatch id=%d", tx.ID)
+	}
+	return nil
+}
+
 func cloneEvent(ev *models.Event) *models.Event {
 	if ev == nil {
 		return nil
@@ -409,6 +449,32 @@ func cloneEvent(ev *models.Event) *models.Event {
 		cp.Payload = append([]byte(nil), ev.Payload...)
 	}
 	return &cp
+}
+
+func transactionToEvent(tx *models.Transaction) (*models.Event, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("nil transaction")
+	}
+	record := tx.MatchRecord()
+	record.AggregatorReceived = record.AggregatorReceived.UTC()
+	record.MAPEReceived = record.MAPEReceived.UTC()
+	record.MatchedAt = record.MatchedAt.UTC()
+	payload, err := json.Marshal(record)
+	if err != nil {
+		return nil, fmt.Errorf("marshal transaction payload: %w", err)
+	}
+	ev := &models.Event{
+		ID:            tx.ID,
+		Type:          tx.Type,
+		ZoneID:        tx.ZoneID,
+		Timestamp:     record.MatchedAt,
+		Source:        "ledger.kafka",
+		CorrelationID: fmt.Sprintf("%s-%d", tx.ZoneID, tx.EpochIndex),
+		Payload:       payload,
+		PrevHash:      tx.PrevHash,
+		Hash:          tx.Hash,
+	}
+	return ev, nil
 }
 
 func finalizeBlock(block *models.BlockV2) ([]byte, error) {
