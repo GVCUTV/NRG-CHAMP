@@ -130,6 +130,14 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
   Aggregator and MAPE payloads remain unchanged from their Kafka forms (including version gating) and are normalized to UTC when persisted. `prevHash`/`hash` continue the ledger chain and are included in each transaction to preserve legacy query semantics until batching is introduced.
 * **Hashing discipline:** transaction leaves are hashed as `SHA-256(CanonicalJSON(tx))`; the Merkle root of those leaves becomes `dataHash`. The header hash is `SHA-256(CanonicalJSON(header-without-headerHash))`. The `prevHeaderHash` field links the header chain and is empty for the genesis block.
 * **Verification flow:** replaying a file recomputes every transaction hash, rebuilds the Merkle root, recomputes each header hash, enforces height monotonicity and `prevHeaderHash` linkage, and confirms that the stored `blockSize` matches the serialized line length. Legacy v1 events are still checked using their historical hash/prevHash rules so mixed files remain valid.
+
+#### Compatibility
+
+* Legacy v1 newline-delimited events remain valid input. The loader promotes them into in-memory events, preserves their hashes, and uses them to seed the continuation point for v2 blocks.
+* Version detection happens per line: if `header.version == "v2"` the entry is decoded as a block, otherwise it is treated as a v1 event. No manual configuration is required when replaying historical files.
+* Mixed ledgers are supported with the constraint that v1 events appear first and v2 blocks follow. The first v2 block must bridge the old chain by pointing each transaction’s `prevHash` to the final v1 hash while keeping `prevHeaderHash` empty for the new header chain genesis.
+* Tampering produces explicit verification errors (e.g., `prevHash mismatch`, `dataHash mismatch`) so operators can pinpoint which record broke compatibility.
+
 * **Sample block:**
 
 ```json
