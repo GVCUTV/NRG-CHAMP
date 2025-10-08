@@ -1,4 +1,4 @@
-// v3
+// v4
 // docs/project_documentation.md
 # NRG CHAMP
 
@@ -95,6 +95,15 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
   * Expose RESTful APIs for data access, control commands, and integration with third-party systems.
 * **External System Integration:**
   * Support integration with existing building management systems and external monitoring services.
+
+### 2.1.7. Ledger Message Schema Versioning
+
+* **Version Tag:**
+  * All Aggregator→Ledger and MAPE→Ledger Kafka messages include a `schemaVersion` field. The current supported identifier is `"v1"`.
+* **Compatibility Guarantees:**
+  * The ledger service accepts and processes only known schema versions. Messages carrying unknown or missing versions are logged, counted, and rejected for safety.
+* **Future Evolution:**
+  * New schema revisions will increment the version string (e.g., `"v2"`) and require corresponding decoder updates before deployment.
 
 ---
 
