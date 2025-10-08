@@ -1,4 +1,4 @@
-// Package internal v8
+// Package internal v9
 // file: internal/server.go
 package internal
 
@@ -46,11 +46,22 @@ func StartCmd() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	go func() { _ = Start(ctx, logger, cfg, IO{}, h) }()
-	<-ctx.Done()
+	errCh := make(chan error, 1)
+	go func() { errCh <- Start(ctx, logger, cfg, IO{}, h) }()
+	var runErr error
+	select {
+	case runErr = <-errCh:
+		stop()
+	case <-ctx.Done():
+		runErr = <-errCh
+	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_ = httpSrv.Shutdown(shutdownCtx)
+	if runErr != nil && !errors.Is(runErr, context.Canceled) {
+		logger.Error("aggregator_run_failed", "err", runErr)
+		return runErr
+	}
 	logger.Info("shutdown_complete")
 	return nil
 }

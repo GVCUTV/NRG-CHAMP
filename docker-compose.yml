@@ -1,4 +1,4 @@
-# // v2
+# // v3
 # // file: docker-compose.yml
 #version: "3.9"
 
@@ -56,6 +56,26 @@ services:
     restart: unless-stopped
     networks: [nrg-net]
 
+  topic-init:
+    build:
+      context: .
+      dockerfile: services/topic-init/Dockerfile
+    image: nrg-champ/topic-init:dev
+    container_name: topic-init
+    restart: "no"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      - LEDGER_KAFKA_BROKERS=kafka:9092
+      - LEDGER_TOPIC_TEMPLATE=zone.ledger.{zone}
+      - LEDGER_ZONES=zone-A
+      - LEDGER_TOPIC_REPLICATION=1
+      - TOPIC_INIT_LOG=/var/log/topic-init/topic-init.log
+    volumes:
+      - ./logs/topic-init:/var/log/topic-init
+    networks: [nrg-net]
+
   aggregator:
     build:
       context: .
@@ -68,6 +88,8 @@ services:
         condition: service_healthy
       zone-simulator:
         condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
     environment:
       AGGREGATOR_PROPS: /app/aggregator.properties
     volumes:
@@ -109,6 +131,8 @@ services:
     depends_on:
       aggregator:
         condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   ledger:
@@ -129,6 +153,7 @@ services:
       - LEDGER_BUFFER_MAX_EPOCHS=200
       - LEDGER_PARTITION_AGGREGATOR=0
       - LEDGER_PARTITION_MAPE=1
+      - LEDGER_TOPIC_REPLICATION=1
     ports:
       - "8083:8083"
     volumes:
@@ -138,6 +163,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
     networks: [ nrg-net ]
 
 #  assessment:

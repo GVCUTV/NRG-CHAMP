@@ -1,4 +1,4 @@
-// v4
+// v5
 // main.go
 package main
 
@@ -80,6 +80,13 @@ func main() {
 	zones := splitAndTrim(zonesVal)
 	if len(zones) == 0 {
 		logger.Error("config", slog.String("error", "at least one zone must be configured"))
+		os.Exit(1)
+	}
+
+	validateCtx, validateCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer validateCancel()
+	if err := ingest.ValidateLedgerTopics(validateCtx, logger, ingest.TopicValidationConfig{Brokers: brokers, Template: topicTemplateVal, Zones: zones}); err != nil {
+		logger.Error("ledger_topic_validation", slog.Any("err", err))
 		os.Exit(1)
 	}
 
