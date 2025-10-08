@@ -101,7 +101,7 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 * **Version Tag:**
   * All Aggregator→Ledger and MAPE→Ledger Kafka messages include a `schemaVersion` field. The current supported identifier is `"v1"`.
   * **Compatibility Guarantees:**
-  * The ledger service accepts and processes only known schema versions. Messages carrying unknown or missing versions are logged, counted, and rejected for safety.
+    * The ledger service accepts and processes only known schema versions. Messages carrying unknown non-empty versions are logged, counted, and rejected for safety, while empty `schemaVersion` fields are promoted to `"v1"` and tracked via the `ledger_load_tx_schema_empty_total` metric for auditing.
   * **Future Evolution:**
   * New schema revisions will increment the version string (e.g., `"v2"`) and require corresponding decoder updates before deployment.
 
