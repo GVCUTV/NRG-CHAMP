@@ -1,4 +1,4 @@
-// v4
+// v5
 // docs/project_documentation.md
 # NRG CHAMP
 
@@ -109,6 +109,25 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 
 * **On-disk format:** each ledger line contains a JSON object with a `header` and `data` section. The header stores: `version` (`"v2"`), `height` (genesis = 0), `prevHeaderHash` (hex-encoded SHA-256 of the previous header), `dataHash` (Merkle root of the serialized transactions), `timestamp` (RFC3339Nano UTC), `blockSize` (serialized byte length), `nonce` (16 random bytes, hex), and the computed `headerHash`.
 * **Block data:** the `data` payload wraps an ordered `transactions` array. Each entry currently mirrors a validated ledger event and retains its individual hash and metadata to preserve existing query semantics while supporting future batching.
+* **Transaction schema (v2):** each `transactions` entry captures a fully matched epoch with canonical timestamps. The structure is:
+
+  ```json
+  {
+    "type": "epoch.match",
+    "schemaVersion": "v1",
+    "zoneId": "<zone>",
+    "epochIndex": 1234,
+    "aggregator": { ... original Aggregator payload ... },
+    "aggregatorReceivedAt": "2024-02-02T15:04:05Z",
+    "mape": { ... original MAPE payload ... },
+    "mapeReceivedAt": "2024-02-02T15:04:05.500Z",
+    "matchedAt": "2024-02-02T15:04:06Z",
+    "prevHash": "",
+    "hash": "<sha256>"
+  }
+  ```
+
+  Aggregator and MAPE payloads remain unchanged from their Kafka forms (including version gating) and are normalized to UTC when persisted. `prevHash`/`hash` continue the ledger chain and are included in each transaction to preserve legacy query semantics until batching is introduced.
 * **Hashing discipline:** transaction leaves are hashed as `SHA-256(CanonicalJSON(tx))`; the Merkle root of those leaves becomes `dataHash`. The header hash is `SHA-256(CanonicalJSON(header-without-headerHash))`. The `prevHeaderHash` field links the header chain and is empty for the genesis block.
 * **Verification flow:** replaying a file recomputes every transaction hash, rebuilds the Merkle root, recomputes each header hash, enforces height monotonicity and `prevHeaderHash` linkage, and confirms that the stored `blockSize` matches the serialized line length. Legacy v1 events are still checked using their historical hash/prevHash rules so mixed files remain valid.
 * **Sample block:**
