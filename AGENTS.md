@@ -32,7 +32,8 @@
 
 - Each created or modified file must start with:
   ```go
-  // vN        // increment previous version, or start at v0 if unknown
+  // vN        
+  //increment previous version, or start at v0 if unknown
   // path/to/file.go
   ```
 - Always generate **complete files**, preserving code not intended to be modified.
@@ -110,6 +111,7 @@ A Codex task is considered **complete** only if all of the following hold:
 - Before editing or adding code, **read** the relevant documentation:
     - `docs/project_documentation.md`
     - `docs/ragionamenti.md`
+    - `docs/relazione.pdf`
     - any relevant subfile under `docs/`
 - If proposed changes **conflict** with documentation, Codex must:
     1. Flag a **“Design Conflict”** in the PR.
