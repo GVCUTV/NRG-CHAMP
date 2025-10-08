@@ -1,5 +1,5 @@
-// v7
-// config.go
+// v8
+// services/mape/internal/config.go
 package internal
 
 import (
@@ -29,6 +29,9 @@ type AppConfig struct {
 	FanSteps       []float64
 	FanSpeeds      []int
 	Actuators      map[string]ZoneActuators
+
+	SetpointMinC float64
+	SetpointMaxC float64
 }
 
 func LoadEnvAndFiles() (*AppConfig, error) {
@@ -43,9 +46,14 @@ func LoadEnvAndFiles() (*AppConfig, error) {
 		PollIntervalMs:     geti("POLL_INTERVAL_MS", 250),
 		ActuatorPartitions: geti("ACTUATOR_PARTITIONS", 3), // heat/cool/vent
 		TopicReplication:   geti("TOPIC_REPLICATION", 1),
+		SetpointMinC:       getf("MAPE_SETPOINT_MIN_C", 10.0),
+		SetpointMaxC:       getf("MAPE_SETPOINT_MAX_C", 35.0),
 	}
 	if len(c.KafkaBrokers) == 0 {
 		return nil, errors.New("KAFKA_BROKERS is required")
+	}
+	if c.SetpointMinC > c.SetpointMaxC {
+		return nil, fmt.Errorf("setpoint min %.2f greater than max %.2f", c.SetpointMinC, c.SetpointMaxC)
 	}
 	if err := c.loadProperties(c.PropertiesPath); err != nil {
 		return nil, err
@@ -74,6 +82,12 @@ func (c *AppConfig) loadProperties(path string) error {
 	var zones []string
 	var steps []float64
 	var speeds []int
+	var targetDefaults float64
+	var hasTargetDefault bool
+	targetOverrides := map[string]float64{}
+	var hystDefault float64
+	var hasHystDefault bool
+	hystOverrides := map[string]float64{}
 
 	for s.Scan() {
 		line := strings.TrimSpace(s.Text())
@@ -92,15 +106,13 @@ func (c *AppConfig) loadProperties(path string) error {
 			zones = split(v)
 		case k == "target":
 			if f, err := strconv.ParseFloat(v, 64); err == nil {
-				for _, z := range zones {
-					c.ZoneTargets[z] = f
-				}
+				targetDefaults = f
+				hasTargetDefault = true
 			}
 		case k == "hysteresis":
 			if f, err := strconv.ParseFloat(v, 64); err == nil {
-				for _, z := range zones {
-					c.ZoneHysteresis[z] = f
-				}
+				hystDefault = f
+				hasHystDefault = true
 			}
 		case k == "fan.steps":
 			for _, p := range split(v) {
@@ -117,12 +129,12 @@ func (c *AppConfig) loadProperties(path string) error {
 		case strings.HasPrefix(k, "target."):
 			z := strings.TrimPrefix(k, "target.")
 			if f, err := strconv.ParseFloat(v, 64); err == nil {
-				c.ZoneTargets[z] = f
+				targetOverrides[z] = f
 			}
 		case strings.HasPrefix(k, "hysteresis."):
 			z := strings.TrimPrefix(k, "hysteresis.")
 			if f, err := strconv.ParseFloat(v, 64); err == nil {
-				c.ZoneHysteresis[z] = f
+				hystOverrides[z] = f
 			}
 		case strings.HasPrefix(k, "actuators.heating."):
 			z := strings.TrimPrefix(k, "actuators.heating.")
@@ -151,6 +163,25 @@ func (c *AppConfig) loadProperties(path string) error {
 		return fmt.Errorf("fan.steps and fan.speeds length mismatch: %d vs %d", len(steps), len(speeds))
 	}
 	c.Zones = zones
+	for _, z := range zones {
+		if v, ok := targetOverrides[z]; ok {
+			c.ZoneTargets[z] = v
+			continue
+		}
+		if !hasTargetDefault {
+			return fmt.Errorf("zone %s missing target and no global default", z)
+		}
+		c.ZoneTargets[z] = targetDefaults
+	}
+	for _, z := range zones {
+		if v, ok := hystOverrides[z]; ok {
+			c.ZoneHysteresis[z] = v
+			continue
+		}
+		if hasHystDefault {
+			c.ZoneHysteresis[z] = hystDefault
+		}
+	}
 	c.FanSteps = steps
 	c.FanSpeeds = speeds
 	return nil
@@ -184,4 +215,13 @@ func split(s string) []string {
 		}
 	}
 	return out
+}
+
+func getf(k string, d float64) float64 {
+	if v := os.Getenv(k); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return d
 }

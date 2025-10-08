@@ -1,4 +1,6 @@
 ## Kafka
+// v1
+// docs/ragionamenti.md
 ### Device -> aggregator
 Ogni zona deve avere il suo proprio topic dedicato, denominato con lo stesso id della zona, ogni device deve avere la sua propria partizione denominata anche essa con l’id del device per evitare collisioni dovute all’alta frequenza di scrittura dei device.
 L'istanza di aggregator assegnata a quella zona legge in round robin dalle partizioni, etichettando come letti i messaggi, e passa alla prossima partizione appena trova un messaggio dell'epoca successiva, che non etichetta come letto.
@@ -37,6 +39,10 @@ Il numero massimo di fallimenti e il tempo di reset del circuit braker dovranno 
 
 ## MAPE
 Gli obiettivi di temperatura all'interno di ogni zona devono essere scritti all'interno di un file di properties.
+Ogni zona può definire un override dedicato (`target.<zoneId>=<float>`) che viene caricato all'avvio; a runtime
+le API HTTP `/config/temperature` permettono di riallineare i setpoint in memoria senza modificare il file.
+Le modifiche vengono mantenute solo finché il servizio resta attivo, così da evitare conflitti di editing; isteresi e curve
+ventola restano globali finché non emergono requisiti di personalizzazione specifici.
 ### Monitor
 
 ### Analyze
