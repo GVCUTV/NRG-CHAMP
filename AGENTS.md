@@ -168,11 +168,10 @@ A Codex task is considered **complete** only if all of the following hold:
 
 ---
 
-## 17) Branching rules
-- Always use the existing branch named `codex/codex` for all pushes.
-- Do **not** create a new branch for each task.
-- Commit all Codex-generated changes to the `codex/codex` branch.
-- If the branch does not exist, create it once and reuse it.
+## 17) Pull Request rules
+- Always open pull requests on the existing branch named `codex/codex`.
+- Do **not** open pull requests on existing branch named `main`.
+- 
 
 ---
 
