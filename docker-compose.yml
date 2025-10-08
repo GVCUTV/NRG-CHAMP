@@ -1,3 +1,5 @@
+# // v1
+# // file: docker-compose.yml
 #version: "3.9"
 
 services:
@@ -55,7 +57,9 @@ services:
     networks: [nrg-net]
 
   aggregator:
-    build: ./services/aggregator
+    build:
+      context: .
+      dockerfile: services/aggregator/Dockerfile
     image: nrg-champ/aggregator:latest
     container_name: aggregator
     restart: unless-stopped
