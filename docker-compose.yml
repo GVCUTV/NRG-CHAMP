@@ -114,8 +114,8 @@ services:
   ledger:
     image: nrg-champ/ledger:dev
     build:
-      context: ./services/ledger
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/ledger/Dockerfile
     container_name: nrg-ledger
     environment:
       - LEDGER_ADDR=:8083
