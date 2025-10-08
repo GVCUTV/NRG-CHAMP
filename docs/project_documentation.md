@@ -766,7 +766,7 @@ NRG CHAMP models facilities and assets using a **hierarchical topology** to supp
 
 ## 6.1. Ingestion Service & Data Aggregation
 
-## 6.1.1. Ingestion Service
+### 6.1.1. Ingestion Service
 
 * **Protocols Supported:**
 
@@ -1489,7 +1489,7 @@ We selected **Apache Kafka** as the primary communication middleware among most 
 
 ### 8.1.2. Aggregator → MAPE
 
-- **One topic (multi‑zone), partition-per-zone:** each aggregator publishes to a shared topic using **one partition per zone**.
+- **Topic-per-pair:** each *Aggregator/MAPE* pair (with many to one cardinality) has a dedicated Kafka topic to avoid collisions and geographically balance load, **partition-per-zone:** each aggregator publishes to the pair topic using **one partition per zone**.
 - **Consumer assignment:** there is a **1:1 assignment** between an **aggregator** and a **MAPE instance**. The MAPE consumer performs **round‑robin over zone partitions** and, **for each partition**, reads **all messages** and **processes only the most recent one**, discarding older items as obsolete.
 
 ### 8.1.3. MAPE → Actuators
@@ -1511,7 +1511,7 @@ We selected **Apache Kafka** as the primary communication middleware among most 
 A **shared circuit‑breaker module** is used across services (HTTP clients, Kafka producers/consumers, etc.). Each call is routed through its **call‑type specific handler** which:
 
 1. **Issues the request**.
-2. On failure and after exceeding the **max failures threshold**, **waits X seconds** before probing the remote.
+2. On failure and after exceeding the **max failures threshold**, **waits a customizable amount of seconds** before probing the remote.
 3. **Sends a lightweight probe**; if healthy, **replays the original request**.
 4. **Resets failure counters** on success.
 
