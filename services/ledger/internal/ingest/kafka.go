@@ -1,4 +1,4 @@
-// v5
+// v6
 // services/ledger/internal/ingest/kafka.go
 // Package ingest coordinates the Kafka pipelines that populate the ledger storage.
 package ingest
@@ -17,6 +17,7 @@ import (
 	circuitbreaker "github.com/nrg-champ/circuitbreaker"
 	"github.com/segmentio/kafka-go"
 
+	"nrgchamp/ledger/internal/metrics"
 	"nrgchamp/ledger/internal/models"
 	"nrgchamp/ledger/internal/storage"
 )
@@ -251,6 +252,7 @@ func (zc *zoneConsumer) handleAggregator(msg kafka.Message) ([]kafka.Message, er
 	zc.log.Debug("aggregator_msg", slog.Int64("offset", msg.Offset), slog.Int("partition", msg.Partition))
 	var agg aggregatedEpoch
 	if err := json.Unmarshal(msg.Value, &agg); err != nil {
+		metrics.IncDecodeError("aggregator")
 		return []kafka.Message{msg}, fmt.Errorf("decode aggregator: %w", err)
 	}
 	if agg.SchemaVersion != schemaVersionV1 {
@@ -296,6 +298,7 @@ func (zc *zoneConsumer) handleMape(msg kafka.Message) ([]kafka.Message, error) {
 	zc.log.Debug("mape_msg", slog.Int64("offset", msg.Offset), slog.Int("partition", msg.Partition))
 	var led mapeLedgerEvent
 	if err := json.Unmarshal(msg.Value, &led); err != nil {
+		metrics.IncDecodeError("mape")
 		return []kafka.Message{msg}, fmt.Errorf("decode mape: %w", err)
 	}
 	if led.SchemaVersion != schemaVersionV1 {
@@ -343,6 +346,15 @@ func (zc *zoneConsumer) finalize(epoch int64, state *matchState, allowImpute boo
 		return nil, fmt.Errorf("missing match state")
 	}
 
+	var (
+		latencySeconds float64
+		haveLatency    bool
+	)
+	if !state.firstSeen.IsZero() {
+		latencySeconds = time.Since(state.firstSeen).Seconds()
+		haveLatency = true
+	}
+
 	zc.mu.Lock()
 	if zc.isFinalizedLocked(epoch) {
 		zc.mu.Unlock()
@@ -358,6 +370,15 @@ func (zc *zoneConsumer) finalize(epoch int64, state *matchState, allowImpute boo
 
 	if err := zc.persistMatch(epoch, aggData, aggReceived, mapeData, mapeReceived); err != nil {
 		return nil, err
+	}
+
+	if haveLatency {
+		metrics.ObserveMatchLatency(latencySeconds)
+	}
+
+	if aggImputed || mapeImputed {
+		metrics.IncImputed(zc.zone)
+		zc.log.Info("imputation_summary", slog.String("zone", zc.zone), slog.Int64("epoch", epoch), slog.Bool("aggregatorImputed", aggImputed), slog.Bool("mapeImputed", mapeImputed))
 	}
 
 	zc.mu.Lock()
