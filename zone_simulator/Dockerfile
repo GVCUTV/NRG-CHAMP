@@ -3,10 +3,11 @@
 # Room Simulator (merged sensors+actuators -> Kafka)
 FROM golang:1.23-alpine AS builder
 WORKDIR /app
-COPY go.mod go.sum ./
+COPY zone_simulator/go.mod zone_simulator/go.sum ./
+COPY circuit_breaker ./circuit_breaker
 RUN go mod download
-COPY *.go ./
-COPY sim.properties ./
+COPY zone_simulator/*.go ./
+COPY zone_simulator/sim.properties ./
 RUN CGO_ENABLED=0 GOOS=linux go build -o zone-simulator ./
 
 FROM alpine:3.20
