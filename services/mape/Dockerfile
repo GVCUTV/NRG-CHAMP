@@ -1,6 +1,6 @@
-# v8
-# Dockerfile
-FROM golang:1.23-alpine AS build
+# // v9
+# // file: services/mape/Dockerfile
+FROM golang:1.23-alpine AS mape_build
 WORKDIR /app
 
 COPY services/mape/go.mod services/mape/go.sum ./
@@ -10,12 +10,12 @@ RUN go mod download
 COPY services/mape/ ./
 RUN CGO_ENABLED=0 go build -o /mape ./cmd/mape
 
-FROM alpine:3.20
+FROM alpine:3.20 AS mape_runtime
 WORKDIR /app
 RUN adduser -D -u 10001 appuser
 USER appuser
-COPY --from=build /mape /app/mape
-COPY --from=build /app/mape.properties /app/config/mape.properties
+COPY --from=mape_build /mape /app/mape
+COPY --from=mape_build /app/mape.properties /app/config/mape.properties
 ENV HTTP_BIND=:8080
 ENV LOG_DIR=/app/logs
 ENV KAFKA_BROKERS=localhost:9092

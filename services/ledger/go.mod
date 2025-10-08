@@ -1,8 +1,8 @@
-// v3
-// go.mod
+// v4
+// file: services/ledger/go.mod
 module nrgchamp/ledger
 
-go 1.22
+go 1.23
 
 require (
         github.com/nrg-champ/circuitbreaker v0.0.0
