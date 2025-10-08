@@ -1,4 +1,4 @@
-// v5
+// v6
 // docs/project_documentation.md
 # NRG CHAMP
 
@@ -239,6 +239,7 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
   * Establish continuous integration and deployment pipelines for regular updates and maintenance.
 * **Monitoring Tools:**
   * Deploy monitoring and alerting systems to track system health and performance metrics.
+  * The ledger service exposes Prometheus metrics at `/metrics`, including `ledger_ingest_imputed_total`, `ledger_ingest_decode_errors_total`, and the `ledger_ingest_match_latency_seconds` histogram for ingestion observability.
 
 ### 2.3.4. Kafka Topic Bootstrap and Validation
 
