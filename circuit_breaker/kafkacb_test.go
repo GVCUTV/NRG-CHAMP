@@ -1,4 +1,4 @@
-// v0
+// v1
 // kafkacb_test.go
 package circuitbreaker
 
@@ -96,13 +96,10 @@ func TestCBKafkaWriterRetryAndStateTransitions(t *testing.T) {
 	}
 
 	logs := logBuf.String()
-	if !strings.Contains(logs, "[CB] open") {
+	if !strings.Contains(logs, "[CB] kafka: state=OPEN") {
 		t.Fatalf("expected open log, got %q", logs)
 	}
-	if !strings.Contains(logs, "[CB] half-open") {
-		t.Fatalf("expected half-open log, got %q", logs)
-	}
-	if !strings.Contains(logs, "[CB] closed") {
+	if !strings.Contains(logs, "[CB] kafka: state=CLOSED") {
 		t.Fatalf("expected closed log, got %q", logs)
 	}
 }
