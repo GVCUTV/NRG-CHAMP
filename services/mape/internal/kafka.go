@@ -1,4 +1,4 @@
-// v9
+// v10
 // services/mape/internal/kafka.go
 package internal
 
@@ -223,9 +223,12 @@ func (ioh *KafkaIO) PublishCommandsAndLedger(ctx context.Context, zone string, c
 		}
 	}
 	b, _ := json.Marshal(led)
+	topic := ioh.cfg.LedgerTopicPref + zone
 	lm := kafka.Message{Value: b, Time: time.Now(), Partition: ioh.cfg.MAPEPartitionID}
 	if err := lw.WriteMessages(ctx, lm); err != nil {
+		ioh.lg.Error("ledger_write_err", "zone", zone, "topic", topic, "partition", ioh.cfg.MAPEPartitionID, "err", err)
 		return fmt.Errorf("ledger write: %w", err)
 	}
+	ioh.lg.Info("ledger_write_ok", "zone", zone, "topic", topic, "partition", ioh.cfg.MAPEPartitionID, "epoch", led.EpochIndex)
 	return nil
 }

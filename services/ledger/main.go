@@ -1,4 +1,4 @@
-// v3
+// v4
 // main.go
 package main
 
@@ -26,7 +26,7 @@ func main() {
 	dataDir := flag.String("data", "./data", "Data directory where the ledger file is stored")
 	logDir := flag.String("logs", "./logs", "Logs directory for file output")
 	brokersFlag := flag.String("kafka-brokers", "kafka:9092", "Comma-separated list of Kafka brokers to consume from")
-	topicTemplate := flag.String("topic-template", "ledger-{zone}", "Kafka topic name template that contains {zone}")
+	topicTemplate := flag.String("topic-template", "zone.ledger.{zone}", "Kafka topic name template that contains {zone}")
 	zonesFlag := flag.String("zones", "", "Comma-separated list of zone identifiers to monitor")
 	groupID := flag.String("consumer-group", "ledger-service", "Kafka consumer group identifier for ledger ingestion")
 	partAgg := flag.Int("partition-aggregator", 0, "Kafka partition index carrying aggregator payloads")

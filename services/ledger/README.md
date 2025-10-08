@@ -1,4 +1,4 @@
-// v3
+// v4
 // README.md
 # Ledger Service (NRG CHAMP) — Standalone
 
@@ -15,7 +15,7 @@ The service reads configuration from flags or environment variables. Key variabl
 | `LEDGER_LOGS` | Directory for log files | `./logs` |
 | `LEDGER_KAFKA_BROKERS` | Comma-separated Kafka broker list | `kafka:9092` |
 | `LEDGER_GROUP_ID` | Consumer group identifier | `ledger-service` |
-| `LEDGER_TOPIC_TEMPLATE` | Topic template containing `{zone}` placeholder | `ledger-{zone}` |
+| `LEDGER_TOPIC_TEMPLATE` | Topic template containing `{zone}` placeholder | `zone.ledger.{zone}` |
 | `LEDGER_ZONES` | Comma-separated list of zones to monitor | _(required)_ |
 | `LEDGER_EPOCH_GRACE_MS` | Milliseconds to wait before imputing missing counterparts | `2000` |
 | `LEDGER_BUFFER_MAX_EPOCHS` | Number of finalized epochs to retain for deduplication | `200` |
