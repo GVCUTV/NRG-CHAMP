@@ -1,4 +1,4 @@
-// v3
+// v4
 // kafka.go
 
 package main
@@ -12,8 +12,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/nrg-champ/circuitbreaker"
 	"github.com/segmentio/kafka-go"
 )
+
+type kafkaMessageWriter interface {
+	WriteMessages(ctx context.Context, msgs ...kafka.Message) error
+}
 
 type Reading struct {
 	DeviceID   string     `json:"deviceId"`
@@ -41,21 +46,36 @@ type ActuatorCommand struct {
 	IssuedAt   int64  `json:"issuedAt"`
 }
 
-func newKafkaWriter(brokers []string, topic string) *kafka.Writer {
-	return &kafka.Writer{
+func newKafkaWriter(log *slog.Logger, brokers []string, topic string) kafkaMessageWriter {
+	baseWriter := &kafka.Writer{
 		Addr:     kafka.TCP(brokers...),
 		Topic:    topic,
 		Balancer: &kafka.Hash{},
 	}
+
+	breaker, err := circuitbreaker.NewKafkaBreakerFromEnv("zone-simulator-writer", nil)
+	if err != nil {
+		log.Error("circuit breaker configuration invalid", "err", err)
+		return circuitbreaker.NewCBKafkaWriter(baseWriter, nil)
+	}
+
+	if breaker != nil && breaker.Enabled() {
+		log.Info("circuit breaker enabled")
+	} else {
+		log.Info("circuit breaker disabled; using plain writer")
+	}
+
+	return circuitbreaker.NewCBKafkaWriter(baseWriter, breaker)
 }
 
-func publish(ctx context.Context, log *slog.Logger, w *kafka.Writer, msg Reading) error {
+func publish(ctx context.Context, log *slog.Logger, w kafkaMessageWriter, msg Reading) error {
 	b, err := json.Marshal(msg)
 	if err != nil {
 		log.Error("marshal failed", "err", err)
 		return err
 	}
-	err = w.WriteMessages(ctx, kafka.Message{Key: []byte(msg.DeviceID), Value: b, Time: msg.Timestamp})
+	kafkaMsg := kafka.Message{Key: []byte(msg.DeviceID), Value: b, Time: msg.Timestamp}
+	err = w.WriteMessages(ctx, kafkaMsg)
 	if err != nil {
 		log.Error("kafka write failed", "err", err, "deviceId", msg.DeviceID)
 		return err
