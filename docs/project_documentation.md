@@ -100,10 +100,50 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 
 * **Version Tag:**
   * All Aggregator→Ledger and MAPE→Ledger Kafka messages include a `schemaVersion` field. The current supported identifier is `"v1"`.
-* **Compatibility Guarantees:**
+  * **Compatibility Guarantees:**
   * The ledger service accepts and processes only known schema versions. Messages carrying unknown or missing versions are logged, counted, and rejected for safety.
-* **Future Evolution:**
+  * **Future Evolution:**
   * New schema revisions will increment the version string (e.g., `"v2"`) and require corresponding decoder updates before deployment.
+
+### Ledger Blocks (v2, NIST-style)
+
+* **On-disk format:** each ledger line contains a JSON object with a `header` and `data` section. The header stores: `version` (`"v2"`), `height` (genesis = 0), `prevHeaderHash` (hex-encoded SHA-256 of the previous header), `dataHash` (Merkle root of the serialized transactions), `timestamp` (RFC3339Nano UTC), `blockSize` (serialized byte length), `nonce` (16 random bytes, hex), and the computed `headerHash`.
+* **Block data:** the `data` payload wraps an ordered `transactions` array. Each entry currently mirrors a validated ledger event and retains its individual hash and metadata to preserve existing query semantics while supporting future batching.
+* **Hashing discipline:** transaction leaves are hashed as `SHA-256(CanonicalJSON(tx))`; the Merkle root of those leaves becomes `dataHash`. The header hash is `SHA-256(CanonicalJSON(header-without-headerHash))`. The `prevHeaderHash` field links the header chain and is empty for the genesis block.
+* **Verification flow:** replaying a file recomputes every transaction hash, rebuilds the Merkle root, recomputes each header hash, enforces height monotonicity and `prevHeaderHash` linkage, and confirms that the stored `blockSize` matches the serialized line length. Legacy v1 events are still checked using their historical hash/prevHash rules so mixed files remain valid.
+* **Sample block:**
+
+```json
+{
+  "header": {
+    "version": "v2",
+    "height": 0,
+    "prevHeaderHash": "",
+    "dataHash": "9f24...",
+    "timestamp": "2024-05-10T12:00:00Z",
+    "blockSize": 512,
+    "nonce": "4d8f2c1e7b5934aa2edb1f3c5a8d9e71",
+    "headerHash": "1b73..."
+  },
+  "data": {
+    "transactions": [
+      {
+        "id": 1,
+        "type": "temperature",
+        "zoneId": "Z1",
+        "timestamp": "2024-05-10T12:00:00Z",
+        "source": "unit-test",
+        "correlationId": "abc-123",
+        "payload": {"celsius": 21.5},
+        "prevHash": "",
+        "hash": "7fd1..."
+      }
+    ]
+  }
+}
+```
+
+*The ellipses above denote truncated hashes for brevity; real blocks contain full 64-character hex digests.*
 
 ---
 
