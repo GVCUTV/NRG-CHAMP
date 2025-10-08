@@ -1,4 +1,4 @@
-// v1
+// v2
 // docs/project_documentation.md
 # NRG CHAMP
 
@@ -1501,9 +1501,9 @@ We selected **Apache Kafka** as the primary communication middleware among most 
 
 ### 8.1.4. Aggregator & MAPE → Ledger
 
-- **Topic-per-zone with two partitions:** for each zone there is a dedicated topic with **two partitions**:
-  - **aggregator** (sensor summaries),
-  - **mape** (decisions/actions).
+- **Canonical topic name:** `zone.ledger.{zoneId}` (see also §“Aggregator + MAPE -> ledger” in `docs/ragionamenti.md`). Each zone has exactly one topic following this pattern.
+- **Strict partition roles:** partition `0` is reserved to **aggregator** sensor summaries, partition `1` to **MAPE** decisions. Producers must write to their assigned partition explicitly.
+- **Consumer enforcement:** the **ledger** subscribes to the canonical topics, routes messages by the actual partition id, and **fails fast** with clear logs if any other partition is encountered.
 - **Epoch‑based matching:** the **ledger** matches items **by epoch** across the two partitions. If any element is missing, it is **estimated from the previous and next epochs** (interpolation/extrapolation policy to be finalized).
 
 > **Why this layout?** It cleanly maps operational boundaries (zones, devices, actuators) to Kafka primitives (topics, partitions), minimizing cross‑talk, preserving ordering where needed, and enabling independent scaling and back‑pressure control per boundary.

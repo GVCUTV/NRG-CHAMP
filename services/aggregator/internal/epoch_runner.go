@@ -1,4 +1,4 @@
-// v10
+// v11
 // services/aggregator/internal/epoch_runner.go
 package internal
 
@@ -89,10 +89,10 @@ func runEpoch(ctx context.Context, log *slog.Logger, cfg Config, io IO, ep Epoch
 			log.Info("produce_mape_ok", "topic", topic, "zone", zone, "epoch", ep.Index, "count", len(allReadings))
 		}
 		if err := io.Producer.SendToLedger(ctx, zone, agg); err != nil {
-			log.Error("produce_ledger_err", "topic", topic, "zone", zone, "err", err)
+			log.Error("produce_ledger_err", "topic", topic, "zone", zone, "partition", cfg.LedgerPartAgg, "err", err)
 			return err
 		} else {
-			log.Info("produce_ledger_ok", "topic", topic, "zone", zone, "epoch", ep.Index, "count", len(allReadings))
+			log.Info("produce_ledger_ok", "topic", topic, "zone", zone, "partition", cfg.LedgerPartAgg, "epoch", ep.Index, "count", len(allReadings))
 		}
 	}
 	log.Info("epoch_end", "index", ep.Index)

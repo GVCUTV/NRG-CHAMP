@@ -1,4 +1,4 @@
-// v2
+// v3
 // internal/ingest/kafka.go
 package ingest
 
@@ -217,7 +217,7 @@ func (zc *zoneConsumer) run(ctx context.Context) {
 		commits, handleErr := zc.handleMessage(msg)
 		if handleErr != nil {
 			zc.log.Error("handle_err", slog.Any("err", handleErr), slog.Int64("offset", msg.Offset), slog.Int("partition", msg.Partition))
-			continue
+			return
 		}
 		if len(commits) > 0 {
 			if err := zc.reader.CommitMessages(ctx, commits...); err != nil {
@@ -234,8 +234,9 @@ func (zc *zoneConsumer) handleMessage(msg kafka.Message) ([]kafka.Message, error
 	case zc.partMape:
 		return zc.handleMape(msg)
 	default:
-		zc.log.Warn("unexpected_partition", slog.Int("partition", msg.Partition))
-		return []kafka.Message{msg}, nil
+		err := fmt.Errorf("unexpected partition %d for zone %s", msg.Partition, zc.zone)
+		zc.log.Error("unexpected_partition", slog.Int("partition", msg.Partition), slog.String("zone", zc.zone))
+		return nil, err
 	}
 }
 
