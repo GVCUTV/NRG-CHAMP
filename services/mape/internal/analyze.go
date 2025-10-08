@@ -1,5 +1,5 @@
-// v8
-// analyze.go
+// v9
+// services/mape/internal/analyze.go
 package internal
 
 import (
@@ -11,6 +11,7 @@ import (
 type Analyze struct {
 	cfg *AppConfig
 	lg  *slog.Logger
+	sp  *ZoneSetpoints
 }
 
 type AnalysisResult struct {
@@ -27,11 +28,17 @@ type AnalysisResult struct {
 	ActuatorEnergyKWh  map[string]float64
 }
 
-func NewAnalyze(cfg *AppConfig, lg *slog.Logger) *Analyze { return &Analyze{cfg: cfg, lg: lg} }
+func NewAnalyze(cfg *AppConfig, sp *ZoneSetpoints, lg *slog.Logger) *Analyze {
+	return &Analyze{cfg: cfg, lg: lg, sp: sp}
+}
 
 // Run decides the action based on the zone's avg temperature from the aggregator summary.
 func (a *Analyze) Run(zone string, read Reading) AnalysisResult {
-	t := a.cfg.ZoneTargets[zone]
+	t, ok := a.sp.Get(zone)
+	if !ok {
+		t = a.cfg.ZoneTargets[zone]
+		a.lg.Warn("setpoint missing in store", "zone", zone, "fallback", t)
+	}
 	h := a.cfg.ZoneHysteresis[zone]
 	res := AnalysisResult{Target: t, Hyst: h, HasTemp: true, TempC: read.AvgTempC, ZoneEnergyKWhEpoch: read.ZoneEnergyKWhEpoch, ZoneEnergySource: read.ZoneEnergySource, ActuatorEnergyKWh: cloneEnergyMap(read.ActuatorEnergyKWh)}
 	res.Delta = res.TempC - t
