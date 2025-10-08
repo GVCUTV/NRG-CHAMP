@@ -1,4 +1,4 @@
-// v2
+// v3
 // internal/api/http.go
 package api
 
@@ -30,11 +30,12 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if err := s.st.Verify(); err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"status": "degraded", "error": err.Error()})
+	report, err := s.st.Verify()
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"status": "degraded", "error": err.Error(), "versions": report})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "ok", "versions": report})
 }
 
 func (s *Server) events(w http.ResponseWriter, r *http.Request) {
