@@ -1,4 +1,4 @@
-// v3
+// v4
 // internal/ingest/ledger_consumer.go
 package ingest
 
@@ -35,7 +35,7 @@ type LedgerConsumerConfig struct {
 // by downstream aggregations.
 type EpochEnergy struct {
 	ZoneID     string
-	EventTime  time.Time
+	MatchedAt  time.Time
 	EnergyKWh  float64
 	EpochIndex *int
 }
@@ -351,7 +351,7 @@ func (c *LedgerConsumer) Run(ctx context.Context) error {
 				count, evicted := c.store.Append(record.ZoneID, record)
 				attrs := []slog.Attr{
 					slog.String("zoneId", record.ZoneID),
-					slog.Time("eventTime", record.EventTime.UTC()),
+					slog.Time("matchedAt", record.MatchedAt.UTC()),
 					slog.Float64("energyKWh", record.EnergyKWh),
 					slog.Int("bufferDepth", count),
 				}
@@ -359,7 +359,7 @@ func (c *LedgerConsumer) Run(ctx context.Context) error {
 					attrs = append(attrs, slog.Int("epochIndex", *record.EpochIndex))
 				}
 				if evicted != nil {
-					attrs = append(attrs, slog.Time("evictedEventTime", evicted.EventTime.UTC()))
+					attrs = append(attrs, slog.Time("evictedMatchedAt", evicted.MatchedAt.UTC()))
 				}
 				if decoded.Type != "" {
 					attrs = append(attrs, slog.String("type", decoded.Type))
@@ -408,7 +408,6 @@ type ledgerEnvelope struct {
 			ZoneEnergyKWhEpoch json.RawMessage `json:"zoneEnergyKWhEpoch"`
 		} `json:"summary"`
 	} `json:"aggregator"`
-	Energy json.RawMessage `json:"energyKWh_total"`
 }
 
 type ledgerRecord struct {
@@ -455,7 +454,7 @@ func decodeLedgerMessage(raw []byte) (ledgerRecord, error) {
 	if err != nil {
 		return rec, err
 	}
-	rec.Energy.EventTime = event
+	rec.Energy.MatchedAt = event
 
 	idx, err := parseEpochIndex(env.EpochIndex)
 	if err != nil {
@@ -463,20 +462,16 @@ func decodeLedgerMessage(raw []byte) (ledgerRecord, error) {
 	}
 	rec.Energy.EpochIndex = idx
 
-	var energy float64
-	switch {
-	case env.Aggregator != nil && env.Aggregator.Summary != nil && len(env.Aggregator.Summary.ZoneEnergyKWhEpoch) > 0 && !isJSONNull(env.Aggregator.Summary.ZoneEnergyKWhEpoch):
-		energy, err = parseEnergyValue(env.Aggregator.Summary.ZoneEnergyKWhEpoch, "aggregator.summary.zoneEnergyKWhEpoch")
-	case len(env.Energy) > 0 && !isJSONNull(env.Energy):
-		energy, err = parseEnergyValue(env.Energy, "energyKWh_total")
-	default:
+	if env.Aggregator != nil && env.Aggregator.Summary != nil && len(env.Aggregator.Summary.ZoneEnergyKWhEpoch) > 0 && !isJSONNull(env.Aggregator.Summary.ZoneEnergyKWhEpoch) {
+		energy, err := parseEnergyValue(env.Aggregator.Summary.ZoneEnergyKWhEpoch, "aggregator.summary.zoneEnergyKWhEpoch")
+		if err != nil {
+			return rec, err
+		}
+		rec.Energy.EnergyKWh = energy
+	} else {
 		rec.EnergyAbsent = true
-		energy = 0
+		rec.Energy.EnergyKWh = 0
 	}
-	if err != nil {
-		return rec, err
-	}
-	rec.Energy.EnergyKWh = energy
 
 	return rec, nil
 }
