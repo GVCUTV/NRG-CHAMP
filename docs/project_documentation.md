@@ -1,4 +1,4 @@
-// v9
+// v10
 // docs/project_documentation.md
 # NRG CHAMP
 
@@ -107,36 +107,120 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 
 ### 2.1.8. Public Epoch Events
 
-The ledger exposes a pared-down **public epoch** document intended for gamification insights and other non-PII consumers. Version `v1` is defined as follows:
+The ledger exposes a pared-down **public epoch** document intended for gamification insights and other non-PII consumers. The payload mirrors the internal match transaction while omitting device-level telemetry and personally identifiable information so downstream services (e.g., Gamification, see §4.4) can focus on outcomes. Version `v1` is defined as follows:
 
-```
+* `type` — fixed to `"epoch.public"`.
+* `schemaVersion` — semantic version string, currently `"v1"`.
+* `zoneId` — canonical zone identifier used throughout NRG CHAMP.
+* `epochIndex` — zero-based sequential counter assigned by the ledger.
+* `matchedAt` — RFC3339Nano UTC timestamp of the match (converted to UTC during publication).
+* `block` — `{ height, headerHash, dataHash }` referencing the containing ledger block (see [Ledger Blocks (v2, NIST-style)](#ledger-blocks-v2-nist-style)).
+* `aggregator.summary` — sparse map of stable roll-up metrics (averages, kWh totals, occupancy ratios, etc.). Only aggregated values appear; raw device samples are intentionally withheld for privacy.
+* `mape` — `{ planned, targetC, deltaC, fan }` summarizing the HVAC decision the MAPE service committed for the epoch.
+
+#### Sample payloads (validated against the publisher structs)
+
+Cooling decision (Gamification will interpret a negative `deltaC` as a cooling pull against the target):
+
+```json
 {
   "type": "epoch.public",
   "schemaVersion": "v1",
-  "zoneId": "<string>",
-  "epochIndex": <int>,
-  "matchedAt": "<RFC3339Nano UTC>",
+  "zoneId": "zone-neo",
+  "epochIndex": 7342,
+  "matchedAt": "2024-07-12T09:15:27.183245Z",
   "block": {
-    "height": <int>,
-    "headerHash": "<hex>",
-    "dataHash": "<hex>"
+    "height": 4182,
+    "headerHash": "51afbc3d9e0f4ad787d3c8f6b42fe8c1",
+    "dataHash": "c7d0938b1f4b2d5c31af8a4d00b5e2f6"
   },
-  "aggregator": { "summary": { ... } },
+  "aggregator": {
+    "summary": {
+      "indoorAvgC": 25.4,
+      "outdoorAvgC": 30.1,
+      "humidityAvgPct": 57.2,
+      "devicesOnline": 14
+    }
+  },
   "mape": {
-    "planned": "heat|cool|hold",
-    "targetC": <float>,
-    "deltaC": <float>,
-    "fan": <int>
+    "planned": "cool",
+    "targetC": 22.0,
+    "deltaC": -3.4,
+    "fan": 3
   }
 }
 ```
 
-**Evolution policy:**
+Hold decision (minimal summary for zones that are already on target):
+
+```json
+{
+  "type": "epoch.public",
+  "schemaVersion": "v1",
+  "zoneId": "zone-orion",
+  "epochIndex": 8120,
+  "matchedAt": "2024-07-12T09:17:57.441902Z",
+  "block": {
+    "height": 4183,
+    "headerHash": "274b9f7dcb11c9a24f3a4d0ef61b7a0d",
+    "dataHash": "5a71bcb7a28a494be55f81b2d4f4d9a8"
+  },
+  "aggregator": {
+    "summary": {
+      "indoorAvgC": 21.0
+    }
+  },
+  "mape": {
+    "planned": "hold",
+    "targetC": 21.0,
+    "deltaC": 0.0,
+    "fan": 1
+  }
+}
+```
+
+#### Consumer responsibilities
+
+* **Keying:** By default the publisher uses zone-based keys so partitions remain affinity-aligned; consumers should group processing by `zoneId`.
+* **Delivery semantics:** The ledger offers at-least-once delivery. Consumers must deduplicate on the tuple `zoneId:epochIndex` (suggested idempotency key) before mutating downstream state.
+* **Offset management:** Commit offsets *after* processing and persisting results to avoid dropping events during restarts.
+* **Downstream linkage:** `block` fields enable auditors to traverse back to the full ledger block, while `mape` values inform Gamification scoring.
+
+Pseudocode (Kafka-like) consumer sketch:
+
+```pseudo
+consumer := kafka.newConsumer(group="gamification", keyField="zoneId")
+state := idempotencyStore()
+
+for msg := range consumer.poll() {
+    event := decodeEpochPublic(msg.value)
+    idKey := event.zoneId + ":" + strconv(event.epochIndex)
+    if state.alreadySeen(idKey) {
+        consumer.commit(msg)
+        continue
+    }
+
+    processForGamification(event)
+    state.markProcessed(idKey)
+    consumer.commit(msg)
+}
+```
+
+#### Evolution policy
 
 * Schema evolution is **additive only**. New fields must be optional and default-safe so existing consumers continue to parse prior payloads.
 * Hash fields remain lowercase hexadecimal strings and timestamps are normalized to UTC prior to publication.
 * Aggregator summaries contain only stable roll-ups (no device-level arrays or PII). Any new summary metrics must follow the additive rule above.
 * Publishing is disabled by default. Operators enable it via `LEDGER_PUBLIC_ENABLE` or `--public-enable`, with additional knobs for topic, brokers, acknowledgements, partitioner, key mode, and schema version.
+
+### 2.1.9. Operational Notes
+
+The public publisher shares the same operational guardrails as the core ledger ingestion path to guarantee safe rollout:
+
+* **Flags & environment knobs** — `LEDGER_PUBLIC_ENABLE`, `LEDGER_PUBLIC_TOPIC`, `LEDGER_PUBLIC_BROKERS`, `LEDGER_PUBLIC_ACKS`, `LEDGER_PUBLIC_PARTITIONER`, `LEDGER_PUBLIC_KEY_MODE`, and `LEDGER_PUBLIC_SCHEMA_VERSION` drive runtime behavior. The topic initializer honours `LEDGER_PUBLIC_PARTITIONS` / `--public-partitions` and `LEDGER_PUBLIC_REPLICATION` / `--public-replication` to provision Kafka correctly.
+* **Metrics** — Prometheus exports `ledger_public_publish_total{result="ok|fail"}`, `ledger_public_last_error_ts`, and `ledger_public_queue_depth` so operators can track delivery health alongside ingestion counters (see §2.3.3).
+* **Circuit breaker** — The writer is wrapped in the shared Kafka circuit breaker (`ledger-public-writer`). When enabled, it backs off on broker errors and surfaces breaker state transitions via logs before retrying publication.
+* **Topic configuration** — `services/topic-init` ensures every zone ledger topic plus the shared `ledger.public.epochs` stream exist with the mandated partition count prior to service startup. The ledger performs its own sanity check (partition counts, topic presence) during boot and aborts if mismatches are detected.
 
 ### Ledger Blocks (v2, NIST-style)
 
