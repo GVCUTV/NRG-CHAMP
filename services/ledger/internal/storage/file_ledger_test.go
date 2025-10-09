@@ -1,4 +1,4 @@
-// v4
+// v5
 // internal/storage/file_ledger_test.go
 package storage
 
@@ -18,7 +18,7 @@ import (
 
 func TestAppendCreatesGenesisBlockV2(t *testing.T) {
 	st, path := newTestLedger(t)
-	if _, err := st.Append(sampleTransaction("Z1", 0)); err != nil {
+	if _, _, err := st.Append(sampleTransaction("Z1", 0)); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 	data, err := os.ReadFile(path)
@@ -81,10 +81,27 @@ func TestAppendCreatesGenesisBlockV2(t *testing.T) {
 	}
 }
 
+func TestAppendReturnsMetadata(t *testing.T) {
+	st, _ := newTestLedger(t)
+	tx, meta, err := st.Append(sampleTransaction("ZONE-META", 12))
+	if err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if tx == nil {
+		t.Fatalf("expected stored transaction clone")
+	}
+	if meta.Height != 0 {
+		t.Fatalf("expected genesis height 0 got %d", meta.Height)
+	}
+	if meta.HeaderHash == "" || meta.DataHash == "" {
+		t.Fatalf("expected metadata hashes to be populated: %#v", meta)
+	}
+}
+
 func TestVerifyThreeBlockChain(t *testing.T) {
 	st, _ := newTestLedger(t)
 	for i := 0; i < 3; i++ {
-		if _, err := st.Append(sampleTransaction("Z1", int64(i))); err != nil {
+		if _, _, err := st.Append(sampleTransaction("Z1", int64(i))); err != nil {
 			t.Fatalf("append %d: %v", i, err)
 		}
 	}
@@ -106,7 +123,7 @@ func TestVerifyThreeBlockChain(t *testing.T) {
 func TestVerifyDetectsDataTamper(t *testing.T) {
 	st, path := newTestLedger(t)
 	for i := 0; i < 2; i++ {
-		if _, err := st.Append(sampleTransaction("Z1", int64(i))); err != nil {
+		if _, _, err := st.Append(sampleTransaction("Z1", int64(i))); err != nil {
 			t.Fatalf("append %d: %v", i, err)
 		}
 	}
@@ -144,7 +161,7 @@ func TestVerifyDetectsDataTamper(t *testing.T) {
 func TestVerifyDetectsHeaderTamper(t *testing.T) {
 	st, path := newTestLedger(t)
 	for i := 0; i < 2; i++ {
-		if _, err := st.Append(sampleTransaction("Z1", int64(i))); err != nil {
+		if _, _, err := st.Append(sampleTransaction("Z1", int64(i))); err != nil {
 			t.Fatalf("append %d: %v", i, err)
 		}
 	}
@@ -231,7 +248,7 @@ func TestVerifyLegacyV1File(t *testing.T) {
 func TestVerifyPureV2File(t *testing.T) {
 	st, path := newTestLedger(t)
 	for i := 0; i < 2; i++ {
-		if _, err := st.Append(sampleTransaction("Z2", int64(i))); err != nil {
+		if _, _, err := st.Append(sampleTransaction("Z2", int64(i))); err != nil {
 			t.Fatalf("append %d: %v", i, err)
 		}
 	}
@@ -260,7 +277,7 @@ func TestVerifyPureV2File(t *testing.T) {
 
 func TestLoadDefaultsEmptySchemaVersion(t *testing.T) {
 	st, path := newTestLedger(t)
-	if _, err := st.Append(sampleTransaction("Z3", 0)); err != nil {
+	if _, _, err := st.Append(sampleTransaction("Z3", 0)); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 	if err := st.file.Close(); err != nil {
@@ -327,7 +344,7 @@ func TestLoadDefaultsEmptySchemaVersion(t *testing.T) {
 
 func TestLoadRejectsUnknownTransactionSchema(t *testing.T) {
 	st, path := newTestLedger(t)
-	if _, err := st.Append(sampleTransaction("Z4", 0)); err != nil {
+	if _, _, err := st.Append(sampleTransaction("Z4", 0)); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 	if err := st.file.Close(); err != nil {
@@ -442,7 +459,7 @@ func TestVerifyMixedV1V2File(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new ledger: %v", err)
 	}
-	if _, err := st.Append(sampleTransaction("Z9", 0)); err != nil {
+	if _, _, err := st.Append(sampleTransaction("Z9", 0)); err != nil {
 		t.Fatalf("append modern: %v", err)
 	}
 	report, err := st.Verify()
