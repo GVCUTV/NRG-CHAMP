@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/http/api_config.go
 package httpserver
 
@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // APIConfig captures HTTP layer environment toggles. The variables are
@@ -17,11 +18,15 @@ type APIConfig struct {
 	// Windows keeps the leaderboard aggregation windows supplied via
 	// configuration while preserving their textual representation.
 	Windows []string
+	// RefreshEvery defines how frequently the leaderboard snapshots are
+	// refreshed in memory.
+	RefreshEvery time.Duration
 }
 
 const (
 	defaultHTTPPort   = 8085
 	defaultWindowsRaw = "24h,7d"
+	defaultRefreshRaw = "60s"
 )
 
 // LoadAPIConfig inspects environment variables dedicated to the HTTP
@@ -43,7 +48,14 @@ func LoadAPIConfig() APIConfig {
 		}
 	}
 
-	return APIConfig{HTTPPort: port, Windows: windows}
+	refresh := parseDuration(defaultRefreshRaw)
+	if raw, ok := lookupEnvTrimmed("GAMIF_REFRESH_EVERY"); ok {
+		if parsed := parseDuration(raw); parsed > 0 {
+			refresh = parsed
+		}
+	}
+
+	return APIConfig{HTTPPort: port, Windows: windows, RefreshEvery: refresh}
 }
 
 func parseWindows(raw string) []string {
@@ -71,4 +83,17 @@ func lookupEnvTrimmed(key string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(value), true
+}
+
+func parseDuration(raw string) time.Duration {
+	if strings.TrimSpace(raw) == "" {
+		return 0
+	}
+	if d, err := time.ParseDuration(raw); err == nil && d > 0 {
+		return d
+	}
+	if seconds, err := strconv.Atoi(raw); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	return 0
 }
