@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/config/config.go
 package config
 
@@ -8,9 +8,11 @@ import (
 )
 
 type Config struct {
-	BindAddr      string        // e.g. ":8085"
-	LedgerBaseURL string        // e.g. "http://ledger:8084"
-	CacheTTL      time.Duration // e.g. 30s
+	BindAddr        string        // e.g. ":8085"
+	LedgerBaseURL   string        // e.g. "http://ledger:8084"
+	CacheTTL        time.Duration // legacy cache ttl for fallback
+	SummaryCacheTTL time.Duration // optional override for summary endpoint
+	SeriesCacheTTL  time.Duration // optional override for series endpoint
 }
 
 func FromEnv() Config {
@@ -22,15 +24,33 @@ func FromEnv() Config {
 	if ledger == "" {
 		ledger = "http://ledger:8084"
 	}
+
 	cache := 30 * time.Second
 	if s := os.Getenv("CACHE_TTL"); s != "" {
-		if d, err := time.ParseDuration(s); err == nil {
+		if d, err := time.ParseDuration(s); err == nil && d > 0 {
 			cache = d
 		}
 	}
+
+	summaryTTL := cache
+	if s := os.Getenv("SUMMARY_CACHE_TTL"); s != "" {
+		if d, err := time.ParseDuration(s); err == nil && d > 0 {
+			summaryTTL = d
+		}
+	}
+
+	seriesTTL := cache
+	if s := os.Getenv("SERIES_CACHE_TTL"); s != "" {
+		if d, err := time.ParseDuration(s); err == nil && d > 0 {
+			seriesTTL = d
+		}
+	}
+
 	return Config{
-		BindAddr:      bind,
-		LedgerBaseURL: ledger,
-		CacheTTL:      cache,
+		BindAddr:        bind,
+		LedgerBaseURL:   ledger,
+		CacheTTL:        cache,
+		SummaryCacheTTL: summaryTTL,
+		SeriesCacheTTL:  seriesTTL,
 	}
 }
