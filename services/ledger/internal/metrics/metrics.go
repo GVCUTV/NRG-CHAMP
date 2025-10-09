@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 type counterVec struct {
@@ -57,6 +58,27 @@ func (c *counter) snapshot() uint64 {
 	return c.value
 }
 
+type gauge struct {
+	mu    sync.Mutex
+	value float64
+}
+
+func newGauge() *gauge {
+	return &gauge{}
+}
+
+func (g *gauge) set(v float64) {
+	g.mu.Lock()
+	g.value = v
+	g.mu.Unlock()
+}
+
+func (g *gauge) snapshot() float64 {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.value
+}
+
 type histogram struct {
 	mu      sync.RWMutex
 	buckets []float64
@@ -101,6 +123,9 @@ var (
 	decodeErrTotal         = newCounterVec()
 	matchLatency           = newHistogram([]float64{0.5, 1, 2, 5, 10, 30})
 	loadTxSchemaEmptyTotal = newCounter()
+	publicPublishTotal     = newCounterVec()
+	publicLastError        = newGauge()
+	publicQueue            = newGauge()
 )
 
 // IncImputed increments the imputation counter for the provided zone label.
@@ -126,6 +151,28 @@ func ObserveMatchLatency(seconds float64) {
 	matchLatency.observe(seconds)
 }
 
+// IncPublicPublish increments the publish counter for the provided result label.
+func IncPublicPublish(result string) {
+	publicPublishTotal.inc(strings.TrimSpace(result))
+}
+
+// SetPublicLastError records the unix timestamp of the last publish failure.
+func SetPublicLastError(ts time.Time) {
+	if ts.IsZero() {
+		publicLastError.set(0)
+		return
+	}
+	publicLastError.set(float64(ts.Unix()))
+}
+
+// SetPublicQueueDepth updates the current queue depth gauge for the publisher.
+func SetPublicQueueDepth(depth int) {
+	if depth < 0 {
+		depth = 0
+	}
+	publicQueue.set(float64(depth))
+}
+
 // Render builds the Prometheus exposition for all registered metrics.
 func Render() string {
 	var b strings.Builder
@@ -143,6 +190,18 @@ func Render() string {
 
 	writeMetricHeader(&b, "ledger_ingest_match_latency_seconds", "histogram")
 	writeHistogram(&b, "ledger_ingest_match_latency_seconds", matchLatency)
+	b.WriteByte('\n')
+
+	writeMetricHeader(&b, "ledger_public_publish_total", "counter")
+	writeCounter(&b, "ledger_public_publish_total", "result", publicPublishTotal.snapshot())
+	b.WriteByte('\n')
+
+	writeMetricHeader(&b, "ledger_public_last_error_ts", "gauge")
+	writeGauge(&b, "ledger_public_last_error_ts", publicLastError.snapshot())
+	b.WriteByte('\n')
+
+	writeMetricHeader(&b, "ledger_public_queue_depth", "gauge")
+	writeGauge(&b, "ledger_public_queue_depth", publicQueue.snapshot())
 	b.WriteByte('\n')
 
 	return b.String()
@@ -196,4 +255,8 @@ func escapeLabel(v string) string {
 
 func writeSimpleCounter(b *strings.Builder, name string, value uint64) {
 	fmt.Fprintf(b, "%s{} %d\n", name, value)
+}
+
+func writeGauge(b *strings.Builder, name string, value float64) {
+	fmt.Fprintf(b, "%s{} %g\n", name, value)
 }
