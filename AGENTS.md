@@ -18,6 +18,7 @@
     - which rule was broken,
     - how, and
     - why the exception was necessary.
+- By any means, each and every solution implemented must work both on macOS and Linux, unless the user explicitly asks platform-specific code.
 
 ---
 
