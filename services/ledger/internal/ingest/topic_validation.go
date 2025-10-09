@@ -1,4 +1,4 @@
-// v0
+// v1
 // services/ledger/internal/ingest/topic_validation.go
 package ingest
 
@@ -16,9 +16,11 @@ const ledgerTopicPartitions = 2
 
 // TopicValidationConfig aggregates the minimal data required to inspect ledger topics.
 type TopicValidationConfig struct {
-	Brokers  []string
-	Template string
-	Zones    []string
+	Brokers          []string
+	Template         string
+	Zones            []string
+	PublicTopic      string
+	PublicPartitions int
 }
 
 // ValidateLedgerTopics ensures every zone ledger topic is present with the expected partition count.
@@ -32,6 +34,12 @@ func ValidateLedgerTopics(ctx context.Context, log *slog.Logger, cfg TopicValida
 	}
 	if strings.TrimSpace(cfg.Template) == "" {
 		return fmt.Errorf("ledger topic validation requires a topic template")
+	}
+	if strings.TrimSpace(cfg.PublicTopic) == "" {
+		return fmt.Errorf("ledger topic validation requires a public topic name")
+	}
+	if cfg.PublicPartitions < 1 {
+		return fmt.Errorf("ledger topic validation requires at least one public partition")
 	}
 	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -74,7 +82,15 @@ func ValidateLedgerTopics(ctx context.Context, log *slog.Logger, cfg TopicValida
 		}
 		log.Info("ledger_topic_valid", slog.String("topic", topic), slog.Int("partitions", count))
 	}
-	log.Info("ledger_topics_validated", slog.Int("zones", len(cfg.Zones)), slog.Int("expected_partitions", ledgerTopicPartitions))
+	publicCount, err := readLedgerPartitions(admin, cfg.PublicTopic)
+	if err != nil {
+		return err
+	}
+	if publicCount != cfg.PublicPartitions {
+		return fmt.Errorf("public topic %s has %d partitions; expected %d (check LEDGER_PUBLIC_PARTITIONS and rerun topic-init)", cfg.PublicTopic, publicCount, cfg.PublicPartitions)
+	}
+	log.Info("ledger_public_topic_valid", slog.String("topic", cfg.PublicTopic), slog.Int("partitions", publicCount))
+	log.Info("ledger_topics_validated", slog.Int("zones", len(cfg.Zones)), slog.Int("expected_partitions", ledgerTopicPartitions), slog.String("publicTopic", cfg.PublicTopic), slog.Int("publicPartitions", cfg.PublicPartitions))
 	return nil
 }
 
