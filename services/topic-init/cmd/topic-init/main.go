@@ -1,4 +1,4 @@
-// v0
+// v1
 // services/topic-init/cmd/topic-init/main.go
 package main
 
@@ -21,14 +21,19 @@ import (
 const (
 	expectedPartitions = 2
 	defaultLogPath     = "/var/log/topic-init/topic-init.log"
+	defaultPublicTopic = "ledger.public.epochs"
+	minPublicParts     = 1
 )
 
 type config struct {
-	brokers     []string
-	template    string
-	zones       []string
-	replication int
-	logPath     string
+	brokers           []string
+	template          string
+	zones             []string
+	replication       int
+	logPath           string
+	publicTopic       string
+	publicPartitions  int
+	publicReplication int
 }
 
 func main() {
@@ -41,7 +46,15 @@ func main() {
 			}
 		}
 	}()
-	logger.Info("topic_init_start", "brokers", cfg.brokers, "template", cfg.template, "zones", cfg.zones, "replication", cfg.replication)
+	logger.Info("topic_init_start",
+		"brokers", cfg.brokers,
+		"template", cfg.template,
+		"zones", cfg.zones,
+		"replication", cfg.replication,
+		"publicTopic", cfg.publicTopic,
+		"publicPartitions", cfg.publicPartitions,
+		"publicReplication", cfg.publicReplication,
+	)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
@@ -50,7 +63,12 @@ func main() {
 		logger.Error("topic_init_failed", "err", err)
 		os.Exit(1)
 	}
-	logger.Info("topic_init_complete", "topics", len(cfg.zones), "partitions", expectedPartitions)
+	logger.Info("topic_init_complete",
+		"zoneTopics", len(cfg.zones),
+		"zonePartitions", expectedPartitions,
+		"publicTopic", cfg.publicTopic,
+		"publicPartitions", cfg.publicPartitions,
+	)
 }
 
 func loadConfig() config {
@@ -59,14 +77,20 @@ func loadConfig() config {
 	zonesFlag := flag.String("zones", getenv("LEDGER_ZONES", ""), "Comma-separated list of zone identifiers")
 	replFlag := flag.Int("replication", geti("LEDGER_TOPIC_REPLICATION", 1), "Replication factor for ledger topics")
 	logPathFlag := flag.String("log", getenv("TOPIC_INIT_LOG", defaultLogPath), "Path for JSON log output")
+	publicTopicFlag := flag.String("public-topic", getenv("LEDGER_PUBLIC_TOPIC", defaultPublicTopic), "Kafka topic name for public epochs")
+	publicPartitionsFlag := flag.Int("public-partitions", geti("LEDGER_PUBLIC_PARTITIONS", 3), "Partition count for the public ledger topic")
+	publicReplicationFlag := flag.Int("public-replication", geti("LEDGER_PUBLIC_REPLICATION", 1), "Replication factor for the public ledger topic")
 	flag.Parse()
 
 	cfg := config{
-		brokers:     splitAndTrim(*brokersFlag),
-		template:    strings.TrimSpace(*templateFlag),
-		zones:       splitAndTrim(*zonesFlag),
-		replication: *replFlag,
-		logPath:     *logPathFlag,
+		brokers:           splitAndTrim(*brokersFlag),
+		template:          strings.TrimSpace(*templateFlag),
+		zones:             splitAndTrim(*zonesFlag),
+		replication:       *replFlag,
+		logPath:           *logPathFlag,
+		publicTopic:       strings.TrimSpace(*publicTopicFlag),
+		publicPartitions:  *publicPartitionsFlag,
+		publicReplication: *publicReplicationFlag,
 	}
 	if len(cfg.brokers) == 0 {
 		fmt.Println("LEDGER_KAFKA_BROKERS or --brokers must be provided")
@@ -82,6 +106,18 @@ func loadConfig() config {
 	}
 	if cfg.replication <= 0 {
 		fmt.Println("LEDGER_TOPIC_REPLICATION must be positive")
+		os.Exit(2)
+	}
+	if cfg.publicTopic == "" {
+		fmt.Println("LEDGER_PUBLIC_TOPIC or --public-topic must be provided")
+		os.Exit(2)
+	}
+	if cfg.publicPartitions < minPublicParts {
+		fmt.Println("LEDGER_PUBLIC_PARTITIONS or --public-partitions must be at least 1")
+		os.Exit(2)
+	}
+	if cfg.publicReplication <= 0 {
+		fmt.Println("LEDGER_PUBLIC_REPLICATION or --public-replication must be positive")
 		os.Exit(2)
 	}
 	return cfg
@@ -132,32 +168,52 @@ func ensureLedgerTopics(ctx context.Context, log *slog.Logger, cfg config) error
 		log.Warn("controller_deadline", "err", err)
 	}
 
-	topics := make([]string, 0, len(cfg.zones))
-	configs := make([]kafka.TopicConfig, 0, len(cfg.zones))
+	topics := make([]topicExpectation, 0, len(cfg.zones)+1)
+	configs := make([]kafka.TopicConfig, 0, len(cfg.zones)+1)
 	for _, zone := range cfg.zones {
 		topic := strings.ReplaceAll(cfg.template, "{zone}", zone)
-		topics = append(topics, topic)
+		topics = append(topics, topicExpectation{name: topic, expectedPartitions: expectedPartitions, kind: "zone"})
 		configs = append(configs, kafka.TopicConfig{Topic: topic, NumPartitions: expectedPartitions, ReplicationFactor: cfg.replication})
 	}
+	configs = append(configs, kafka.TopicConfig{Topic: cfg.publicTopic, NumPartitions: cfg.publicPartitions, ReplicationFactor: cfg.publicReplication})
+	topics = append(topics, topicExpectation{name: cfg.publicTopic, expectedPartitions: cfg.publicPartitions, kind: "public"})
 	if err := admin.CreateTopics(configs...); err != nil {
 		if !isAlreadyExists(err) {
 			return fmt.Errorf("create topics: %w", err)
 		}
 		log.Info("topics_exist", "error", err)
 	} else {
-		log.Info("topics_created", "count", len(configs), "partitions", expectedPartitions, "replication", cfg.replication)
+		log.Info("topics_created",
+			"count", len(configs),
+			"zonePartitions", expectedPartitions,
+			"zoneReplication", cfg.replication,
+			"publicTopic", cfg.publicTopic,
+			"publicPartitions", cfg.publicPartitions,
+			"publicReplication", cfg.publicReplication,
+		)
 	}
 	for _, topic := range topics {
-		count, err := readPartitions(admin, topic)
+		count, err := readPartitions(admin, topic.name)
 		if err != nil {
 			return err
 		}
-		if count != expectedPartitions {
-			return fmt.Errorf("ledger topic %s has %d partitions; expected %d", topic, count, expectedPartitions)
+		if count != topic.expectedPartitions {
+			return fmt.Errorf("ledger topic %s has %d partitions; expected %d", topic.name, count, topic.expectedPartitions)
 		}
-		log.Info("ledger_topic_ready", "topic", topic, "partitions", count, "replication", cfg.replication)
+		if topic.kind == "public" {
+			log.Info("public_topic_ready", "topic", topic.name, "partitions", count, "replication", cfg.publicReplication)
+			continue
+		}
+		log.Info("ledger_topic_ready", "topic", topic.name, "partitions", count, "replication", cfg.replication)
 	}
 	return nil
+}
+
+// topicExpectation expresses the desired partition layout for a Kafka topic so we can validate broker state post-creation.
+type topicExpectation struct {
+	name               string
+	expectedPartitions int
+	kind               string
 }
 
 func readPartitions(conn *kafka.Conn, topic string) (int, error) {
