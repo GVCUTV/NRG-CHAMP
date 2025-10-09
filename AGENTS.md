@@ -173,7 +173,7 @@ A Codex task is considered **complete** only if all of the following hold:
 ---
 
 ## 17) Pull Request rules
-- Always open pull requests on the existing branch named `codex/codex`.
+- Always open pull requests on the existing branch named `test`.
 - Do **not** open pull requests on existing branch named `main`.
 - 
 
