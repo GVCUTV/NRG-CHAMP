@@ -1,4 +1,4 @@
-// v6
+// v7
 // main.go
 package main
 
@@ -131,6 +131,21 @@ func main() {
 		slog.String("schemaVersion", publicCfg.SchemaVersion),
 	)
 
+	pubCfg := publicschema.Config{
+		Enabled:       publicCfg.Enabled,
+		Topic:         publicCfg.Topic,
+		Brokers:       append([]string(nil), publicCfg.Brokers...),
+		Acks:          publicCfg.Acks,
+		Partitioner:   publicschema.Partitioner(publicCfg.Partitioner),
+		KeyMode:       publicschema.KeyMode(publicCfg.KeyMode),
+		SchemaVersion: publicCfg.SchemaVersion,
+	}
+	publicPublisher, err := publicschema.NewPublisher(pubCfg, logger)
+	if err != nil {
+		logger.Error("public_publisher_init", slog.Any("err", err))
+		os.Exit(1)
+	}
+
 	validateCtx, validateCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer validateCancel()
 	if err := ingest.ValidateLedgerTopics(validateCtx, logger, ingest.TopicValidationConfig{Brokers: brokers, Template: topicTemplateVal, Zones: zones}); err != nil {
@@ -151,6 +166,20 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	if err := publicPublisher.Start(ctx); err != nil {
+		logger.Error("public_publisher_start", slog.Any("err", err))
+		os.Exit(1)
+	}
+	defer func() {
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer stopCancel()
+		if err := publicPublisher.Stop(stopCtx); err != nil {
+			logger.Error("public_publisher_stop", slog.Any("err", err))
+		}
+	}()
+
+	finalizeHook := publicschema.NewPublisherHook(publicPublisher, logger)
+
 	ingestCfg := ingest.Config{
 		Brokers:             brokers,
 		GroupID:             groupIDVal,
@@ -162,7 +191,7 @@ func main() {
 		BufferMaxEpochs:     bufferMaxVal,
 	}
 	logger.Info("ingest_config", slog.String("brokers", strings.Join(brokers, ",")), slog.String("groupID", groupIDVal), slog.String("topicTemplate", topicTemplateVal), slog.String("zones", strings.Join(zones, ",")), slog.Duration("grace", grace), slog.Int("bufferMaxEpochs", bufferMaxVal), slog.Int("partitionAggregator", partAggVal), slog.Int("partitionMape", partMapeVal))
-	mgr, err := ingest.Start(ctx, ingestCfg, st, logger)
+	mgr, err := ingest.Start(ctx, ingestCfg, st, logger, finalizeHook)
 	if err != nil {
 		logger.Error("ingest_start", slog.Any("err", err))
 		os.Exit(1)
