@@ -1,44 +1,48 @@
-// v0
+// v1
 // cmd/gamification/main.go
 package main
 
 import (
-	"log"
-	"nrgchamp/gamification/internal/api"
-	"nrgchamp/gamification/internal/core"
+	"context"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"nrgchamp/gamification/internal/app"
+	"nrgchamp/gamification/internal/config"
 )
 
 func main() {
-	// Initialize configuration (env + defaults)
-	cfg := core.LoadConfig()
+	bootstrap := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	// Initialize logger writing to both stdout and a rotating file in DATA_DIR
-	lg, closeFn, err := core.NewLogger(cfg)
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("failed to initialize logger: %v", err)
+		bootstrap.Error("config_load_failed", slog.Any("err", err))
+		os.Exit(1)
 	}
-	defer closeFn()
 
-	lg.Info("gamification service starting",
-		"version", "v0",
-		"listen", cfg.ListenAddress,
-		"ledger_base_url", cfg.LedgerBaseURL,
-	)
-
-	// Initialize store (on-disk JSON with file-locking)
-	store, err := core.NewStore(cfg, lg)
+	application, err := app.New(cfg)
 	if err != nil {
-		lg.Error("failed to init store", "err", err)
-		return
+		bootstrap.Error("app_init_failed", slog.Any("err", err))
+		os.Exit(1)
 	}
-	defer store.Close()
+	defer func() {
+		if cerr := application.Close(); cerr != nil {
+			bootstrap.Error("app_close_failed", slog.Any("err", cerr))
+		}
+	}()
 
-	// Initialize ledger client
-	lc := core.NewLedgerClient(cfg, lg)
+	logger := application.Logger()
+	logger.Info("service_boot", slog.String("listen_address", cfg.ListenAddress), slog.String("log_path", cfg.LogFilePath), slog.String("properties_path", cfg.PropertiesPath))
 
-	// Build HTTP router and start server
-	srv := api.NewServer(cfg, lg, store, lc)
-	if err := srv.ListenAndServe(); err != nil {
-		lg.Error("http server terminated", "err", err)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if err := application.Run(ctx); err != nil {
+		logger.Error("service_terminated", slog.Any("err", err))
+		os.Exit(1)
 	}
+
+	logger.Info("service_stopped")
 }

@@ -1,22 +1,21 @@
-# v0
-# Dockerfile
-# Build stage
-FROM golang:1.22-alpine AS build
-WORKDIR /app
-COPY . ./
+# v1
+# file: services/gamification/Dockerfile
+FROM golang:1.23-alpine AS gamification_build
+WORKDIR /src
+COPY go.work go.work.sum ./
+COPY services/gamification/go.mod ./services/gamification/
+RUN --mount=type=cache,target=/go/pkg/mod go work sync
+COPY services/gamification/ ./services/gamification/
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    cd cmd/gamification && go build -o /out/gamification
+    cd services/gamification/cmd/gamification && go build -o /out/gamification
 
-# Runtime stage
-FROM alpine:3.20
-RUN adduser -D -H -u 10001 appuser
+FROM alpine:3.20 AS gamification_runtime
 WORKDIR /srv
-COPY --from=build /out/gamification /usr/local/bin/gamification
-ENV DATA_DIR=/data \
-    LISTEN_ADDRESS=:8086 \
-    LEDGER_BASE_URL=http://ledger:8084
-RUN mkdir -p /data && chown -R appuser /data
+RUN adduser -D -H appuser
+COPY --from=gamification_build /out/gamification /usr/local/bin/gamification
+COPY services/gamification/gamification.properties /srv/gamification.properties
+ENV GAMIFICATION_PROPERTIES_PATH=/srv/gamification.properties
 USER appuser
 EXPOSE 8086
 ENTRYPOINT ["/usr/local/bin/gamification"]

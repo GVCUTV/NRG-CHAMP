@@ -1,64 +1,70 @@
-# Gamification Service (NRG CHAMP)
+# v1
+# file: README.md
+NRG CHAMP Gamification Service — HTTP skeleton for the global leaderboard
 
-**Status:** v0 — 2025-09-13T09:58:52.869545Z
+This module provides the initial process skeleton for the future
+leaderboard API. The implementation focuses on configuration loading,
+structured logging, health endpoints, and lifecycle management. Actual
+leaderboard computations will land in later iterations.
 
-This service computes **scores** and exposes **leaderboards** based *strictly on the Ledger service* (HTTP read‑only).
-It is **independent** from the Assessment service.
+## Layout
 
-## APIs
-
-- `POST /score/recompute?zoneId=&from=&to=` — Recompute scores deterministically from the Ledger for a time window.
-- `GET /leaderboard?scope=building|floor|zone&page=&size=` — Paged, sorted leaderboard.
-- `GET /health` — Liveness.
+```
+services/gamification/
+├── cmd/gamification/        # Entry point wiring config + app lifecycle
+├── internal/app/            # Logger fan-out and server orchestration
+├── internal/config/         # Defaults, properties, and env parsing
+├── internal/http/           # Router, health handlers, middleware
+└── gamification.properties  # Sample properties file with defaults
+```
 
 ## Configuration
 
-Environment variables (also provided via Kubernetes ConfigMap):
+Settings are layered as defaults, the optional properties file, then
+environment variables. The following keys are currently recognised:
 
-- `LEDGER_BASE_URL` (default: `http://ledger:8084`) — Base URL of the Ledger HTTP API.
-- `WEIGHT_COMFORT` (default: `1.0`)
-- `WEIGHT_ANOMALY` (default: `-5.0`)
-- `WEIGHT_ENERGY` (default: `-0.1`)
-- `ZONE_ID_DELIM` (default: `:`) — Delimiter for parsing `building:floor:zone` grouping.
-- `DATA_DIR` (default: `/data`) — Where the store writes `scores.json` and log files.
-- `LOG_LEVEL` (default: `INFO`)
+| Key | Description | Default |
+| --- | ----------- | ------- |
+| `GAMIFICATION_PROPERTIES_PATH` | Path to the properties file. | `gamification.properties` |
+| `listen_address` | Properties key overriding the HTTP bind address. | `:8086` |
+| `GAMIFICATION_LISTEN_ADDRESS` | Environment override for the bind address. | `:8086` |
+| `log_path` | Properties key selecting the log file location. | `logs/gamification.log` |
+| `GAMIFICATION_LOG_PATH` | Environment override for the log file. | `logs/gamification.log` |
+| `http_read_timeout_ms` | Milliseconds for reading request headers/body. | `5000` |
+| `GAMIFICATION_HTTP_READ_TIMEOUT_MS` | Environment override for the same timeout. | `5000` |
+| `http_write_timeout_ms` | Milliseconds allowed for sending responses. | `10000` |
+| `GAMIFICATION_HTTP_WRITE_TIMEOUT_MS` | Environment override for the same timeout. | `10000` |
+| `shutdown_timeout_ms` | Milliseconds granted for graceful shutdown. | `5000` |
+| `GAMIFICATION_SHUTDOWN_TIMEOUT_MS` | Environment override for the same timeout. | `5000` |
 
-## Files written
+When running via Docker the properties file is copied next to the binary
+and referenced through the `GAMIFICATION_PROPERTIES_PATH` variable.
 
-- `{DATA_DIR}/scores.json` — persistent score store (append‑safe JSON file).
-- `{DATA_DIR}/gamification.log` — combined plain‑text log.
+## Health Endpoints
 
-## Build & Run (local)
+The HTTP server currently exposes:
 
-```bash
-cd gamification
-go build ./cmd/gamification
-LEDGER_BASE_URL=http://localhost:8084 ./gamification
-```
+- `GET /health` and `GET /health/live` returning `200 OK` while the
+  process is alive.
+- `GET /health/ready` returning `503 Service Unavailable` until the
+  router is fully initialised. Once ready, the endpoint responds `200 OK`.
 
-## Docker
+## Running Locally
 
-```bash
-docker build -t nrgchamp/gamification:latest ./gamification
-docker run --rm -p 8086:8086 -e LEDGER_BASE_URL=http://host.docker.internal:8084 -v $PWD/data:/data nrgchamp/gamification:latest
-```
-
-## Docker Compose (fragment)
-
-A minimal compose file is provided at the repo root: `docker-compose.gamification.yaml`.
-Merge its `services.gamification` section into your main Compose file, or run it standalone:
+From the repository root:
 
 ```bash
-docker compose -f docker-compose.gamification.yaml up --build
+mkdir -p bin
+go build -o ./bin/gamification ./services/gamification/cmd/gamification
+GAMIFICATION_LOG_PATH=./logs/gamification.log ./bin/gamification
 ```
 
-## Kubernetes
+The service logs to both stdout and the configured log file. Ensure the
+log directory exists or allow the service to create it with the default
+permissions (0755).
 
-Manifests live under `k8s/gamification`. Apply with:
+## Next Steps
 
-```bash
-kubectl apply -k k8s/gamification
-```
-
-> Ensure the `LEDGER_BASE_URL` in the ConfigMap points to the in‑cluster Ledger service DNS name (defaults to `http://ledger:8084`).
-
+Future tasks will hook the router to real leaderboard storage, connect
+Kafka consumers, and expose read-only leaderboard APIs consistent with
+`docs/project_documentation.md` and `docs/ragionamenti.md`.
