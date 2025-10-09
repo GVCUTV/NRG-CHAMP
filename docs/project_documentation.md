@@ -1,4 +1,4 @@
-// v7
+// v8
 // docs/project_documentation.md
 # NRG CHAMP
 
@@ -867,6 +867,13 @@ NRG CHAMP models facilities and assets using a **hierarchical topology** to supp
 
 **Outcome.** These patterns isolate failures, support the independent evolution of services, and keep the ledger’s audit trail robust while operational components scale as needed.
 # 6. Core Modules
+
+### Service Index
+
+- [Aggregator service documentation](services/aggregator_docs.md) — functional and
+  architectural requirements for the ingestion and pre-processing pipeline.
+- [Gamification service README](../services/gamification/README.md) — leaderboard
+  MVP usage, configuration, and API reference.
 
 ## 6.1. Ingestion Service & Data Aggregation
 
