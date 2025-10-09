@@ -1,4 +1,4 @@
-// v2
+// v3
 // internal/app/app.go
 package app
 
@@ -69,13 +69,21 @@ func New(cfg config.Config) (*Application, error) {
 		GroupID:          cfg.LedgerGroupID,
 		MaxEpochsPerZone: cfg.MaxEpochsPerZone,
 		PollTimeout:      cfg.LedgerPollTimeout,
+		AcceptedSchemas:  cfg.LedgerSchemaAccept,
 	}, ledgerLogger)
 	if err != nil {
 		_ = lf.Close()
 		return nil, fmt.Errorf("ledger consumer init: %w", err)
 	}
 
-	ledgerLogger.Info("ledger_consumer_config", slog.String("topic", cfg.LedgerTopic), slog.String("group", cfg.LedgerGroupID), slog.String("brokers", strings.Join(cfg.KafkaBrokers, ",")), slog.Duration("pollTimeout", cfg.LedgerPollTimeout), slog.Int("maxEpochsPerZone", cfg.MaxEpochsPerZone))
+	ledgerLogger.Info("ledger_consumer_config",
+		slog.String("topic", cfg.LedgerTopic),
+		slog.String("group", cfg.LedgerGroupID),
+		slog.String("brokers", strings.Join(cfg.KafkaBrokers, ",")),
+		slog.Duration("pollTimeout", cfg.LedgerPollTimeout),
+		slog.Int("maxEpochsPerZone", cfg.MaxEpochsPerZone),
+		slog.String("acceptedSchemas", strings.Join(cfg.LedgerSchemaAccept, ",")),
+	)
 
 	scoreLogger := logger.With(slog.String("component", "score_manager"))
 	windows := score.ResolveWindows(apiCfg.Windows)
