@@ -1,5 +1,5 @@
-// v2
-// services/assessment/Dockerfile
+# v1
+# services/assessment/Dockerfile
 # Build stage
 FROM golang:1.23-alpine AS assessment_build
 WORKDIR /src
