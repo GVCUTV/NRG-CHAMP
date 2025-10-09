@@ -1,4 +1,4 @@
-// v1
+// v2
 // internal/http/router.go
 package httpserver
 
@@ -7,6 +7,7 @@ import (
 
 	"log/slog"
 
+	"nrgchamp/gamification/internal/metrics"
 	"nrgchamp/gamification/internal/score"
 )
 
@@ -20,6 +21,7 @@ func NewRouter(logger *slog.Logger, health *HealthState, source leaderboardSourc
 	mux.Handle("/health/live", methodGuard(http.MethodGet, healthLiveHandler()))
 	mux.Handle("/health/ready", methodGuard(http.MethodGet, healthReadyHandler(health)))
 	mux.Handle("/leaderboard", methodGuard(http.MethodGet, leaderboardHandler(logger, source)))
+	mux.Handle("/metrics", methodGuard(http.MethodGet, metricsHandler(logger)))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusNotFound)
@@ -29,6 +31,19 @@ func NewRouter(logger *slog.Logger, health *HealthState, source leaderboardSourc
 		}
 	})
 	return mux
+}
+
+func metricsHandler(logger *slog.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body := metrics.Render()
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte(body)); err != nil {
+			if logger != nil {
+				logger.Error("write_response_failed", slog.Any("err", err))
+			}
+		}
+	})
 }
 
 // leaderboardSource exposes the subset of score.Manager used by the HTTP
