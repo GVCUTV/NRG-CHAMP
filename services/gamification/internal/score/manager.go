@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/score/manager.go
 package score
 
@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"nrgchamp/gamification/internal/ingest"
+	"nrgchamp/gamification/internal/metrics"
 )
 
 // WindowSpec captures the textual identifier used by the HTTP surface and the
@@ -163,9 +164,11 @@ func (m *Manager) Refresh(at time.Time) {
 		return
 	}
 	now := at.UTC()
+	start := time.Now()
 
 	zones, order := m.store.SnapshotAll()
 	boards := make(map[string]Leaderboard, len(m.windows))
+	totalEntries := 0
 
 	for _, window := range m.windows {
 		cutoff := now.Add(-window.Duration)
@@ -201,6 +204,7 @@ func (m *Manager) Refresh(at time.Time) {
 			Entries:     append([]Entry(nil), entries...),
 		}
 		boards[window.Name] = board
+		totalEntries += len(entries)
 
 		m.log.Info("score_window_refreshed",
 			slog.String("window", window.Name),
@@ -214,8 +218,14 @@ func (m *Manager) Refresh(at time.Time) {
 	m.lastStamp = now
 	m.mu.Unlock()
 
+	duration := time.Since(start)
+	metrics.ObserveScoreRefresh(duration)
+
 	m.log.Info("score_refresh_complete",
 		slog.Int("windows", len(m.windows)),
+		slog.Int("total_entries", totalEntries),
+		slog.Int("zones_tracked", len(order)),
+		slog.Duration("duration", duration),
 		slog.Time("generated_at", now),
 	)
 }
