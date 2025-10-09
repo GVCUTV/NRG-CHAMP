@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/api/handlers.go
 package api
 
@@ -26,11 +26,12 @@ type ledgerClient interface {
 }
 
 type Handlers struct {
-	Log    *slog.Logger
-	Client ledgerClient
-	Cache  *cache.Cache[any]
-	Target float64 // target temperature °C
-	Tol    float64 // comfort tolerance °C
+	Log          *slog.Logger
+	Client       ledgerClient
+	SummaryCache *cache.Cache[any]
+	SeriesCache  *cache.Cache[any]
+	Target       float64 // target temperature °C
+	Tol          float64 // comfort tolerance °C
 }
 
 var (
@@ -178,10 +179,12 @@ func (h *Handlers) Summary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	key := cacheKey("summary", zone, from.Format(time.RFC3339), to.Format(time.RFC3339), fmt.Sprintf("pages:%d", pageBudget))
-	if v, ok := h.Cache.Get(key); ok {
-		h.Log.Info("cache hit", "endpoint", "summary", "zoneId", zone)
-		writeJSON(w, http.StatusOK, v)
-		return
+	if h.SummaryCache != nil {
+		if v, ok := h.SummaryCache.Get(key); ok {
+			h.Log.Info("cache hit", "endpoint", "summary", "zoneId", zone)
+			writeJSON(w, http.StatusOK, v)
+			return
+		}
 	}
 
 	ctx := r.Context()
@@ -202,7 +205,9 @@ func (h *Handlers) Summary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s := kpi.ComputeSummary(zone, from, to, readings, actions, anoms, h.Target, h.Tol)
-	h.Cache.Set(key, s)
+	if h.SummaryCache != nil {
+		h.SummaryCache.Set(key, s)
+	}
 	h.Log.Info("computed summary", "zoneId", zone, "from", from, "to", to)
 	writeJSON(w, http.StatusOK, s)
 }
@@ -256,10 +261,12 @@ func (h *Handlers) Series(w http.ResponseWriter, r *http.Request) {
 	}
 
 	key := cacheKey("series", metric, zone, from.Format(time.RFC3339), to.Format(time.RFC3339), bucketDur.String(), fmt.Sprintf("pages:%d", pageBudget))
-	if v, ok := h.Cache.Get(key); ok {
-		h.Log.Info("cache hit", "endpoint", "series", "metric", metric, "zoneId", zone)
-		writeJSON(w, http.StatusOK, v)
-		return
+	if h.SeriesCache != nil {
+		if v, ok := h.SeriesCache.Get(key); ok {
+			h.Log.Info("cache hit", "endpoint", "series", "metric", metric, "zoneId", zone)
+			writeJSON(w, http.StatusOK, v)
+			return
+		}
 	}
 
 	ctx := r.Context()
@@ -269,7 +276,9 @@ func (h *Handlers) Series(w http.ResponseWriter, r *http.Request) {
 
 	points := computeSeries(metric, from, to, bucketDur, readings, actions, anoms, h.Target, h.Tol)
 
-	h.Cache.Set(key, points)
+	if h.SeriesCache != nil {
+		h.SeriesCache.Set(key, points)
+	}
 	h.Log.Info("computed series", "metric", metric, "zoneId", zone, "from", from, "to", to, "bucket", bucketDur)
 	writeJSON(w, http.StatusOK, points)
 }

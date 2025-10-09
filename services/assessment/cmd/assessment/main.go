@@ -1,4 +1,4 @@
-// v0
+// v1
 // cmd/assessment/main.go
 package main
 
@@ -26,7 +26,7 @@ func main() {
 	log := lg.Logger
 
 	cfg := config.FromEnv()
-	log.Info("config loaded", "bind", cfg.BindAddr, "ledger", cfg.LedgerBaseURL, "cacheTTL", cfg.CacheTTL)
+	log.Info("config loaded", "bind", cfg.BindAddr, "ledger", cfg.LedgerBaseURL, "cacheTTL", cfg.CacheTTL, "summaryTTL", cfg.SummaryCacheTTL, "seriesTTL", cfg.SeriesCacheTTL)
 
 	// Target & tolerance from env (default 22°C, tol 0.5°C)
 	target := 22.0
@@ -43,13 +43,15 @@ func main() {
 	}
 
 	cli := ledger.New(cfg.LedgerBaseURL)
-	c := cache.New[any](cfg.CacheTTL)
+	summaryCache := cache.New[any](cfg.SummaryCacheTTL)
+	seriesCache := cache.New[any](cfg.SeriesCacheTTL)
 	h := &api.Handlers{
-		Log:    log,
-		Client: cli,
-		Cache:  c,
-		Target: target,
-		Tol:    tol,
+		Log:          log,
+		Client:       cli,
+		SummaryCache: summaryCache,
+		SeriesCache:  seriesCache,
+		Target:       target,
+		Tol:          tol,
 	}
 
 	srv := api.NewServer(cfg.BindAddr, log, h)
