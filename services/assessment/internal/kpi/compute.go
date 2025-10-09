@@ -1,9 +1,8 @@
-// v0
+// v1
 // internal/kpi/compute.go
 package kpi
 
 import (
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -12,62 +11,33 @@ import (
 	"github.com/your-org/assessment/internal/ledger"
 )
 
-// ComputeSummary computes KPIs from ledger events in [from, to] for a zone.
+// ComputeSummary calculates the four authoritative KPIs for [from, to).
+//
+// comfort_time_pct  = 100 · Σ duration_i · 1(|temp_i − target| ≤ tol) / Σ duration_i, where duration_i is the overlap between
+//
+//	the i-th temperature sample's hold interval and the window. Only samples intersecting the window count.
+//
+// mean_dev          = Σ duration_i · |temp_i − target| / Σ duration_i (°C). The same durations used for comfort weighting are
+//
+//	reused here so both metrics react identically to sparse sampling.
+//
+// actuator_on_pct   = 100 · overlap(ON intervals, [from, to)) / window_length. ON intervals are derived from actuator action
+//
+//	events, defaulting to OFF before any event. Partial overlaps contribute only their intersection length.
+//
+// anomaly_count     = |{ a ∈ anomalies | from ≤ a.ts < to }|.
+//
+// Edge policies:
+//   - Window length ≤ 0 ⇒ all time-based percentages return 0.
+//   - No temperature data overlapping the window ⇒ comfort_time_pct = mean_dev = 0.
+//   - Missing/NaN target ⇒ comfort_time_pct = mean_dev = 0 (deviations cannot be evaluated).
+//   - Missing/NaN tolerance ⇒ treated as 0 °C; negative tolerance is clamped to 0 °C. Bounds are inclusive.
+//   - Temperature samples with NaN values are ignored.
 func ComputeSummary(zoneID string, from, to time.Time, readings, actions, anomalies []ledger.Event, targetTemp float64, tolerance float64) Summary {
-	// Build time-aligned series of temperatures and actuator states
-	rTemps := extractTemps(readings)
-	aTimeline := buildActuatorTimeline(actions, from, to)
-
-	windowDur := to.Sub(from)
-	if windowDur <= 0 {
-		windowDur = time.Second
-	}
-
-	// Comfort: sample by stepping through reading timestamps
-	var comfortDur time.Duration
-	var totalDur time.Duration
-	var madSum float64
-	var madCount int
-
-	for i := 0; i < len(rTemps); i++ {
-		curr := rTemps[i]
-		nextTs := to
-		if i+1 < len(rTemps) {
-			nextTs = rTemps[i+1].Ts
-		}
-		segStart := maxTime(curr.Ts, from)
-		segEnd := minTime(nextTs, to)
-		if !segEnd.After(segStart) {
-			continue
-		}
-		d := segEnd.Sub(segStart)
-		totalDur += d
-
-		dev := math.Abs(curr.Value - targetTemp)
-		if dev <= tolerance {
-			comfortDur += d
-		}
-		madSum += dev
-		madCount++
-	}
-
-	comfortPct := 0.0
-	if totalDur > 0 {
-		comfortPct = 100.0 * float64(comfortDur) / float64(totalDur)
-	}
-	meanDev := 0.0
-	if madCount > 0 {
-		meanDev = madSum / float64(madCount)
-	}
-
-	anomalyCount := len(anomalies)
-
-	// Actuator on-time percentage: compute overlap of ON intervals with [from, to]
-	onPct := 0.0
-	if len(aTimeline) > 0 {
-		onDur := overlapDuration(aTimeline, from, to)
-		onPct = 100.0 * float64(onDur) / float64(windowDur)
-	}
+	temps := extractTemps(readings)
+	comfortPct, meanDev := comfortAndMeanDeviation(temps, from, to, targetTemp, tolerance)
+	onPct := actuatorOnPercentage(actions, from, to)
+	anomalyCount := countAnomaliesInWindow(anomalies, from, to)
 
 	return Summary{
 		ZoneID:         zoneID,
@@ -78,6 +48,86 @@ func ComputeSummary(zoneID string, from, to time.Time, readings, actions, anomal
 		MeanDeviation:  round2(meanDev),
 		ActuatorOnPct:  round2(onPct),
 	}
+}
+
+// comfortAndMeanDeviation returns the time-weighted comfort percentage and mean absolute deviation (°C).
+// See the top-level ComputeSummary documentation for formulas. The function returns (0, 0) when the target is NaN
+// or when no valid temperature sample overlaps the window.
+func comfortAndMeanDeviation(samples []tempSample, from, to time.Time, target, tolerance float64) (float64, float64) {
+	if math.IsNaN(target) {
+		return 0, 0
+	}
+	tol := tolerance
+	if math.IsNaN(tol) || tol < 0 {
+		tol = 0
+	}
+	if to.Before(from) || to.Equal(from) {
+		return 0, 0
+	}
+
+	var comfortDur time.Duration
+	var weightedDev float64
+	var observed time.Duration
+
+	for i := 0; i < len(samples); i++ {
+		if math.IsNaN(samples[i].Value) {
+			continue
+		}
+		nextTs := to
+		if i+1 < len(samples) {
+			nextTs = samples[i+1].Ts
+		}
+		segStart := maxTime(samples[i].Ts, from)
+		segEnd := minTime(nextTs, to)
+		if !segEnd.After(segStart) {
+			continue
+		}
+		dur := segEnd.Sub(segStart)
+		observed += dur
+
+		dev := math.Abs(samples[i].Value - target)
+		if dev <= tol {
+			comfortDur += dur
+		}
+		weightedDev += dev * float64(dur)
+	}
+
+	if observed == 0 {
+		return 0, 0
+	}
+
+	comfortPct := 100 * float64(comfortDur) / float64(observed)
+	meanDev := weightedDev / float64(observed)
+	return comfortPct, meanDev
+}
+
+// actuatorOnPercentage computes the ON-time percentage for [from, to).
+// When the window length is ≤ 0 or no ON interval overlaps the window the result is 0.
+func actuatorOnPercentage(actions []ledger.Event, from, to time.Time) float64 {
+	windowDur := to.Sub(from)
+	if windowDur <= 0 {
+		return 0
+	}
+	timeline := buildActuatorTimeline(actions, from, to)
+	if len(timeline) == 0 {
+		return 0
+	}
+	onDur := overlapDuration(timeline, from, to)
+	if onDur <= 0 {
+		return 0
+	}
+	return 100 * float64(onDur) / float64(windowDur)
+}
+
+// countAnomaliesInWindow counts anomaly events within [from, to).
+func countAnomaliesInWindow(anomalies []ledger.Event, from, to time.Time) int {
+	count := 0
+	for _, e := range anomalies {
+		if (e.Ts.Equal(from) || e.Ts.After(from)) && e.Ts.Before(to) {
+			count++
+		}
+	}
+	return count
 }
 
 type tempSample struct {
@@ -123,7 +173,7 @@ func buildActuatorTimeline(actions []ledger.Event, from, to time.Time) []interva
 
 	for _, e := range actions {
 		if e.Ts.Before(from) { // update state before window
-			on = on || isOn(e)
+			on = isOn(e)
 			continue
 		}
 		if e.Ts.After(to) {

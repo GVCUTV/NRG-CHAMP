@@ -1,8 +1,21 @@
-// v0
+// v1
 // README.md
 # Assessment Service (Service 5)
 
 **Purpose**: Compute KPIs strictly from the **Ledger** service and expose them via HTTP.
+
+## KPI Specification (authoritative)
+- **comfort_time_pct** — `100 × Σ overlap_i × 1(|temp_i − target| ≤ tol) / Σ overlap_i`. Overlaps use the intersection between
+the sample hold interval and the requested window. Bounds are inclusive, tolerance `< 0` or `NaN` is clamped to `0 °C`, and
+`target = NaN` yields `0`.
+- **mean_dev** — `Σ overlap_i × |temp_i − target| / Σ overlap_i` (°C) using the same overlaps as comfort. Empty/missing data or
+`target = NaN` return `0`.
+- **actuator_on_pct** — `100 × overlap(ON intervals, window) / window_length`. ON intervals derive from Ledger action events with
+the last known state before the window. A zero-length window returns `0`.
+- **anomaly_count** — number of anomaly events with timestamps in `[from, to)`.
+
+These formulas are implemented in `internal/kpi/compute.go` and cross-referenced from
+[docs/project_documentation.md](../docs/project_documentation.md).
 
 ## KPIs
 - `comfort_time_pct`: percentage of time within tolerance of target temperature.
