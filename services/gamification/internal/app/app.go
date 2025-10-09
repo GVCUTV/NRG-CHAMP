@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/app/app.go
 package app
 
@@ -15,6 +15,7 @@ import (
 
 	"nrgchamp/gamification/internal/config"
 	httpserver "nrgchamp/gamification/internal/http"
+	"nrgchamp/gamification/internal/ingest"
 )
 
 // Application wires configuration, logging, routing, and graceful
@@ -26,6 +27,7 @@ type Application struct {
 	logFile *os.File
 	server  *http.Server
 	health  *httpserver.HealthState
+	ledger  *ingest.LedgerConsumer
 }
 
 // New prepares a fully wired service instance using the supplied
@@ -65,12 +67,28 @@ func New(cfg config.Config) (*Application, error) {
 		IdleTimeout:       cfg.HTTPWriteTimeout,
 	}
 
+	ledgerLogger := logger.With(slog.String("component", "ledger_consumer"))
+	consumer, err := ingest.NewLedgerConsumer(ingest.LedgerConsumerConfig{
+		Brokers:          cfg.KafkaBrokers,
+		Topic:            cfg.LedgerTopic,
+		GroupID:          cfg.LedgerGroupID,
+		MaxEpochsPerZone: cfg.MaxEpochsPerZone,
+		PollTimeout:      cfg.LedgerPollTimeout,
+	}, ledgerLogger)
+	if err != nil {
+		_ = lf.Close()
+		return nil, fmt.Errorf("ledger consumer init: %w", err)
+	}
+
+	ledgerLogger.Info("ledger_consumer_config", slog.String("topic", cfg.LedgerTopic), slog.String("group", cfg.LedgerGroupID), slog.String("brokers", strings.Join(cfg.KafkaBrokers, ",")), slog.Duration("pollTimeout", cfg.LedgerPollTimeout), slog.Int("maxEpochsPerZone", cfg.MaxEpochsPerZone))
+
 	return &Application{
 		cfg:     cfg,
 		logger:  logger,
 		logFile: lf,
 		server:  server,
 		health:  health,
+		ledger:  consumer,
 	}, nil
 }
 
@@ -84,49 +102,103 @@ func (a *Application) Logger() *slog.Logger {
 // terminates unexpectedly. It manages readiness probes and graceful
 // shutdown behaviour.
 func (a *Application) Run(ctx context.Context) error {
-	errCh := make(chan error, 1)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	httpCh := make(chan error, 1)
 	go func() {
 		a.health.SetReady(true)
 		a.logger.Info("http_server_listen", slog.String("address", a.cfg.ListenAddress))
 		err := a.server.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			errCh <- err
+			httpCh <- err
 			return
 		}
-		errCh <- nil
+		httpCh <- err
 	}()
 
-	select {
-	case <-ctx.Done():
-		a.logger.Info("shutdown_signal")
-		a.health.SetReady(false)
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), a.cfg.ShutdownTimeout)
-		defer cancel()
-		if err := a.server.Shutdown(shutdownCtx); err != nil {
-			if !errors.Is(err, context.Canceled) {
-				a.logger.Error("server_shutdown_failed", slog.Any("err", err))
-				return fmt.Errorf("shutdown: %w", err)
+	var ledgerCh chan error
+	if a.ledger != nil {
+		ledgerCh = make(chan error, 1)
+		go func() {
+			ledgerCh <- a.ledger.Run(ctx)
+		}()
+	}
+
+	var httpErr error
+	var ledgerErr error
+
+	for {
+		select {
+		case err := <-httpCh:
+			httpErr = err
+			httpCh = nil
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				a.logger.Error("http_server_error", slog.Any("err", err))
+			} else {
+				a.logger.Info("server_closed")
 			}
+			cancel()
+		case err := <-ledgerCh:
+			ledgerErr = err
+			ledgerCh = nil
+			if err != nil && !errors.Is(err, context.Canceled) {
+				a.logger.Error("ledger_consumer_error", slog.Any("err", err))
+			} else if err == nil {
+				a.logger.Info("ledger_consumer_completed")
+			}
+			cancel()
+		case <-ctx.Done():
+			a.logger.Info("shutdown_signal")
+			a.health.SetReady(false)
+			shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), a.cfg.ShutdownTimeout)
+			if err := a.server.Shutdown(shutdownCtx); err != nil {
+				if !errors.Is(err, context.Canceled) {
+					a.logger.Error("server_shutdown_failed", slog.Any("err", err))
+					if httpErr == nil {
+						httpErr = fmt.Errorf("shutdown: %w", err)
+					}
+				}
+			}
+			shutdownCancel()
+
+			if httpCh != nil {
+				if err := <-httpCh; err != nil && !errors.Is(err, http.ErrServerClosed) {
+					a.logger.Error("server_shutdown_error", slog.Any("err", err))
+					if httpErr == nil {
+						httpErr = err
+					}
+				}
+			}
+			if ledgerCh != nil {
+				if err := <-ledgerCh; err != nil && !errors.Is(err, context.Canceled) {
+					a.logger.Error("ledger_consumer_shutdown_error", slog.Any("err", err))
+					if ledgerErr == nil {
+						ledgerErr = err
+					}
+				}
+			}
+
+			if ledgerErr != nil && !errors.Is(ledgerErr, context.Canceled) {
+				return ledgerErr
+			}
+			if httpErr != nil && !errors.Is(httpErr, http.ErrServerClosed) {
+				return httpErr
+			}
+			a.logger.Info("shutdown_complete")
+			return nil
 		}
-		if err := <-errCh; err != nil {
-			a.logger.Error("server_shutdown_error", slog.Any("err", err))
-			return err
-		}
-		a.logger.Info("shutdown_complete")
-		return nil
-	case err := <-errCh:
-		a.health.SetReady(false)
-		if err != nil {
-			a.logger.Error("http_server_error", slog.Any("err", err))
-			return err
-		}
-		a.logger.Info("server_closed")
-		return nil
 	}
 }
 
 // Close flushes and closes resources owned by the application instance.
 func (a *Application) Close() error {
+	if a.ledger != nil {
+		if err := a.ledger.Close(); err != nil {
+			return err
+		}
+		a.ledger = nil
+	}
 	if a.logFile == nil {
 		return nil
 	}

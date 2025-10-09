@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/config/config.go
 package config
 
@@ -30,6 +30,16 @@ type Config struct {
 	ShutdownTimeout time.Duration
 	// PropertiesPath records the path used to load property values.
 	PropertiesPath string
+	// KafkaBrokers lists the bootstrap brokers used to join the ledger topic.
+	KafkaBrokers []string
+	// LedgerTopic identifies the public ledger stream carrying finalized epochs.
+	LedgerTopic string
+	// LedgerGroupID is the consumer group identifier used for checkpointing.
+	LedgerGroupID string
+	// LedgerPollTimeout bounds the duration spent waiting for Kafka messages.
+	LedgerPollTimeout time.Duration
+	// MaxEpochsPerZone caps the buffered epochs per zone retained in memory.
+	MaxEpochsPerZone int
 }
 
 const (
@@ -39,6 +49,11 @@ const (
 	defaultWriteTimeout  = 10 * time.Second
 	defaultShutdown      = 5 * time.Second
 	defaultPropsPath     = "gamification.properties"
+	defaultKafkaBrokers  = "kafka:9092"
+	defaultLedgerTopic   = "ledger.public.epochs"
+	defaultLedgerGroup   = "gamification-ledger"
+	defaultPollTimeout   = 5 * time.Second
+	defaultMaxEpochs     = 1000
 )
 
 // Load resolves configuration by layering defaults, an optional
@@ -46,11 +61,16 @@ const (
 // file location can be overridden with GAMIFICATION_PROPERTIES_PATH.
 func Load() (Config, error) {
 	cfg := Config{
-		ListenAddress:    defaultListenAddress,
-		LogFilePath:      filepath.Clean(defaultLogFile),
-		HTTPReadTimeout:  defaultReadTimeout,
-		HTTPWriteTimeout: defaultWriteTimeout,
-		ShutdownTimeout:  defaultShutdown,
+		ListenAddress:     defaultListenAddress,
+		LogFilePath:       filepath.Clean(defaultLogFile),
+		HTTPReadTimeout:   defaultReadTimeout,
+		HTTPWriteTimeout:  defaultWriteTimeout,
+		ShutdownTimeout:   defaultShutdown,
+		KafkaBrokers:      splitAndTrim(defaultKafkaBrokers),
+		LedgerTopic:       defaultLedgerTopic,
+		LedgerGroupID:     defaultLedgerGroup,
+		LedgerPollTimeout: defaultPollTimeout,
+		MaxEpochsPerZone:  defaultMaxEpochs,
 	}
 
 	propsPath := strings.TrimSpace(os.Getenv("GAMIFICATION_PROPERTIES_PATH"))
@@ -142,6 +162,37 @@ func setProperty(cfg *Config, key, value string) error {
 			return err
 		}
 		cfg.ShutdownTimeout = d
+	case "kafka_brokers":
+		brokers := splitAndTrim(value)
+		if len(brokers) == 0 {
+			return errors.New("kafka_brokers cannot be empty")
+		}
+		cfg.KafkaBrokers = brokers
+	case "ledger_topic":
+		if value == "" {
+			return errors.New("ledger_topic cannot be empty")
+		}
+		cfg.LedgerTopic = value
+	case "ledger_group_id":
+		if value == "" {
+			return errors.New("ledger_group_id cannot be empty")
+		}
+		cfg.LedgerGroupID = value
+	case "ledger_poll_timeout_ms":
+		d, err := parsePositiveMillis(value)
+		if err != nil {
+			return err
+		}
+		cfg.LedgerPollTimeout = d
+	case "max_epochs_per_zone":
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("invalid max_epochs_per_zone: %w", err)
+		}
+		if n <= 0 {
+			return errors.New("max_epochs_per_zone must be positive")
+		}
+		cfg.MaxEpochsPerZone = n
 	default:
 		// Unknown keys are ignored to keep the loader forward-compatible.
 	}
@@ -182,6 +233,53 @@ func applyEnv(cfg *Config) error {
 		}
 		cfg.ShutdownTimeout = d
 	}
+	if v, ok := lookupEnvTrimmed("GAMIFICATION_KAFKA_BROKERS"); ok {
+		brokers := splitAndTrim(v)
+		if len(brokers) == 0 {
+			return errors.New("GAMIFICATION_KAFKA_BROKERS cannot be empty")
+		}
+		cfg.KafkaBrokers = brokers
+	} else if v, ok := lookupEnvTrimmed("KAFKA_BROKERS"); ok {
+		brokers := splitAndTrim(v)
+		if len(brokers) == 0 {
+			return errors.New("KAFKA_BROKERS cannot be empty")
+		}
+		cfg.KafkaBrokers = brokers
+	}
+	if v, ok := lookupEnvTrimmed("GAMIFICATION_LEDGER_TOPIC"); ok {
+		if v == "" {
+			return errors.New("GAMIFICATION_LEDGER_TOPIC cannot be empty")
+		}
+		cfg.LedgerTopic = v
+	} else if v, ok := lookupEnvTrimmed("LEDGER_TOPIC"); ok {
+		if v == "" {
+			return errors.New("LEDGER_TOPIC cannot be empty")
+		}
+		cfg.LedgerTopic = v
+	}
+	if v, ok := lookupEnvTrimmed("GAMIFICATION_LEDGER_GROUP"); ok {
+		if v == "" {
+			return errors.New("GAMIFICATION_LEDGER_GROUP cannot be empty")
+		}
+		cfg.LedgerGroupID = v
+	}
+	if v, ok := lookupEnvTrimmed("GAMIFICATION_LEDGER_POLL_TIMEOUT_MS"); ok {
+		d, err := parsePositiveMillis(v)
+		if err != nil {
+			return fmt.Errorf("GAMIFICATION_LEDGER_POLL_TIMEOUT_MS: %w", err)
+		}
+		cfg.LedgerPollTimeout = d
+	}
+	if v, ok := lookupEnvTrimmed("GAMIF_MAX_EPOCHS_PER_ZONE"); ok {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("GAMIF_MAX_EPOCHS_PER_ZONE: %w", err)
+		}
+		if n <= 0 {
+			return errors.New("GAMIF_MAX_EPOCHS_PER_ZONE must be positive")
+		}
+		cfg.MaxEpochsPerZone = n
+	}
 	return nil
 }
 
@@ -191,6 +289,18 @@ func lookupEnvTrimmed(key string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(v), true
+}
+
+func splitAndTrim(raw string) []string {
+	fields := strings.Split(raw, ",")
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		trimmed := strings.TrimSpace(field)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 func parsePositiveMillis(v string) (time.Duration, error) {

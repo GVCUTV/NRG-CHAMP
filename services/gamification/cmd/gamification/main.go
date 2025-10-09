@@ -1,4 +1,4 @@
-// v1
+// v2
 // cmd/gamification/main.go
 package main
 
@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"nrgchamp/gamification/internal/app"
@@ -34,7 +35,15 @@ func main() {
 	}()
 
 	logger := application.Logger()
-	logger.Info("service_boot", slog.String("listen_address", cfg.ListenAddress), slog.String("log_path", cfg.LogFilePath), slog.String("properties_path", cfg.PropertiesPath))
+	logger.Info("service_boot",
+		slog.String("listen_address", cfg.ListenAddress),
+		slog.String("log_path", cfg.LogFilePath),
+		slog.String("properties_path", cfg.PropertiesPath),
+		slog.String("ledger_topic", cfg.LedgerTopic),
+		slog.String("ledger_group", cfg.LedgerGroupID),
+		slog.String("kafka_brokers", strings.Join(cfg.KafkaBrokers, ",")),
+		slog.Int("max_epochs_per_zone", cfg.MaxEpochsPerZone),
+	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
