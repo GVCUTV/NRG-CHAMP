@@ -19,6 +19,83 @@ minimum viable experience required by the platform:
 - The HTTP surface always exposes a single **global** scope. Per-building or
   per-floor breakdowns are intentionally out of scope for this MVP.
 
+## Ledger input contract (v1)
+
+Gamification subscribes to the `epoch.public` stream emitted by the ledger and
+currently understands only schema version `v1`. Any other type or schema is
+rejected before scoring.
+
+### Accepted payload shape
+
+- `type` — must equal `"epoch.public"`.
+- `schemaVersion` — must equal `"v1"`.
+- `zoneId` — required zone identifier. Empty values are logged and ignored.
+- `epochIndex` — optional sequential index. When present it is cached alongside
+  the score for observability only.
+- `matchedAt` — required RFC3339 timestamp. Leaderboard windowing relies solely
+  on this field; payloads missing the field are dropped.
+- `aggregator.summary.zoneEnergyKWhEpoch` — required numeric kilowatt-hour
+  consumption for the epoch. If absent the event is counted as missing energy
+  and excluded from rankings.
+
+Example payload consumed successfully by the decoder:
+
+```json
+{
+  "type": "epoch.public",
+  "schemaVersion": "v1",
+  "zoneId": "zone-001",
+  "epochIndex": 7,
+  "matchedAt": "2024-05-02T15:04:05Z",
+  "aggregator": {
+    "summary": {
+      "zoneEnergyKWhEpoch": 42.5
+    }
+  },
+  "energyKWh_total": 99.1,
+  "epoch": "2024-05-02T15:00:00Z"
+}
+```
+
+Field usage inside Gamification:
+
+- `zoneId` selects the leaderboard entry to update.
+- `matchedAt` anchors the reading within the rolling windows described below.
+- `aggregator.summary.zoneEnergyKWhEpoch` is added to the running totals that
+  drive rank ordering.
+- `epochIndex` and legacy totals such as `energyKWh_total` are stored only for
+  diagnostics; they do not influence the standings.
+
+## Leaderboard computation
+
+- **Windowing** — Windows are derived exclusively from the `matchedAt` timestamp
+  of each accepted payload. The service maintains trailing windows of **24
+  hours** and **7 days**. Other durations in requests are ignored and `24h` is
+  returned.
+- **Ranking** — For every window the service sums `zoneEnergyKWhEpoch` per zone
+  and sorts the results in ascending order so the lowest consumption ranks
+  first. No tie-breakers are applied; identical totals keep their insertion
+  order and still receive distinct rank integers.
+
+## Troubleshooting ledger ingestion
+
+Decode outcomes are exported under `gamification_ledger_decode_drop_total` with a
+`reason` label. The most common values are:
+
+| Reason label | Meaning | Follow-up |
+| --- | --- | --- |
+| `missing_matchedAt` | Payload omitted the required `matchedAt` field. The event cannot be windowed and is dropped. | Inspect upstream ledger publisher; ensure it stamps the match timestamp. |
+| `json_error` | JSON could not be parsed or contained incompatible types (e.g. string instead of number for `zoneEnergyKWhEpoch`). | Verify the producer schema, then replay or repair the offending record. |
+| `schema_reject` | `type` or `schemaVersion` did not normalize to `epoch.public`/`v1`, or the value is not listed in `LEDGER_SCHEMA_ACCEPT`. | Update the allow-list or ensure the publisher still emits v1 payloads. |
+
+Additional counters:
+
+- `gamification_ledger_decode_ok_total` — number of successfully decoded
+  payloads after schema checks.
+- `gamification_ledger_energy_missing_total` — epochs that passed validation but
+  lacked `aggregator.summary.zoneEnergyKWhEpoch`. These entries are excluded
+  from standings until upstream fills the metric.
+
 ## Configuration
 
 Runtime configuration layers defaults, the optional properties file, and finally
