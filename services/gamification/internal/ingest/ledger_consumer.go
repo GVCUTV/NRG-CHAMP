@@ -1,4 +1,4 @@
-// v2
+// v3
 // internal/ingest/ledger_consumer.go
 package ingest
 
@@ -34,9 +34,10 @@ type LedgerConsumerConfig struct {
 // EpochEnergy stores the minimal information about a finalized epoch required
 // by downstream aggregations.
 type EpochEnergy struct {
-	ZoneID    string
-	Epoch     time.Time
-	EnergyKWh float64
+	ZoneID     string
+	EventTime  time.Time
+	EnergyKWh  float64
+	EpochIndex *int
 }
 
 // ZoneStore keeps the most recent epochs per zone in an append-only buffer. It
@@ -289,22 +290,82 @@ func (c *LedgerConsumer) Run(ctx context.Context) error {
 		}
 
 		metrics.IncLedgerMessage()
-		record, decodeErr := decodeLedgerMessage(msg.Value)
+		decoded, decodeErr := decodeLedgerMessage(msg.Value)
 		if decodeErr != nil {
-			c.log.Warn("ledger_consumer_decode_error", slog.Any("err", decodeErr), slog.Int64("offset", msg.Offset))
+			attrs := []slog.Attr{
+				slog.Any("err", decodeErr),
+				slog.Int64("offset", msg.Offset),
+				slog.Int("partition", msg.Partition),
+			}
+			if decoded.Type != "" {
+				attrs = append(attrs, slog.String("type", decoded.Type))
+			}
+			if decoded.Schema != "" {
+				attrs = append(attrs, slog.String("schemaVersion", decoded.Schema))
+			}
+			args := make([]any, 0, len(attrs))
+			for _, attr := range attrs {
+				args = append(args, attr)
+			}
+			c.log.Warn("ledger_consumer_decode_error", args...)
 		} else {
+			record := decoded.Energy
 			if record.ZoneID == "" {
-				c.log.Warn("ledger_consumer_missing_zone", slog.Int64("offset", msg.Offset))
+				attrs := []slog.Attr{
+					slog.Int64("offset", msg.Offset),
+					slog.Int("partition", msg.Partition),
+				}
+				if decoded.Type != "" {
+					attrs = append(attrs, slog.String("type", decoded.Type))
+				}
+				if decoded.Schema != "" {
+					attrs = append(attrs, slog.String("schemaVersion", decoded.Schema))
+				}
+				args := make([]any, 0, len(attrs))
+				for _, attr := range attrs {
+					args = append(args, attr)
+				}
+				c.log.Warn("ledger_consumer_missing_zone", args...)
 			} else {
+				if decoded.EnergyAbsent {
+					attrs := []slog.Attr{
+						slog.Int64("offset", msg.Offset),
+						slog.Int("partition", msg.Partition),
+						slog.String("zoneId", record.ZoneID),
+						slog.Float64("energyKWh", 0),
+						slog.Int("ledger_consumer_missing_energy", 1),
+					}
+					if decoded.Type != "" {
+						attrs = append(attrs, slog.String("type", decoded.Type))
+					}
+					if decoded.Schema != "" {
+						attrs = append(attrs, slog.String("schemaVersion", decoded.Schema))
+					}
+					args := make([]any, 0, len(attrs))
+					for _, attr := range attrs {
+						args = append(args, attr)
+					}
+					c.log.Warn("ledger_consumer_missing_energy", args...)
+				}
+
 				count, evicted := c.store.Append(record.ZoneID, record)
 				attrs := []slog.Attr{
 					slog.String("zoneId", record.ZoneID),
-					slog.Time("epoch", record.Epoch.UTC()),
+					slog.Time("eventTime", record.EventTime.UTC()),
 					slog.Float64("energyKWh", record.EnergyKWh),
 					slog.Int("bufferDepth", count),
 				}
+				if record.EpochIndex != nil {
+					attrs = append(attrs, slog.Int("epochIndex", *record.EpochIndex))
+				}
 				if evicted != nil {
-					attrs = append(attrs, slog.Time("evictedEpoch", evicted.Epoch.UTC()))
+					attrs = append(attrs, slog.Time("evictedEventTime", evicted.EventTime.UTC()))
+				}
+				if decoded.Type != "" {
+					attrs = append(attrs, slog.String("type", decoded.Type))
+				}
+				if decoded.Schema != "" {
+					attrs = append(attrs, slog.String("schemaVersion", decoded.Schema))
 				}
 				args := make([]any, 0, len(attrs))
 				for _, attr := range attrs {
@@ -336,36 +397,91 @@ func (c *LedgerConsumer) updateLagMetric() {
 // ledgerEnvelope mirrors the minimal fields required from the public ledger
 // stream while ignoring future extensions.
 type ledgerEnvelope struct {
-	ZoneID string          `json:"zoneId"`
-	Epoch  json.RawMessage `json:"epoch"`
+	Type          string          `json:"type"`
+	SchemaVersion string          `json:"schemaVersion"`
+	ZoneID        string          `json:"zoneId"`
+	Epoch         json.RawMessage `json:"epoch"`
+	EpochIndex    json.RawMessage `json:"epochIndex"`
+	MatchedAt     json.RawMessage `json:"matchedAt"`
+	Aggregator    *struct {
+		Summary *struct {
+			ZoneEnergyKWhEpoch json.RawMessage `json:"zoneEnergyKWhEpoch"`
+		} `json:"summary"`
+	} `json:"aggregator"`
 	Energy json.RawMessage `json:"energyKWh_total"`
+}
+
+type ledgerRecord struct {
+	Energy       EpochEnergy
+	Schema       string
+	Type         string
+	EnergyAbsent bool
 }
 
 // decodeLedgerMessage extracts the required fields from a Kafka message value,
 // enforcing the expected data types while gracefully tolerating additional
 // fields that may appear in the payload.
-func decodeLedgerMessage(raw []byte) (EpochEnergy, error) {
+func decodeLedgerMessage(raw []byte) (ledgerRecord, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
+
 	var env ledgerEnvelope
 	if err := dec.Decode(&env); err != nil {
-		return EpochEnergy{}, fmt.Errorf("decode ledger payload: %w", err)
+		return ledgerRecord{}, fmt.Errorf("decode ledger payload: %w", err)
 	}
-	if strings.TrimSpace(env.ZoneID) == "" {
-		return EpochEnergy{}, errors.New("zoneId missing or empty")
+
+	rec := ledgerRecord{
+		Schema: strings.TrimSpace(env.SchemaVersion),
+		Type:   strings.TrimSpace(env.Type),
 	}
-	epoch, err := parseEpoch(env.Epoch)
+
+	rec.Energy.ZoneID = strings.TrimSpace(env.ZoneID)
+	if rec.Energy.ZoneID == "" {
+		return rec, errors.New("zoneId missing or empty")
+	}
+
+	var (
+		event            time.Time
+		err              error
+		requireMatchedAt = rec.Type == "epoch.public" && rec.Schema == "v1"
+	)
+	if len(env.MatchedAt) > 0 {
+		event, err = parseMatchedAt(env.MatchedAt)
+	} else if requireMatchedAt {
+		err = errors.New("matchedAt missing")
+	} else {
+		event, err = parseEpoch(env.Epoch)
+	}
 	if err != nil {
-		return EpochEnergy{}, err
+		return rec, err
 	}
-	energy, err := parseEnergy(env.Energy)
+	rec.Energy.EventTime = event
+
+	idx, err := parseEpochIndex(env.EpochIndex)
 	if err != nil {
-		return EpochEnergy{}, err
+		return rec, err
 	}
-	return EpochEnergy{ZoneID: strings.TrimSpace(env.ZoneID), Epoch: epoch, EnergyKWh: energy}, nil
+	rec.Energy.EpochIndex = idx
+
+	var energy float64
+	switch {
+	case env.Aggregator != nil && env.Aggregator.Summary != nil && len(env.Aggregator.Summary.ZoneEnergyKWhEpoch) > 0 && !isJSONNull(env.Aggregator.Summary.ZoneEnergyKWhEpoch):
+		energy, err = parseEnergyValue(env.Aggregator.Summary.ZoneEnergyKWhEpoch, "aggregator.summary.zoneEnergyKWhEpoch")
+	case len(env.Energy) > 0 && !isJSONNull(env.Energy):
+		energy, err = parseEnergyValue(env.Energy, "energyKWh_total")
+	default:
+		rec.EnergyAbsent = true
+		energy = 0
+	}
+	if err != nil {
+		return rec, err
+	}
+	rec.Energy.EnergyKWh = energy
+
+	return rec, nil
 }
 
-// parseEpoch resolves the ledger epoch field accepting RFC3339/RFC3339Nano
+// parseEpoch resolves the legacy ledger epoch field accepting RFC3339/RFC3339Nano
 // strings as well as Unix epoch milliseconds provided either as string or
 // numeric JSON values.
 func parseEpoch(raw json.RawMessage) (time.Time, error) {
@@ -404,29 +520,90 @@ func parseEpoch(raw json.RawMessage) (time.Time, error) {
 	return time.Time{}, errors.New("epoch format not recognized")
 }
 
-// parseEnergy reads the ledger energy field accepting numeric JSON values or
-// numeric strings, returning a consistent float64 representation.
-func parseEnergy(raw json.RawMessage) (float64, error) {
+func parseMatchedAt(raw json.RawMessage) (time.Time, error) {
 	if len(raw) == 0 {
-		return 0, errors.New("energyKWh_total missing")
+		return time.Time{}, errors.New("matchedAt missing")
 	}
+
+	var asString string
+	if err := json.Unmarshal(raw, &asString); err != nil {
+		return time.Time{}, fmt.Errorf("matchedAt decode: %w", err)
+	}
+	trimmed := strings.TrimSpace(asString)
+	if trimmed == "" {
+		return time.Time{}, errors.New("matchedAt empty")
+	}
+
+	if ts, err := time.Parse(time.RFC3339Nano, trimmed); err == nil {
+		return ts.UTC(), nil
+	}
+	ts, err := time.Parse(time.RFC3339, trimmed)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("matchedAt parse: %w", err)
+	}
+	return ts.UTC(), nil
+}
+
+func parseEpochIndex(raw json.RawMessage) (*int, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	var asNumber json.Number
+	if err := json.Unmarshal(raw, &asNumber); err == nil {
+		if i, err := asNumber.Int64(); err == nil {
+			cast := int(i)
+			return &cast, nil
+		}
+	}
+
+	var asString string
+	if err := json.Unmarshal(raw, &asString); err == nil {
+		trimmed := strings.TrimSpace(asString)
+		if trimmed == "" {
+			return nil, nil
+		}
+		val, err := strconv.Atoi(trimmed)
+		if err != nil {
+			return nil, fmt.Errorf("parse epochIndex: %w", err)
+		}
+		return &val, nil
+	}
+
+	return nil, errors.New("epochIndex format not recognized")
+}
+
+func isJSONNull(raw json.RawMessage) bool {
+	trimmed := bytes.TrimSpace(raw)
+	return bytes.Equal(trimmed, []byte("null"))
+}
+
+// parseEnergyValue reads the ledger energy field accepting numeric JSON values
+// or numeric strings, returning a consistent float64 representation.
+func parseEnergyValue(raw json.RawMessage, field string) (float64, error) {
+	if len(raw) == 0 {
+		return 0, fmt.Errorf("%s missing", field)
+	}
+
 	var asNumber json.Number
 	if err := json.Unmarshal(raw, &asNumber); err == nil {
 		if f, err := asNumber.Float64(); err == nil {
 			return f, nil
 		}
 	}
+
 	var asString string
 	if err := json.Unmarshal(raw, &asString); err == nil {
 		trimmed := strings.TrimSpace(asString)
 		if trimmed == "" {
-			return 0, errors.New("energy string empty")
+			return 0, fmt.Errorf("%s empty", field)
 		}
 		f, err := strconv.ParseFloat(trimmed, 64)
 		if err != nil {
-			return 0, fmt.Errorf("parse energy: %w", err)
+			return 0, fmt.Errorf("parse %s: %w", field, err)
 		}
 		return f, nil
 	}
-	return 0, errors.New("energy format not recognized")
+
+	return 0, fmt.Errorf("%s format not recognized", field)
 }
