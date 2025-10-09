@@ -1,4 +1,4 @@
-// v5
+// v6
 // main.go
 package main
 
@@ -16,8 +16,10 @@ import (
 	"syscall"
 	"time"
 
+	ledgerinternal "nrgchamp/ledger/internal"
 	"nrgchamp/ledger/internal/api"
 	"nrgchamp/ledger/internal/ingest"
+	publicschema "nrgchamp/ledger/internal/public"
 	"nrgchamp/ledger/internal/storage"
 )
 
@@ -33,6 +35,13 @@ func main() {
 	partMape := flag.Int("partition-mape", 1, "Kafka partition index carrying MAPE payloads")
 	graceMS := flag.Int("epoch-grace-ms", 2000, "Milliseconds to wait for counterpart before imputing")
 	bufferMax := flag.Int("buffer-max-epochs", 200, "Maximum number of finalized epochs kept for deduplication")
+	publicEnable := flag.Bool("public-enable", false, "Enable publishing finalized epochs to the public ledger topic")
+	publicTopic := flag.String("public-topic", "ledger.public.epochs", "Kafka topic for public epoch events")
+	publicBrokers := flag.String("public-brokers", "", "Comma-separated Kafka brokers for public publishing (defaults to --kafka-brokers)")
+	publicAcks := flag.Int("public-acks", -1, "Kafka acknowledgement level for public publisher (-1 all, 1 leader, 0 none)")
+	publicPartitioner := flag.String("public-partitioner", string(ledgerinternal.PublicPartitionerHash), "Kafka partitioner for public epochs (hash|roundrobin)")
+	publicKeyMode := flag.String("public-key-mode", string(ledgerinternal.PublicKeyModeZone), "Kafka key mode for public epochs (zone|epoch|none)")
+	publicSchemaVersion := flag.String("public-schema-version", publicschema.SchemaVersionV1, "Public epoch schema version identifier")
 	flag.Parse()
 
 	addrVal := envOrDefault("LEDGER_ADDR", *addr)
@@ -46,6 +55,22 @@ func main() {
 	partMapeVal := envOrInt("LEDGER_PARTITION_MAPE", *partMape)
 	graceMSVal := envOrInt("LEDGER_EPOCH_GRACE_MS", *graceMS)
 	bufferMaxVal := envOrInt("LEDGER_BUFFER_MAX_EPOCHS", *bufferMax)
+	publicEnableVal := envOrBool("LEDGER_PUBLIC_ENABLE", *publicEnable)
+	publicTopicVal := envOrDefault("LEDGER_PUBLIC_TOPIC", *publicTopic)
+	publicBrokersVal := envOrDefault("LEDGER_PUBLIC_BROKERS", *publicBrokers)
+	if strings.TrimSpace(publicBrokersVal) == "" {
+		publicBrokersVal = brokersVal
+	}
+	publicAcksVal := envOrInt("LEDGER_PUBLIC_ACKS", *publicAcks)
+	publicPartitionerVal := strings.ToLower(strings.TrimSpace(envOrDefault("LEDGER_PUBLIC_PARTITIONER", *publicPartitioner)))
+	if publicPartitionerVal == "" {
+		publicPartitionerVal = string(ledgerinternal.PublicPartitionerHash)
+	}
+	publicKeyModeVal := strings.ToLower(strings.TrimSpace(envOrDefault("LEDGER_PUBLIC_KEY_MODE", *publicKeyMode)))
+	if publicKeyModeVal == "" {
+		publicKeyModeVal = string(ledgerinternal.PublicKeyModeZone)
+	}
+	publicSchemaVersionVal := strings.TrimSpace(envOrDefault("LEDGER_PUBLIC_SCHEMA_VERSION", *publicSchemaVersion))
 
 	if err := os.MkdirAll(logDirVal, 0o755); err != nil {
 		panic(err)
@@ -82,6 +107,29 @@ func main() {
 		logger.Error("config", slog.String("error", "at least one zone must be configured"))
 		os.Exit(1)
 	}
+	publicBrokersList := splitAndTrim(publicBrokersVal)
+	publicCfg := ledgerinternal.PublicPublisherConfig{
+		Enabled:       publicEnableVal,
+		Topic:         publicTopicVal,
+		Brokers:       publicBrokersList,
+		Acks:          publicAcksVal,
+		Partitioner:   ledgerinternal.PublicPartitioner(publicPartitionerVal),
+		KeyMode:       ledgerinternal.PublicKeyMode(publicKeyModeVal),
+		SchemaVersion: publicSchemaVersionVal,
+	}
+	if err := publicCfg.Validate(); err != nil {
+		logger.Error("public_config_validation", slog.Any("err", err))
+		os.Exit(1)
+	}
+	logger.Info("public_config",
+		slog.Bool("enabled", publicCfg.Enabled),
+		slog.String("topic", publicCfg.Topic),
+		slog.String("brokers", strings.Join(publicCfg.Brokers, ",")),
+		slog.Int("acks", publicCfg.Acks),
+		slog.String("partitioner", string(publicCfg.Partitioner)),
+		slog.String("keyMode", string(publicCfg.KeyMode)),
+		slog.String("schemaVersion", publicCfg.SchemaVersion),
+	)
 
 	validateCtx, validateCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer validateCancel()
@@ -229,6 +277,19 @@ func envOrInt(key string, fallback int) int {
 	if v, ok := os.LookupEnv(key); ok {
 		if parsed, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
 			return parsed
+		}
+	}
+	return fallback
+}
+
+// envOrBool returns the boolean parsed from an environment variable or fallback on failure.
+func envOrBool(key string, fallback bool) bool {
+	if v, ok := os.LookupEnv(key); ok {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "t", "yes", "y", "on":
+			return true
+		case "0", "false", "f", "no", "n", "off":
+			return false
 		}
 	}
 	return fallback
