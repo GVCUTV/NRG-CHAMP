@@ -12,11 +12,12 @@ import (
 // The router currently focuses on health checking endpoints that will be
 // used by orchestration layers once the service is packaged inside
 // Docker.
-func NewRouter(logger *slog.Logger, health *HealthState) *http.ServeMux {
+func NewRouter(logger *slog.Logger, health *HealthState, apiCfg APIConfig) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/health", methodGuard(http.MethodGet, healthLiveHandler()))
 	mux.Handle("/health/live", methodGuard(http.MethodGet, healthLiveHandler()))
 	mux.Handle("/health/ready", methodGuard(http.MethodGet, healthReadyHandler(health)))
+	mux.Handle("/leaderboard", methodGuard(http.MethodGet, leaderboardHandler(logger, apiCfg)))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusNotFound)

@@ -48,8 +48,13 @@ func New(cfg config.Config) (*Application, error) {
 	}
 
 	logger := newLogger(lf)
+	apiCfg := httpserver.LoadAPIConfig()
+	logger.Info("http_api_config_loaded",
+		slog.Int("http_port", apiCfg.HTTPPort),
+		slog.Any("windows", apiCfg.Windows),
+	)
 	health := httpserver.NewHealthState()
-	router := httpserver.NewRouter(logger, health)
+	router := httpserver.NewRouter(logger, health, apiCfg)
 	handler := httpserver.WrapWithLogging(logger, router)
 	server := &http.Server{
 		Addr:              cfg.ListenAddress,
