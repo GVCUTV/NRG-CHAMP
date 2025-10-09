@@ -3,7 +3,6 @@
 package kpi
 
 import (
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
