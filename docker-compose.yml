@@ -40,7 +40,7 @@ services:
     image: nrg-champ/zone-simulator:dev
     build:
       context: .
-      dockerfile: ./zone_simulator/Dockerfile
+      dockerfile: zone_simulator/Dockerfile
     container_name: zone-simulator
     depends_on:
       kafka:
