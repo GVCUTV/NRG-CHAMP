@@ -1,31 +1,30 @@
-# // v3
+# // v4
 # // file: services/gamification/Dockerfile
-FROM golang:1.23-alpine AS gamification_build_stage
+# v3.1 — module-centric, correct circuit_breaker location
+FROM golang:1.23-alpine AS gamification_build
 WORKDIR /src
-ENV GOWORK=off
-COPY circuit_breaker /circuit_breaker
+
+# Selective COPY: service + local lib to /src/circuit_breaker (NOT /circuit_breaker)
 COPY services/gamification/go.mod services/gamification/go.sum ./services/gamification/
+COPY circuit_breaker/ ./circuit_breaker/
 COPY services/gamification/ ./services/gamification/
+
+# Workspace off so go.work cannot conflict
+ENV GOWORK=off
+
+# Download deps and build from the module dir
 RUN --mount=type=cache,target=/go/pkg/mod \
     go -C services/gamification mod download
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 go -C services/gamification build -o /out/gamification ./cmd/gamification
 
-FROM alpine:3.20 AS gamification_runtime_stage
+FROM alpine:3.20 AS gamification_runtime
 WORKDIR /srv
-RUN adduser -D -H appuser
-COPY --from=gamification_build_stage /out/gamification /usr/local/bin/gamification
-ENV BROKER_ADDRESS=kafka:9092 \
-    LEDGER_TOPIC=ledger.public.epochs \
-    LEDGER_CONSUMER_GROUP=gamification-ledger \
-    GAMIFICATION_PORT=8085 \
-    GAMIFICATION_LOG_PATH=/srv/logs/gamification.log \
-    GAMIFICATION_HTTP_READ_TIMEOUT_MS=5000 \
-    GAMIFICATION_HTTP_WRITE_TIMEOUT_MS=10000 \
-    GAMIFICATION_SHUTDOWN_TIMEOUT_MS=5000 \
-    LEDGER_POLL_TIMEOUT_MS=5000 \
-    MAX_EPOCHS_PER_ZONE=1000
+RUN adduser -D -H appuser \
+ && mkdir -p /var/log/gamification \
+ && chown appuser:appuser /var/log/gamification
+COPY --from=gamification_build /out/gamification /srv/gamification
 USER appuser
 EXPOSE 8085
-ENTRYPOINT ["/usr/local/bin/gamification"]
+ENV GAMIFICATION_BIND_ADDR=":8085"
+ENTRYPOINT ["/srv/gamification"]
