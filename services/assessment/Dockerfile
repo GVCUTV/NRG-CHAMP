@@ -1,9 +1,11 @@
-// v1
+// v2
 // services/assessment/Dockerfile
 # Build stage
 FROM golang:1.23-alpine AS assessment_build
 WORKDIR /src
 COPY . .
+COPY circuit_breaker /circuit_breaker
+ENV GOWORK=off
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     sh -c 'mkdir -p /out && CGO_ENABLED=0 go build -o /out/assessment ./services/assessment/cmd/assessment'
