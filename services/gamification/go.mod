@@ -8,3 +8,5 @@ require (
         github.com/nrg-champ/circuitbreaker v0.0.0
         github.com/segmentio/kafka-go v0.4.47
 )
+
+replace github.com/nrg-champ/circuitbreaker => /circuit_breaker

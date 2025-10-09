@@ -208,21 +208,6 @@ services:
 #      - ledger
 #    volumes:
 #      - assessment_logs:/var/log/assessment
-#
-#  gamification:
-#    build: ./gamification
-#    container_name: gamification
-#    environment:
-#      - LEDGER_BASE_URL=http://ledger:8084
-#      - DATA_DIR=/data
-#      - LOG_LEVEL=INFO
-#      - ZONE_ID_DELIM=:
-#    volumes:
-#      - ./data/gamification:/data
-#    ports:
-#      - "8086:8086"
-#    depends_on:
-#      - ledger
 
 networks:
   nrg-net: {}
