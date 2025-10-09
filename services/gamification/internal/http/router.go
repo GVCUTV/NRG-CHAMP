@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/http/router.go
 package httpserver
 
@@ -6,18 +6,20 @@ import (
 	"net/http"
 
 	"log/slog"
+
+	"nrgchamp/gamification/internal/score"
 )
 
 // NewRouter wires all HTTP routes exposed by the gamification service.
 // The router currently focuses on health checking endpoints that will be
 // used by orchestration layers once the service is packaged inside
 // Docker.
-func NewRouter(logger *slog.Logger, health *HealthState, apiCfg APIConfig) *http.ServeMux {
+func NewRouter(logger *slog.Logger, health *HealthState, source leaderboardSource) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.Handle("/health", methodGuard(http.MethodGet, healthLiveHandler()))
 	mux.Handle("/health/live", methodGuard(http.MethodGet, healthLiveHandler()))
 	mux.Handle("/health/ready", methodGuard(http.MethodGet, healthReadyHandler(health)))
-	mux.Handle("/leaderboard", methodGuard(http.MethodGet, leaderboardHandler(logger, apiCfg)))
+	mux.Handle("/leaderboard", methodGuard(http.MethodGet, leaderboardHandler(logger, source)))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusNotFound)
@@ -27,6 +29,14 @@ func NewRouter(logger *slog.Logger, health *HealthState, apiCfg APIConfig) *http
 		}
 	})
 	return mux
+}
+
+// leaderboardSource exposes the subset of score.Manager used by the HTTP
+// handler. A small interface keeps the router agnostic to implementation
+// details while supporting deterministic ordering.
+type leaderboardSource interface {
+	Windows() []score.WindowSpec
+	Snapshot(window string) (score.Leaderboard, bool)
 }
 
 func healthLiveHandler() http.Handler {
