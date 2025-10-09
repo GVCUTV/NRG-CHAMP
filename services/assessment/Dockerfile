@@ -1,16 +1,22 @@
-# v1
-# services/assessment/Dockerfile
-# Build stage
+# v4 — module-centric, build from module dir, correct local lib path
 FROM golang:1.23-alpine AS assessment_build
 WORKDIR /src
-COPY . .
-COPY circuit_breaker /circuit_breaker
-ENV GOWORK=off
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    sh -c 'mkdir -p /out && CGO_ENABLED=0 go build -o /out/assessment ./services/assessment/cmd/assessment'
 
-# Runtime stage
+# Copy only what's needed; place circuit_breaker under /src/circuit_breaker
+COPY services/assessment/go.mod services/assessment/go.sum ./services/assessment/
+COPY circuit_breaker/ ./circuit_breaker/
+COPY services/assessment/ ./services/assessment/
+
+# Disable workspace so go.work is ignored inside the container
+ENV GOWORK=off
+
+# Fetch deps and build from INSIDE the module directory
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go -C services/assessment mod download
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go -C services/assessment build -o /out/assessment ./cmd/assessment
+
+# Minimal runtime
 FROM alpine:3.20 AS assessment_runtime
 WORKDIR /
 RUN adduser -D -H assessment \
