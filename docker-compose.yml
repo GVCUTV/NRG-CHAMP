@@ -1,4 +1,4 @@
-# // v4
+# // v5
 # // file: docker-compose.yml
 #version: "3.9"
 
@@ -71,6 +71,9 @@ services:
       - LEDGER_TOPIC_TEMPLATE=zone.ledger.{zone}
       - LEDGER_ZONES=zone-A
       - LEDGER_TOPIC_REPLICATION=1
+      - LEDGER_PUBLIC_TOPIC=ledger.public.epochs
+      - LEDGER_PUBLIC_PARTITIONS=3
+      - LEDGER_PUBLIC_REPLICATION=1
       - TOPIC_INIT_LOG=/var/log/topic-init/topic-init.log
     volumes:
       - ./logs/topic-init:/var/log/topic-init
@@ -154,6 +157,14 @@ services:
       - LEDGER_PARTITION_AGGREGATOR=0
       - LEDGER_PARTITION_MAPE=1
       - LEDGER_TOPIC_REPLICATION=1
+      - LEDGER_PUBLIC_ENABLE=true
+      - LEDGER_PUBLIC_TOPIC=ledger.public.epochs
+      - LEDGER_PUBLIC_PARTITIONS=3
+      - LEDGER_PUBLIC_BROKERS=kafka:9092
+      - LEDGER_PUBLIC_ACKS=-1
+      - LEDGER_PUBLIC_PARTITIONER=hash
+      - LEDGER_PUBLIC_KEY_MODE=zone
+      - LEDGER_PUBLIC_SCHEMA_VERSION=v1
     ports:
       - "8083:8083"
     volumes:
