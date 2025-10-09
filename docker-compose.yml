@@ -208,24 +208,24 @@ services:
       - "8085:8085"
     networks: [ nrg-net ]
 
-  assessment:
-    build:
-      context: .
-      dockerfile: services/assessment/Dockerfile
-    image: nrgchamp/assessment:local
-    environment:
-      - LEDGER_BASE_URL=http://ledger:8084
-      - CACHE_TTL=30s
-      - ASSESSMENT_BIND_ADDR=:8085
-      - ASSESSMENT_LOGFILE=/var/log/assessment/assessment.log
-    ports:
-      - "8085:8085"
-    depends_on:
-      ledger:
-        condition: service_started
-    volumes:
-      - assessment_logs:/var/log/assessment
-    networks: [ nrg-net ]
+#  assessment:
+#    build:
+#      context: .
+#      dockerfile: services/assessment/Dockerfile
+#    image: nrgchamp/assessment:local
+#    environment:
+#      - LEDGER_BASE_URL=http://ledger:8084
+#      - CACHE_TTL=30s
+#      - ASSESSMENT_BIND_ADDR=:8085
+#      - ASSESSMENT_LOGFILE=/var/log/assessment/assessment.log
+#    ports:
+#      - "8085:8085"
+#    depends_on:
+#      ledger:
+#        condition: service_started
+#    volumes:
+#      - assessment_logs:/var/log/assessment
+#    networks: [ nrg-net ]
 
 networks:
   nrg-net: {}
