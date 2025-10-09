@@ -1,9 +1,10 @@
-// v1
+// v2
 // internal/ingest/ledger_consumer_test.go
 package ingest
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 )
@@ -116,5 +117,39 @@ func TestDecodeLedgerMessageMissingMatchedAt(t *testing.T) {
 	decoded, decErr := decodeLedgerMessage(raw)
 	if decErr == nil {
 		t.Fatalf("expected error, got success: %+v", decoded)
+	}
+	if !errors.Is(decErr, errMatchedAtMissing) {
+		t.Fatalf("expected errMatchedAtMissing, got %v", decErr)
+	}
+}
+
+func TestNormalizeLedgerSchema(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		typ      string
+		schema   string
+		expected string
+		ok       bool
+	}{
+		{name: "v1", typ: "epoch.public", schema: "v1", expected: "v1", ok: true},
+		{name: "legacy", typ: "", schema: "", expected: "legacy", ok: true},
+		{name: "blank schema defaults legacy", typ: "epoch.public", schema: "", expected: "legacy", ok: true},
+		{name: "type mismatch", typ: "epoch.private", schema: "v1", expected: "v1", ok: false},
+		{name: "schema provided without type", typ: "", schema: "v2", expected: "v2", ok: false},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			normalized, ok := normalizeLedgerSchema(tc.typ, tc.schema)
+			if normalized != tc.expected {
+				t.Fatalf("expected normalized %q, got %q", tc.expected, normalized)
+			}
+			if ok != tc.ok {
+				t.Fatalf("expected ok=%v, got %v", tc.ok, ok)
+			}
+		})
 	}
 }

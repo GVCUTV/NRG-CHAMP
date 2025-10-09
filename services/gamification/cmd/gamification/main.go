@@ -1,4 +1,4 @@
-// v3
+// v4
 // cmd/gamification/main.go
 package main
 
@@ -42,6 +42,7 @@ func main() {
 		slog.String("ledger_group", cfg.LedgerGroupID),
 		slog.String("kafka_brokers", strings.Join(cfg.KafkaBrokers, ",")),
 		slog.Int("max_epochs_per_zone", cfg.MaxEpochsPerZone),
+		slog.String("ledger_schema_accept", strings.Join(cfg.LedgerSchemaAccept, ",")),
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
