@@ -1,23 +1,22 @@
-# // v2
+# // v3
 # // file: zone_simulator/Dockerfile
 # Room Simulator (merged sensors+actuators -> Kafka)
-FROM golang:1.23-alpine AS zs_builder_base
-WORKDIR /app
 FROM golang:1.23-alpine AS zs_builder
 WORKDIR /app
-COPY zone_simulator/go.mod zone_simulator/go.sum ./
-COPY circuit_breaker /circuit_breaker
-COPY zone_simulator/*.go ./
-COPY zone_simulator/sim.properties ./
-# Popola correttamente go.sum (inclusi transitivi di circuit_breaker)
-RUN --mount=type=cache,target=/go/pkg/mod go mod download && go mod tidy
-RUN CGO_ENABLED=0 GOOS=linux go build -o zone-simulator ./
+ENV GOWORK=off
+
+COPY zone_simulator/go.mod zone_simulator/go.sum ./zone_simulator/
+COPY circuit_breaker ./circuit_breaker
+RUN go -C zone_simulator mod download
+
+COPY zone_simulator ./zone_simulator
+RUN mkdir -p /out && CGO_ENABLED=0 GOOS=linux go -C zone_simulator build -o /out/zone-simulator ./cmd/zone-simulator
 
 FROM alpine:3.20 AS zs_runtime
 WORKDIR /app
 RUN adduser -D -H appuser
-COPY --from=zs_builder /app/zone-simulator /app/zone-simulator
-COPY --from=zs_builder /app/sim.properties /app/sim.properties
+COPY --from=zs_builder /out/zone-simulator /app/zone-simulator
+COPY --from=zs_builder /app/zone_simulator/sim.properties /app/sim.properties
 ENV SIM_PROPERTIES=/app/sim.properties
 # Optional defaults
 ENV KAFKA_BROKERS=kafka:9092
