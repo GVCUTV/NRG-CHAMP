@@ -1,15 +1,21 @@
-// v0
-// Dockerfile
+// v1
+// services/assessment/Dockerfile
 # Build stage
-FROM golang:1.22 AS build
-WORKDIR /app
-COPY . ./
-RUN --mount=type=cache,target=/go/pkg/mod     --mount=type=cache,target=/root/.cache/go-build     cd assessment && go build -o /out/assessment ./cmd/assessment
+FROM golang:1.23-alpine AS assessment_build
+WORKDIR /src
+COPY . .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    sh -c 'mkdir -p /out && CGO_ENABLED=0 go build -o /out/assessment ./services/assessment/cmd/assessment'
 
 # Runtime stage
-FROM gcr.io/distroless/base-debian12
+FROM alpine:3.20 AS assessment_runtime
 WORKDIR /
-COPY --from=build /out/assessment /assessment
+RUN adduser -D -H assessment \
+ && mkdir -p /var/log/assessment \
+ && chown assessment:assessment /var/log/assessment
+COPY --from=assessment_build /out/assessment /assessment
+USER assessment
 EXPOSE 8085
 ENV ASSESSMENT_BIND_ADDR=":8085"
 ENTRYPOINT ["/assessment"]
