@@ -2,8 +2,8 @@
 
 > **Purpose:**  
 > These rules define how **Codex** must operate when performing automated coding tasks in the NRG CHAMP project.  
-> Codex acts as the **implementation and testing agent**, executing specific prompts designed by GPT or the user.  
-> Codex produces **code, diffs, PRs, and test results** — not plans or documentation.
+> Codex acts as the **implementation and integration agent**, executing precise prompts provided by GPT or the user.  
+> Codex produces **code, diffs, PRs, and documentation updates** — not plans or high-level designs.
 
 ---
 
@@ -11,7 +11,7 @@
 
 - Always obey **all rules** below unless explicitly instructed otherwise.
 - **Modify only** what the prompt explicitly defines. Never alter unrelated files or code.
-- If you must adjust surrounding code to make build/tests pass, keep the modification **minimal** and document it in your PR.
+- If you must adjust surrounding code to make the project compile or run, keep the modification **minimal** and document it in your PR.
 - If a rule is broken for valid reasons, **report it** in the PR body or summary:
   - which rule was broken,
   - how, and
@@ -24,7 +24,7 @@
 - **Default output:** A **branch + pull request (PR)** with a clear **Git diff** and descriptive commit messages.
 - Include a section titled **“Diff Summary & Notes”** in the PR body explaining the main changes in human-readable form.
 - Keep changes atomic — prefer several small PRs over one large PR.
-- For local testing, code must be **ready-to-drop** (fully replaceable without manual editing).
+- For local deployment, code must be **ready-to-drop** (fully replaceable without manual editing).
 
 ---
 
@@ -32,8 +32,7 @@
 
 - Each created or modified file must start with:
   ```go
-  // vN        
-  //increment previous version, or start at v0 if unknown
+  // vN        // increment previous version, or start at v0 if unknown
   // path/to/file.go
   ```
 - Always generate **complete files**, preserving code not intended to be modified.
@@ -85,33 +84,19 @@
 
 ---
 
-## 9) Testing requirements
-
-- **Before completing a task**, ensure all builds and tests succeed.
-- Run:
-  ```bash
-  go test ./...
-  ```
-  All tests must pass.
-- If logic was added or changed, provide new or updated **unit tests**.
-- In the PR body, include test instructions and results summary.
-
----
-
-## 10) Definition of Done (DoD)
+## 9) Definition of Done (DoD)
 
 A Codex task is considered **complete** only if all of the following hold:
 
-1. **Build passes** successfully in the sandbox.
-2. **All tests pass**, and new functionality is covered by tests.
-3. The PR is **limited to scope** with no unrelated changes.
-4. Code is **fully commented** and follows project conventions.
-5. Logging is implemented and functional.
-6. Documentation or rationale conflicts (if any) are flagged and approved.
+1. The **build succeeds** without errors.
+2. The PR is **limited to scope** with no unrelated changes.
+3. Code is **fully commented** and follows project conventions.
+4. Logging is implemented and functional.
+5. Documentation or rationale conflicts (if any) are flagged and approved.
 
 ---
 
-## 11) Repository synchronization
+## 10) Repository synchronization
 
 - Operate on the **snapshot** of the assigned branch at task start.
 - Before writing code, ensure the environment is synced to the latest `origin/<branch>` commit.
@@ -120,11 +105,12 @@ A Codex task is considered **complete** only if all of the following hold:
 
 ---
 
-## 12) Documentation awareness
+## 11) Documentation awareness
 
 - Before editing or adding code, **read** the relevant documentation:
   - `docs/project_documentation.md`
   - `docs/ragionamenti.md`
+  - any relevant subfile under `docs/`
 - If proposed changes **conflict** with documentation, Codex must:
   1. Flag a **“Design Conflict”** in the PR.
   2. Request confirmation from the user before proceeding further.
@@ -132,7 +118,7 @@ A Codex task is considered **complete** only if all of the following hold:
 
 ---
 
-## 13) Rule violation & conflict reporting
+## 12) Rule violation & conflict reporting
 
 - If Codex cannot satisfy all constraints due to limitations (e.g., missing stdlib feature, dependency need, conflicting rule), it must:
   1. Stop and describe the conflict in PR comments.
@@ -140,27 +126,26 @@ A Codex task is considered **complete** only if all of the following hold:
 
 ---
 
-## 14) Atomicity & granularity of changes
+## 13) Atomicity & granularity of changes
 
 - Large changes must be split into smaller, reviewable steps (separate PRs).
 - Each PR should handle **one logical modification** only — e.g., “add logging”, “fix HTTP method validation”, “refactor config parser”.
 
 ---
 
-## 15) Version control & commit conventions
+## 14) Version control & commit conventions
 
 - **PR title format:** `[Service|Module] — <short action>: <goal>`  
   Example: `aggregator — add slog and /health handler`
 - **PR body must include:**
   - Diff Summary & Notes
   - Design Rationale
-  - Test instructions
   - Impacts, risks, migration notes (if any)
 - **Commit messages:** imperative style (e.g., “Add logging middleware”), one logical change per commit.
 
 ---
 
-## 16) Limitations & escalation
+## 15) Limitations & escalation
 
 - If a task cannot be completed within current Codex capabilities (e.g., missing environment tools, blocked dependency, ambiguous design), Codex must:
   - Halt the task,
@@ -169,17 +154,17 @@ A Codex task is considered **complete** only if all of the following hold:
 
 ---
 
-## 17) Behavioral checklist
+## 16) Behavioral checklist
 
-- Always operate on the latest repo snapshot.
-- Ensure all builds and tests pass before PR completion.
-- Always use `log/slog` for logging.
-- Always follow Docker base images (`golang:1.23-alpine`, `alpine:3.20`).
-- Comment and document every significant code section.
-- Produce clear, human-readable PRs and commit messages.
-- Never edit beyond scope or skip testing.
-- Never use non-standard libraries without explicit permission.
-- Never silently ignore contradictions with project documentation.
+-  Always operate on the latest repo snapshot.
+-  Ensure the build passes before PR completion.
+-  Always use `log/slog` for logging.
+-  Always follow Docker base images (`golang:1.23-alpine`, `alpine:3.20`).
+-  Comment and document every significant code section.
+-  Produce clear, human-readable PRs and commit messages.
+-  Never edit beyond scope or modify unrelated code.
+-  Never use non-standard libraries without explicit permission.
+-  Never silently ignore contradictions with project documentation.
 
 ---
 
