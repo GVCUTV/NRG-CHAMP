@@ -1,4 +1,4 @@
-// v4
+// v3
 // main.go
 
 package main
@@ -79,8 +79,6 @@ func main() {
 			cancel()
 		}
 	}()
-
-	sim.logActuatorSample()
 
 	<-stop
 	logger.Info("shutdown signal received")

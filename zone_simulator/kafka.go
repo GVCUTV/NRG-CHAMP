@@ -1,4 +1,4 @@
-// v2
+// v1
 // kafka.go
 
 package main
@@ -27,8 +27,9 @@ type TempReading struct {
 	TempC float64 `json:"tempC"`
 }
 type ActuatorReading struct {
-	State   string  `json:"state"`
-	PowerKW float64 `json:"powerKW"`
+	State     string  `json:"state"`
+	PowerW    float64 `json:"powerW"`
+	EnergyKWh float64 `json:"energyKWh"`
 }
 
 type ActuatorCommand struct {

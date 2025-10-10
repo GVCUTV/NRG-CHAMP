@@ -1,11 +1,10 @@
-// v3
+// v2
 // simulate.go
 package main
 
 import (
 	"context"
 	"github.com/segmentio/kafka-go"
-	"strconv"
 	"time"
 )
 
@@ -51,6 +50,26 @@ func (s *Simulator) startPhysicsLoop(ctx context.Context) {
 				// temperature change
 				s.tIn += (qTotal * dt) / Cth
 
+				// energy meters (convert W*s to kWh)
+				if s.heat == ModeOn {
+					s.heatKWh += (s.cfg.HeatPowerW * dt / 3600.0) / 1000.0
+				}
+				if s.cool == ModeOn {
+					s.coolKWh += (s.cfg.CoolPowerW * dt / 3600.0) / 1000.0
+				}
+				var fanW float64
+				switch s.vent {
+				case 25:
+					fanW = s.cfg.FanW25
+				case 50:
+					fanW = s.cfg.FanW50
+				case 75:
+					fanW = s.cfg.FanW75
+				case 100:
+					fanW = s.cfg.FanW100
+				}
+				s.fanKWh += (fanW * dt / 3600.0) / 1000.0
+
 				s.lastE = now
 				s.mu.Unlock()
 			case <-ctx.Done():
@@ -74,7 +93,7 @@ func (s *Simulator) startPublisher(ctx context.Context, w *kafka.Writer, deviceI
 		for {
 			select {
 			case now := <-ticker.C:
-				tIn, _, heat, cool, vent, hKW, cKW, fKW := s.snapshot()
+				tIn, _, heat, cool, vent, hKWh, cKWh, fKWh := s.snapshot()
 				switch devType {
 				case DeviceTempSensor:
 					_ = publish(ctx, s.log, w, Reading{
@@ -85,7 +104,10 @@ func (s *Simulator) startPublisher(ctx context.Context, w *kafka.Writer, deviceI
 						Reading:    TempReading{TempC: tIn},
 					})
 				case DeviceHeating:
-					ar := ActuatorReading{State: string(heat), PowerKW: hKW}
+					ar := ActuatorReading{State: string(heat), PowerW: 0, EnergyKWh: hKWh}
+					if heat == ModeOn {
+						ar.PowerW = s.cfg.HeatPowerW
+					}
 					_ = publish(ctx, s.log, w, Reading{
 						DeviceID:   deviceID,
 						DeviceType: DeviceHeating,
@@ -94,7 +116,10 @@ func (s *Simulator) startPublisher(ctx context.Context, w *kafka.Writer, deviceI
 						Reading:    ar,
 					})
 				case DeviceCooling:
-					ar := ActuatorReading{State: string(cool), PowerKW: cKW}
+					ar := ActuatorReading{State: string(cool), PowerW: 0, EnergyKWh: cKWh}
+					if cool == ModeOn {
+						ar.PowerW = s.cfg.CoolPowerW
+					}
 					_ = publish(ctx, s.log, w, Reading{
 						DeviceID:   deviceID,
 						DeviceType: DeviceCooling,
@@ -103,7 +128,18 @@ func (s *Simulator) startPublisher(ctx context.Context, w *kafka.Writer, deviceI
 						Reading:    ar,
 					})
 				case DeviceVentilation:
-					ar := ActuatorReading{State: strconv.Itoa(vent), PowerKW: fKW}
+					var power float64
+					switch vent {
+					case 25:
+						power = s.cfg.FanW25
+					case 50:
+						power = s.cfg.FanW50
+					case 75:
+						power = s.cfg.FanW75
+					case 100:
+						power = s.cfg.FanW100
+					}
+					ar := ActuatorReading{State: s.ventState(), PowerW: power, EnergyKWh: fKWh}
 					_ = publish(ctx, s.log, w, Reading{
 						DeviceID:   deviceID,
 						DeviceType: DeviceVentilation,
