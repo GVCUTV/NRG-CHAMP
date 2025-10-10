@@ -1,14 +1,17 @@
-// v0
+// v1
 // README.md
 # Assessment Service (Service 5)
 
 **Purpose**: Compute KPIs strictly from the **Ledger** service and expose them via HTTP.
 
 ## KPIs
-- `comfort_time_pct`: percentage of time within tolerance of target temperature.
-- `anomaly_count`: count of anomaly events.
-- `mean_dev`: mean absolute deviation from target temperature (°C).
-- `actuator_on_pct`: percentage of time at least one actuator is ON.
+Both `GET /kpi/summary` and `GET /kpi/series` return the KPIs defined below.
+
+### KPI definitions
+- `comfort_time_pct`: Time-weighted percentage of the window `[from, to)` during which the absolute temperature error `|temp - target|` is less than or equal to the tolerance. Weighting follows the duration between consecutive readings within the window, so intervals without telemetry do not contribute to the numerator or denominator.
+- `mean_dev`: Sample-weighted mean absolute deviation, in °C, between each temperature reading observed in `[from, to)` and the target temperature. Every reading contributes equally regardless of spacing.
+- `actuator_on_pct`: Percentage of the window duration, in seconds, where at least one actuator is ON. Computed as the overlap between ON intervals and `[from, to)` divided by the window length (falls back to one second if `to <= from` to avoid division by zero).
+- `anomaly_count`: Count of anomaly events supplied by the Ledger with timestamps in `[from, to)`. The service uses the events as delivered, so upstream filtering governs membership in the window.
 
 ## API
 - `GET /health`
