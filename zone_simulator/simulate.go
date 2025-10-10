@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"github.com/segmentio/kafka-go"
+	"strconv"
 	"time"
 )
 
@@ -102,7 +103,7 @@ func (s *Simulator) startPublisher(ctx context.Context, w *kafka.Writer, deviceI
 						Reading:    ar,
 					})
 				case DeviceVentilation:
-					ar := ActuatorReading{State: s.ventState(), PowerKW: fKW}
+					ar := ActuatorReading{State: strconv.Itoa(vent), PowerKW: fKW}
 					_ = publish(ctx, s.log, w, Reading{
 						DeviceID:   deviceID,
 						DeviceType: DeviceVentilation,
