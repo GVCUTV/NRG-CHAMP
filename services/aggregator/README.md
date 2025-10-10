@@ -18,3 +18,9 @@ Run locally:
   go run ./aggregator/cmd/server -props ./aggregator/aggregator.properties
 
 Properties are in `aggregator.properties` (see that file for docs).
+
+## Smoke Test
+
+After launching the aggregator with `go run ./aggregator/cmd/server -props ./aggregator/aggregator.properties`,
+verify logs emit both `kafka_read_raw` and `kafka_decoded` with non-zero counts for each partition. This
+confirms the reader is consuming messages and decoding payloads before forwarding zone-aggregated epochs.
