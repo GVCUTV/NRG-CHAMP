@@ -1,5 +1,5 @@
-// v1
-// Dockerfile
+# v1
+# Dockerfile
 FROM golang:1.22-alpine AS build
 WORKDIR /src
 COPY . .
