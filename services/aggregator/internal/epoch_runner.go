@@ -1,4 +1,4 @@
-// Package internal v8
+// Package internal v9
 // file: internal/epoch_runner.go
 package internal
 
@@ -26,6 +26,7 @@ func Start(ctx context.Context, log *slog.Logger, cfg Config, io IO, h *Health) 
 	defer ticker.Stop()
 	// random delay to avoid thundering herd
 	time.Sleep(time.Duration(rand.Intn(50)) * time.Millisecond)
+	energyState := NewEnergyState()
 
 	for {
 		select {
@@ -35,7 +36,7 @@ func Start(ctx context.Context, log *slog.Logger, cfg Config, io IO, h *Health) 
 			return ctx.Err()
 		case now := <-ticker.C:
 			epoch := computeEpoch(now, cfg.Epoch)
-			if err := runEpoch(ctx, log, cfg, io, epoch); err != nil {
+			if err := runEpoch(ctx, log, cfg, io, epoch, energyState); err != nil {
 				if h != nil {
 					h.Error()
 				}
@@ -55,7 +56,7 @@ func computeEpoch(now time.Time, d time.Duration) EpochID {
 	return EpochID{Start: start, End: start.Add(d), Index: idx, Len: d}
 }
 
-func runEpoch(ctx context.Context, log *slog.Logger, cfg Config, io IO, ep EpochID) error {
+func runEpoch(ctx context.Context, log *slog.Logger, cfg Config, io IO, ep EpochID, energyState *EnergyState) error {
 	log.Info("epoch_start", "index", ep.Index, "start", ep.Start, "end", ep.End, "len_ms", ep.Len.Milliseconds())
 	for ti, topic := range cfg.Topics {
 		log.Info("topic_rr", "step", ti, "topic", topic)
@@ -77,7 +78,7 @@ func runEpoch(ctx context.Context, log *slog.Logger, cfg Config, io IO, ep Epoch
 				continue
 			}
 		}
-		agg := aggregate(topic, ep, allReadings, cfg.OutlierZ)
+		agg := aggregate(topic, ep, allReadings, cfg.OutlierZ, energyState)
 		if err := io.Producer.SendToMAPE(ctx, topic, agg); err != nil {
 			log.Error("produce_mape_err", "topic", topic, "err", err)
 			return err
