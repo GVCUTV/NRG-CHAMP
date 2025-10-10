@@ -1,130 +1,179 @@
-# AGENTS.md — Project Instruction Rules for NRG CHAMP
+# AGENTS.md — Codex Operational Rules for NRG CHAMP
 
-> **Apply these rules in every task unless explicitly overridden.**
-
----
-
-## 1. General Compliance & Change Control
-
-- Always obey **all** rules below — do not violate unless the user *explicitly instructs* you to break them.  
-- **Never** change what the user didn’t explicitly ask you to change — unless you first ask for permission.  
-- If you must break a rule (for a justified reason), you must **explicitly report** it at the start of your output, *after the diff section*, explaining:
-  1. Which rule was broken  
-  2. How it was broken  
-  3. Why the break was necessary  
+> **Purpose:**  
+> These rules define how **Codex** must operate when performing automated coding tasks in the NRG CHAMP project.  
+> Codex acts as the **implementation and integration agent**, executing precise prompts provided by GPT or the user.  
+> Codex produces **code, diffs, PRs, and documentation updates** — not plans or high-level designs.
 
 ---
 
-## 2. Diff & Rule Violation Reporting
+## 1) General compliance & scope discipline
 
-- Every output must begin with a **clear diff summary**, showing all added, removed, or modified lines/files.  
-- Immediately after the diff, if any rule was broken, include a **“Rule Violation Report”** section.  
-- Only after those must you provide the actual code or content output.
-
----
-
-## 3. Output Format & File Generation
-
-- When generating code outputs, you must provide **downloadable files**.  
-- If multiple files are produced, package them into a **single zip archive**.  
-- You must **never** output the code in a non-downloadable (inline-only) form when full files or archives are expected.
+- Always obey **all rules** below unless explicitly instructed otherwise.
+- **Modify only** what the prompt explicitly defines. Never alter unrelated files or code.
+- If you must adjust surrounding code to make the project compile or run, keep the modification **minimal** and document it in your PR.
+- If a rule is broken for valid reasons, **report it** in the PR body or summary:
+  - which rule was broken,
+  - how, and
+  - why the exception was necessary.
 
 ---
 
-## 4. Full File, Ready-to-Drop
+## 2) Output & delivery expectations
 
-- Always generate **complete files**, not just snippets, unless explicitly told you can.  
-- The output files must be **ready-to-drop**: I should be able to replace existing files without needing manual edits.  
-- You must **preserve any code you did not intend to modify** (imports, comments, structure) exactly as is.
+- **Default output:** A **branch + pull request (PR)** with a clear **Git diff** and descriptive commit messages.
+- Include a section titled **“Diff Summary & Notes”** in the PR body explaining the main changes in human-readable form.
+- Keep changes atomic — prefer several small PRs over one large PR.
+- For local deployment, code must be **ready-to-drop** (fully replaceable without manual editing).
 
 ---
 
-## 5. Versioning & File Header
+## 3) File completeness & version headers
 
-- Each file must begin with a version comment on the **first line**, e.g.:
+- Each created or modified file must start with:
   ```go
-  // v3
-  // myservice.go
-  ```  
-- That version must be **incremented** from the previous version (v2 → v3, etc.).  
-- If no previous version is known, start from **v0**.  
-- The second line must include the file name, as shown above.
+  // vN        // increment previous version, or start at v0 if unknown
+  // path/to/file.go
+  ```
+- Always generate **complete files**, preserving code not intended to be modified.
+- The output must be **production-ready** and buildable as-is.
 
 ---
 
-## 6. Commenting & Design Rationale
+## 4) Commenting & design rationale
 
-- All code must be **fully commented** with natural, human-style explanations (no AI disclaimers).  
-- If you make design choices, short rationale or justification follows in comments or a small note after the code.
-
----
-
-## 7. Logging Policy
-
-- Every operation executed by the code must be logged to **both**:
-  1. Standard output (console)  
-  2. A logfile  
-- **Always** use Go’s **`slog`** (or `log/slog`) for all logging — no alternative logging libraries.
+- Code must be **fully commented** in natural, human-like style (never mention AI).
+- At the end of the PR body, include a short **Design Rationale** section describing:
+  - Why this approach was chosen
+  - Any trade-offs or limitations considered
 
 ---
 
-## 8. Package / Dependency Policy
+## 5) Logging policy
 
-- Use only **Go standard libraries** unless explicitly instructed otherwise.  
-- If you determine a needed library is not in the standard library, you must **stop** and ask me how to proceed (which library to use or what alternative).
-
----
-
-## 9. Docker / Build / Runtime Rules
-
-- For any Dockerfile:
-  - **Build stage** must use `golang:1.23-alpine`.  
-  - **Runtime stage** must use `alpine:3.20`.  
-  - If a health check endpoint is required, it should use `/health` (GET) to confirm service status.
+- Every functional operation in the code must log to **both** stdout **and** a logfile.
+- Use **Go’s `log/slog`** exclusively.
+- Do not use alternative logging libraries unless the user explicitly allows it.
 
 ---
 
-## 10. HTTP Method Discipline
+## 6) Library & dependency policy
 
-- In server/handler code, each endpoint must **only accept the correct HTTP method**:
-  - `GET` for reads/status  
-  - `POST` for commands or updates  
-  - `PUT` / `PATCH` for config changes  
-  - `DELETE` for removals  
-- Reject or error on other methods.
+- Use **Go standard libraries only** unless explicitly instructed otherwise.
+- If a library outside the stdlib is required, **pause execution** and open a PR comment explaining the need and suggesting alternatives.
 
 ---
 
-## 11. Handling Limitations & Uncertainty
+## 7) Docker, build & runtime policy
 
-- If you believe a part of my prompt is **unrealizable** due to your current GPT version or system constraints, **stop execution** and explicitly **notify me**:
-  - Which part is problematic  
-  - Why it’s not feasible  
-  - Propose alternative prompt or adjustment
-
----
-
-## 12. Task Instructions & Scope in Prompts
-
-- Prompts should always specify:
-  1. **What** needs to change (goal)  
-  2. **Which files or modules** are affected  
-  3. What must **not be changed**  
-- If needed, the prompt can specify the **last known version number** for continuity.
+- **Dockerfiles** must follow this convention:
+  - **Build stage:** `golang:1.23-alpine`
+  - **Runtime stage:** `alpine:3.20`
+- If a health-check endpoint is required, implement it at `GET /health` returning HTTP 200 with a minimal JSON or text payload.
 
 ---
 
-## 13. Echo / Confirmation
+## 8) HTTP endpoint discipline
 
-- Before you produce final code, you may **echo back your understanding of the rules** or specific constraints for that task so I confirm correctness.  
-- If your echo is wrong or incomplete, I can correct it before you generate full output.
-
----
-
-## 14. Incremental / Subtask Approach
-
-- For large or complex changes, break them into **smaller subtasks** (e.g. “first add logging,” “then modify endpoint logic”) so rule compliance is easier to enforce and review.
+- Each endpoint must accept **only** the correct HTTP method:
+  - `GET` for reads/status
+  - `POST` for create/execute commands
+  - `PUT` / `PATCH` for configuration updates
+  - `DELETE` for deletions
+- Reject all other methods with appropriate status codes.
 
 ---
 
-**End of AGENTS.md**
+## 9) Definition of Done (DoD)
+
+A Codex task is considered **complete** only if all of the following hold:
+
+1. The **build succeeds** without errors.
+2. The PR is **limited to scope** with no unrelated changes.
+3. Code is **fully commented** and follows project conventions.
+4. Logging is implemented and functional.
+5. Documentation or rationale conflicts (if any) are flagged and approved.
+
+---
+
+## 10) Repository synchronization
+
+- Operate on the **snapshot** of the assigned branch at task start.
+- Before writing code, ensure the environment is synced to the latest `origin/<branch>` commit.
+- Include the current **HEAD commit hash** in the PR description.
+- If the branch changes upstream during task execution, **stop** and request a restart.
+
+---
+
+## 11) Documentation awareness
+
+- Before editing or adding code, **read** the relevant documentation:
+  - `docs/project_documentation.md`
+  - `docs/ragionamenti.md`
+  - any relevant subfile under `docs/`
+- If proposed changes **conflict** with documentation, Codex must:
+  1. Flag a **“Design Conflict”** in the PR.
+  2. Request confirmation from the user before proceeding further.
+- Never override documentation assumptions silently.
+
+---
+
+## 12) Rule violation & conflict reporting
+
+- If Codex cannot satisfy all constraints due to limitations (e.g., missing stdlib feature, dependency need, conflicting rule), it must:
+  1. Stop and describe the conflict in PR comments.
+  2. Suggest possible resolutions or alternatives.
+
+---
+
+## 13) Atomicity & granularity of changes
+
+- Large changes must be split into smaller, reviewable steps (separate PRs).
+- Each PR should handle **one logical modification** only — e.g., “add logging”, “fix HTTP method validation”, “refactor config parser”.
+
+---
+
+## 14) Version control & commit conventions
+
+- **PR title format:** `[Service|Module] — <short action>: <goal>`  
+  Example: `aggregator — add slog and /health handler`
+- **PR body must include:**
+  - Diff Summary & Notes
+  - Design Rationale
+  - Impacts, risks, migration notes (if any)
+- **Commit messages:** imperative style (e.g., “Add logging middleware”), one logical change per commit.
+
+---
+
+## 15) Limitations & escalation
+
+- If a task cannot be completed within current Codex capabilities (e.g., missing environment tools, blocked dependency, ambiguous design), Codex must:
+  - Halt the task,
+  - State the limitation explicitly, and
+  - Suggest how the user or GPT could revise the prompt.
+
+---
+
+## 16) Behavioral checklist
+
+-  Always operate on the latest repo snapshot.
+-  Ensure the build passes before PR completion.
+-  Always use `log/slog` for logging.
+-  Always follow Docker base images (`golang:1.23-alpine`, `alpine:3.20`).
+-  Comment and document every significant code section.
+-  Produce clear, human-readable PRs and commit messages.
+-  Never edit beyond scope or modify unrelated code.
+-  Never use non-standard libraries without explicit permission.
+-  Never silently ignore contradictions with project documentation.
+
+---
+
+## 17) Branching rules
+- Always use the existing branch named `codex/codex` for all pushes.
+- Do **not** create a new branch for each task.
+- Commit all Codex-generated changes to the `codex/codex` branch.
+- If the branch does not exist, create it once and reuse it.
+
+---
+
+**End of AGENTS.md — Codex Operational Rules**
