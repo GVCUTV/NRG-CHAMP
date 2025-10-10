@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/ingest/kafka.go
 package ingest
 
@@ -26,6 +26,8 @@ type Config struct {
 	Zones               []string
 	PartitionAggregator int
 	PartitionMAPE       int
+	GracePeriod         time.Duration
+	BufferMaxEpochs     int
 }
 
 // Manager tracks the lifecycle of all background consumers.
@@ -53,6 +55,14 @@ func Start(ctx context.Context, cfg Config, st *storage.FileLedger, log *slog.Lo
 	}
 
 	mgr := &Manager{}
+	grace := cfg.GracePeriod
+	if grace <= 0 {
+		grace = 2 * time.Second
+	}
+	bufferMax := cfg.BufferMaxEpochs
+	if bufferMax <= 0 {
+		bufferMax = 200
+	}
 	for _, zone := range cfg.Zones {
 		topic := strings.ReplaceAll(cfg.TopicTemplate, "{zone}", zone)
 		reader := kafka.NewReader(kafka.ReaderConfig{
@@ -63,7 +73,7 @@ func Start(ctx context.Context, cfg Config, st *storage.FileLedger, log *slog.Lo
 			MinBytes:    1,
 			MaxBytes:    10e6,
 		})
-		consumer := newZoneConsumer(zone, topic, reader, st, log.With(slog.String("zone", zone)), cfg.PartitionAggregator, cfg.PartitionMAPE)
+		consumer := newZoneConsumer(zone, topic, reader, st, log.With(slog.String("zone", zone)), cfg.PartitionAggregator, cfg.PartitionMAPE, grace, bufferMax)
 		mgr.consumers = append(mgr.consumers, consumer)
 		mgr.wg.Add(1)
 		go func(zc *zoneConsumer) {
@@ -88,10 +98,13 @@ type zoneConsumer struct {
 
 	partAgg  int
 	partMape int
+	grace    time.Duration
+	buffer   int
 
-	mu          sync.Mutex
-	pendingAgg  map[int64]pendingAgg
-	pendingMape map[int64]pendingMape
+	mu        sync.Mutex
+	pending   map[int64]*matchState
+	finalized map[int64]time.Time
+	order     []int64
 }
 
 type pendingAgg struct {
@@ -106,17 +119,32 @@ type pendingMape struct {
 	received time.Time
 }
 
-func newZoneConsumer(zone, topic string, reader *kafka.Reader, st *storage.FileLedger, log *slog.Logger, partAgg, partMape int) *zoneConsumer {
+// matchState stores the partial information gathered for a zone/epoch pair while waiting for both counterparts.
+type matchState struct {
+	agg       *pendingAgg
+	mape      *pendingMape
+	firstSeen time.Time
+}
+
+// pendingFinalize wraps data ready for persistence after grace expiration or counterpart arrival.
+type pendingFinalize struct {
+	epoch int64
+	state *matchState
+}
+
+func newZoneConsumer(zone, topic string, reader *kafka.Reader, st *storage.FileLedger, log *slog.Logger, partAgg, partMape int, grace time.Duration, buffer int) *zoneConsumer {
 	return &zoneConsumer{
-		zone:        zone,
-		topic:       topic,
-		reader:      reader,
-		storage:     st,
-		log:         log,
-		partAgg:     partAgg,
-		partMape:    partMape,
-		pendingAgg:  make(map[int64]pendingAgg),
-		pendingMape: make(map[int64]pendingMape),
+		zone:      zone,
+		topic:     topic,
+		reader:    reader,
+		storage:   st,
+		log:       log,
+		partAgg:   partAgg,
+		partMape:  partMape,
+		grace:     grace,
+		buffer:    buffer,
+		pending:   make(map[int64]*matchState),
+		finalized: make(map[int64]time.Time),
 	}
 }
 
@@ -129,11 +157,22 @@ func (zc *zoneConsumer) run(ctx context.Context) {
 	zc.log.Info("consumer_start", slog.String("topic", zc.topic))
 
 	backoff := time.Second
+	wait := zc.grace
+	if wait <= 0 {
+		wait = 2 * time.Second
+	}
 	for {
-		msg, err := zc.reader.FetchMessage(ctx)
+		fetchCtx, cancel := context.WithTimeout(ctx, wait)
+		msg, err := zc.reader.FetchMessage(fetchCtx)
+		cancel()
 		if err != nil {
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+				zc.handleExpired(time.Now().UTC(), false, ctx)
+				continue
+			}
+			if errors.Is(err, context.Canceled) || ctx.Err() != nil {
 				zc.log.Info("consumer_stop", slog.String("reason", "context"))
+				zc.handleExpired(time.Now().UTC(), true, ctx)
 				return
 			}
 			zc.log.Error("fetch_err", slog.Any("err", err))
@@ -176,6 +215,7 @@ func (zc *zoneConsumer) handleMessage(msg kafka.Message) ([]kafka.Message, error
 }
 
 func (zc *zoneConsumer) handleAggregator(msg kafka.Message) ([]kafka.Message, error) {
+	zc.log.Debug("aggregator_msg", slog.Int64("offset", msg.Offset), slog.Int("partition", msg.Partition))
 	var agg aggregatedEpoch
 	if err := json.Unmarshal(msg.Value, &agg); err != nil {
 		return []kafka.Message{msg}, fmt.Errorf("decode aggregator: %w", err)
@@ -183,41 +223,39 @@ func (zc *zoneConsumer) handleAggregator(msg kafka.Message) ([]kafka.Message, er
 	if agg.ZoneID != "" && !strings.EqualFold(agg.ZoneID, zc.zone) {
 		zc.log.Warn("zone_mismatch", slog.String("payloadZone", agg.ZoneID), slog.String("topic", zc.topic))
 	}
-	entry := pendingAgg{msg: msg, data: agg, received: time.Now().UTC()}
-
-	var matched pendingMape
-	matchedFound := false
+	now := time.Now().UTC()
 
 	zc.mu.Lock()
-	if _, exists := zc.pendingAgg[agg.Epoch.Index]; exists {
-		zc.log.Warn("duplicate_aggregator", slog.Int64("epoch", agg.Epoch.Index))
+	if zc.isFinalizedLocked(agg.Epoch.Index) {
+		zc.mu.Unlock()
+		zc.log.Info("aggregator_duplicate_finalized", slog.Int64("epoch", agg.Epoch.Index), slog.Int64("offset", msg.Offset))
+		return []kafka.Message{msg}, nil
 	}
-	zc.pendingAgg[agg.Epoch.Index] = entry
-	if mp, ok := zc.pendingMape[agg.Epoch.Index]; ok {
-		matched = mp
-		matchedFound = true
-		delete(zc.pendingAgg, agg.Epoch.Index)
-		delete(zc.pendingMape, agg.Epoch.Index)
+	state := zc.getOrCreateLocked(agg.Epoch.Index, now)
+	if state.agg != nil {
+		zc.mu.Unlock()
+		zc.log.Warn("duplicate_aggregator", slog.Int64("epoch", agg.Epoch.Index), slog.Int64("offset", msg.Offset))
+		return []kafka.Message{msg}, nil
+	}
+	state.agg = &pendingAgg{msg: msg, data: agg, received: now}
+	if state.mape != nil {
+		delete(zc.pending, agg.Epoch.Index)
+		zc.mu.Unlock()
+		commits, err := zc.finalize(agg.Epoch.Index, state, false)
+		if err != nil {
+			zc.requeue(agg.Epoch.Index, state)
+			return nil, err
+		}
+		return commits, nil
 	}
 	zc.mu.Unlock()
 
-	if !matchedFound {
-		zc.log.Info("aggregator_pending", slog.Int64("epoch", agg.Epoch.Index), slog.Int64("offset", msg.Offset))
-		return nil, nil
-	}
-
-	if err := zc.persistMatch(agg.Epoch.Index, entry, matched); err != nil {
-		zc.mu.Lock()
-		zc.pendingAgg[agg.Epoch.Index] = entry
-		zc.pendingMape[agg.Epoch.Index] = matched
-		zc.mu.Unlock()
-		return nil, err
-	}
-	zc.log.Info("epoch_committed", slog.Int64("epoch", agg.Epoch.Index), slog.Int64("aggOffset", entry.msg.Offset), slog.Int64("mapeOffset", matched.msg.Offset))
-	return []kafka.Message{entry.msg, matched.msg}, nil
+	zc.log.Info("aggregator_pending", slog.Int64("epoch", agg.Epoch.Index), slog.Int64("offset", msg.Offset))
+	return nil, nil
 }
 
 func (zc *zoneConsumer) handleMape(msg kafka.Message) ([]kafka.Message, error) {
+	zc.log.Debug("mape_msg", slog.Int64("offset", msg.Offset), slog.Int("partition", msg.Partition))
 	var led mapeLedgerEvent
 	if err := json.Unmarshal(msg.Value, &led); err != nil {
 		return []kafka.Message{msg}, fmt.Errorf("decode mape: %w", err)
@@ -225,48 +263,76 @@ func (zc *zoneConsumer) handleMape(msg kafka.Message) ([]kafka.Message, error) {
 	if led.ZoneID != "" && !strings.EqualFold(led.ZoneID, zc.zone) {
 		zc.log.Warn("zone_mismatch", slog.String("payloadZone", led.ZoneID), slog.String("topic", zc.topic))
 	}
-	entry := pendingMape{msg: msg, data: led, received: time.Now().UTC()}
-
-	var matched pendingAgg
-	matchedFound := false
+	now := time.Now().UTC()
 
 	zc.mu.Lock()
-	if _, exists := zc.pendingMape[led.EpochIndex]; exists {
-		zc.log.Warn("duplicate_mape", slog.Int64("epoch", led.EpochIndex))
+	if zc.isFinalizedLocked(led.EpochIndex) {
+		zc.mu.Unlock()
+		zc.log.Info("mape_duplicate_finalized", slog.Int64("epoch", led.EpochIndex), slog.Int64("offset", msg.Offset))
+		return []kafka.Message{msg}, nil
 	}
-	zc.pendingMape[led.EpochIndex] = entry
-	if ag, ok := zc.pendingAgg[led.EpochIndex]; ok {
-		matched = ag
-		matchedFound = true
-		delete(zc.pendingMape, led.EpochIndex)
-		delete(zc.pendingAgg, led.EpochIndex)
+	state := zc.getOrCreateLocked(led.EpochIndex, now)
+	if state.mape != nil {
+		zc.mu.Unlock()
+		zc.log.Warn("duplicate_mape", slog.Int64("epoch", led.EpochIndex), slog.Int64("offset", msg.Offset))
+		return []kafka.Message{msg}, nil
+	}
+	state.mape = &pendingMape{msg: msg, data: led, received: now}
+	if state.agg != nil {
+		delete(zc.pending, led.EpochIndex)
+		zc.mu.Unlock()
+		commits, err := zc.finalize(led.EpochIndex, state, false)
+		if err != nil {
+			zc.requeue(led.EpochIndex, state)
+			return nil, err
+		}
+		return commits, nil
 	}
 	zc.mu.Unlock()
 
-	if !matchedFound {
-		zc.log.Info("mape_pending", slog.Int64("epoch", led.EpochIndex), slog.Int64("offset", msg.Offset))
-		return nil, nil
-	}
-
-	if err := zc.persistMatch(led.EpochIndex, matched, entry); err != nil {
-		zc.mu.Lock()
-		zc.pendingAgg[led.EpochIndex] = matched
-		zc.pendingMape[led.EpochIndex] = entry
-		zc.mu.Unlock()
-		return nil, err
-	}
-	zc.log.Info("epoch_committed", slog.Int64("epoch", led.EpochIndex), slog.Int64("aggOffset", matched.msg.Offset), slog.Int64("mapeOffset", entry.msg.Offset))
-	return []kafka.Message{matched.msg, entry.msg}, nil
+	zc.log.Info("mape_pending", slog.Int64("epoch", led.EpochIndex), slog.Int64("offset", msg.Offset))
+	return nil, nil
 }
 
-func (zc *zoneConsumer) persistMatch(epoch int64, agg pendingAgg, led pendingMape) error {
+// finalize persists a matched epoch, optionally imputing missing sides, and returns messages to acknowledge.
+func (zc *zoneConsumer) finalize(epoch int64, state *matchState, allowImpute bool) ([]kafka.Message, error) {
+	if state == nil {
+		return nil, fmt.Errorf("missing match state")
+	}
+
+	zc.mu.Lock()
+	if zc.isFinalizedLocked(epoch) {
+		zc.mu.Unlock()
+		zc.log.Info("epoch_already_finalized", slog.Int64("epoch", epoch))
+		return zc.messagesForCommit(state), nil
+	}
+	zc.mu.Unlock()
+
+	aggData, aggReceived, aggImputed, mapeData, mapeReceived, mapeImputed := imputeMissingSide(zc.zone, epoch, state.agg, state.mape)
+	if (!allowImpute) && (aggImputed || mapeImputed) {
+		return nil, fmt.Errorf("imputation not allowed for epoch %d", epoch)
+	}
+
+	if err := zc.persistMatch(epoch, aggData, aggReceived, mapeData, mapeReceived); err != nil {
+		return nil, err
+	}
+
+	zc.mu.Lock()
+	zc.markFinalizedLocked(epoch)
+	zc.mu.Unlock()
+
+	zc.log.Info("epoch_committed", slog.Int64("epoch", epoch), slog.Bool("aggregatorImputed", aggImputed), slog.Bool("mapeImputed", mapeImputed))
+	return zc.messagesForCommit(state), nil
+}
+
+func (zc *zoneConsumer) persistMatch(epoch int64, agg aggregatedEpoch, aggReceived time.Time, led mapeLedgerEvent, ledReceived time.Time) error {
 	payload := combinedPayload{
 		ZoneID:             zc.zone,
 		EpochIndex:         epoch,
-		Aggregator:         agg.data,
-		AggregatorReceived: agg.received,
-		MAPE:               led.data,
-		MAPEReceived:       led.received,
+		Aggregator:         agg,
+		AggregatorReceived: aggReceived,
+		MAPE:               led,
+		MAPEReceived:       ledReceived,
 		MatchedAt:          time.Now().UTC(),
 	}
 	body, err := json.Marshal(payload)
@@ -285,6 +351,201 @@ func (zc *zoneConsumer) persistMatch(epoch int64, agg pendingAgg, led pendingMap
 		return fmt.Errorf("append ledger: %w", err)
 	}
 	return nil
+}
+
+// getOrCreateLocked fetches an existing matchState for epoch or creates a new one while the mutex is held.
+func (zc *zoneConsumer) getOrCreateLocked(epoch int64, now time.Time) *matchState {
+	if st, ok := zc.pending[epoch]; ok {
+		if st.firstSeen.IsZero() || now.Before(st.firstSeen) {
+			st.firstSeen = now
+		}
+		return st
+	}
+	st := &matchState{firstSeen: now}
+	zc.pending[epoch] = st
+	return st
+}
+
+// isFinalizedLocked reports whether the epoch has been written to storage; caller must hold the mutex.
+func (zc *zoneConsumer) isFinalizedLocked(epoch int64) bool {
+	_, ok := zc.finalized[epoch]
+	return ok
+}
+
+// markFinalizedLocked tracks a freshly persisted epoch for duplicate suppression; caller must hold the mutex.
+func (zc *zoneConsumer) markFinalizedLocked(epoch int64) {
+	if zc.buffer <= 0 {
+		zc.buffer = 200
+	}
+	zc.finalized[epoch] = time.Now().UTC()
+	zc.order = append(zc.order, epoch)
+	if len(zc.order) > zc.buffer {
+		oldest := zc.order[0]
+		zc.order = zc.order[1:]
+		delete(zc.finalized, oldest)
+	}
+}
+
+// messagesForCommit returns the Kafka messages that should be acknowledged after persistence.
+func (zc *zoneConsumer) messagesForCommit(state *matchState) []kafka.Message {
+	commits := make([]kafka.Message, 0, 2)
+	if state.agg != nil {
+		commits = append(commits, state.agg.msg)
+	}
+	if state.mape != nil {
+		commits = append(commits, state.mape.msg)
+	}
+	return commits
+}
+
+// requeue restores a matchState into the pending map when persistence fails.
+func (zc *zoneConsumer) requeue(epoch int64, state *matchState) {
+	now := time.Now().UTC()
+	zc.mu.Lock()
+	if existing, ok := zc.pending[epoch]; ok {
+		if state.agg != nil {
+			existing.agg = state.agg
+		}
+		if state.mape != nil {
+			existing.mape = state.mape
+		}
+		if existing.firstSeen.IsZero() || state.firstSeen.Before(existing.firstSeen) {
+			existing.firstSeen = state.firstSeen
+		}
+		zc.mu.Unlock()
+		return
+	}
+	if state != nil {
+		if state.firstSeen.IsZero() {
+			state.firstSeen = now
+		}
+		zc.pending[epoch] = state
+	}
+	zc.mu.Unlock()
+}
+
+// handleExpired flushes any pending entries that exhausted the grace period or must be forced during shutdown.
+func (zc *zoneConsumer) handleExpired(now time.Time, force bool, ctx context.Context) {
+	expirations := zc.collectExpired(now, force)
+	for _, exp := range expirations {
+		commits, err := zc.finalize(exp.epoch, exp.state, true)
+		if err != nil {
+			zc.log.Error("expire_finalize_err", slog.Any("err", err), slog.Int64("epoch", exp.epoch))
+			zc.requeue(exp.epoch, exp.state)
+			continue
+		}
+		if len(commits) == 0 || zc.reader == nil {
+			continue
+		}
+		if err := zc.reader.CommitMessages(ctx, commits...); err != nil {
+			zc.log.Error("commit_err", slog.Any("err", err))
+		}
+	}
+}
+
+// collectExpired builds the list of epochs ready for persistence due to elapsed grace period.
+func (zc *zoneConsumer) collectExpired(now time.Time, force bool) []pendingFinalize {
+	zc.mu.Lock()
+	defer zc.mu.Unlock()
+	var out []pendingFinalize
+	for epoch, state := range zc.pending {
+		if state == nil {
+			delete(zc.pending, epoch)
+			continue
+		}
+		if state.agg != nil && state.mape != nil {
+			continue
+		}
+		if !force {
+			if zc.grace <= 0 {
+				continue
+			}
+			if state.firstSeen.IsZero() {
+				continue
+			}
+			if now.Sub(state.firstSeen) < zc.grace {
+				continue
+			}
+		}
+		out = append(out, pendingFinalize{epoch: epoch, state: state})
+		delete(zc.pending, epoch)
+	}
+	return out
+}
+
+// imputeMissingSide fabricates minimal placeholder data for whichever counterpart is missing.
+func imputeMissingSide(zone string, epoch int64, agg *pendingAgg, mape *pendingMape) (aggregatedEpoch, time.Time, bool, mapeLedgerEvent, time.Time, bool) {
+	now := time.Now().UTC()
+
+	var aggData aggregatedEpoch
+	var aggReceived time.Time
+	aggImputed := false
+	if agg != nil {
+		aggData = agg.data
+		aggReceived = agg.received
+	} else {
+		aggImputed = true
+		aggData = aggregatedEpoch{
+			ZoneID:     zone,
+			Epoch:      epochWindow{Index: epoch},
+			ByDevice:   map[string][]aggregatedReading{},
+			Summary:    map[string]float64{"imputed": 1},
+			ProducedAt: now,
+		}
+		if mape != nil {
+			if start, err := time.Parse(time.RFC3339, mape.data.Start); err == nil {
+				aggData.Epoch.Start = start
+			}
+			if end, err := time.Parse(time.RFC3339, mape.data.End); err == nil {
+				aggData.Epoch.End = end
+				if !aggData.Epoch.Start.IsZero() {
+					aggData.Epoch.Len = aggData.Epoch.End.Sub(aggData.Epoch.Start)
+				}
+			}
+		}
+		aggReceived = now
+	}
+	aggData.ZoneID = zone
+	aggData.Epoch.Index = epoch
+
+	var mapeData mapeLedgerEvent
+	var mapeReceived time.Time
+	mapeImputed := false
+	if mape != nil {
+		mapeData = mape.data
+		mapeReceived = mape.received
+	} else {
+		mapeImputed = true
+		start := ""
+		end := ""
+		if !aggData.Epoch.Start.IsZero() {
+			start = aggData.Epoch.Start.UTC().Format(time.RFC3339)
+		}
+		if !aggData.Epoch.End.IsZero() {
+			end = aggData.Epoch.End.UTC().Format(time.RFC3339)
+		}
+		var target float64
+		if aggData.Summary != nil {
+			target = aggData.Summary["targetC"]
+		}
+		mapeData = mapeLedgerEvent{
+			EpochIndex: epoch,
+			ZoneID:     zone,
+			Planned:    "hold",
+			TargetC:    target,
+			HystC:      0,
+			DeltaC:     0,
+			Fan:        0,
+			Start:      start,
+			End:        end,
+			Timestamp:  now.UnixMilli(),
+		}
+		mapeReceived = now
+	}
+	mapeData.ZoneID = zone
+	mapeData.EpochIndex = epoch
+
+	return aggData, aggReceived, aggImputed, mapeData, mapeReceived, mapeImputed
 }
 
 type combinedPayload struct {

@@ -1,4 +1,4 @@
-// v1
+// v2
 // k8s/configmap.yaml
 apiVersion: v1
 kind: ConfigMap
@@ -8,3 +8,8 @@ data:
   LEDGER_ADDR: ":8083"
   LEDGER_DATA: "/data"
   LEDGER_LOGS: "/logs"
+  LEDGER_KAFKA_BROKERS: "kafka:9092"
+  LEDGER_GROUP_ID: "ledger-service"
+  LEDGER_TOPIC_TEMPLATE: "ledger-{zone}"
+  LEDGER_EPOCH_GRACE_MS: "2000"
+  LEDGER_BUFFER_MAX_EPOCHS: "200"
