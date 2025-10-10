@@ -1,4 +1,4 @@
-// v1
+// v2
 // http.go
 
 package main
@@ -22,12 +22,12 @@ func (s *Simulator) handleStatus(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	tIn, tOut, heat, cool, vent, hKWh, cKWh, fKWh := s.snapshot()
+	tIn, tOut, heat, cool, vent, hKW, cKW, fKW := s.snapshot()
 	resp := map[string]any{
 		"zoneId": s.cfg.ZoneID, "t_in": tIn, "t_out": tOut,
 		"heating": heat, "cooling": cool, "ventilation": vent,
-		"energyKWh": map[string]float64{"heating": hKWh, "cooling": cKWh, "fan": fKWh},
-		"devices":   map[string]string{"tempSensor": s.tempSensorID, "heater": s.heatID, "cooler": s.coolID, "ventilation": s.fanID},
+		"powerKW": map[string]float64{"heating": hKW, "cooling": cKW, "fan": fKW},
+		"devices": map[string]string{"tempSensor": s.tempSensorID, "heater": s.heatID, "cooler": s.coolID, "ventilation": s.fanID},
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
