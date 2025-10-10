@@ -169,9 +169,9 @@ A Codex task is considered **complete** only if all of the following hold:
 ---
 
 ## 17) Branching rules
-- Always use the existing branch named `codex` for all pushes.
+- Always use the existing branch named `codex/codex` for all pushes.
 - Do **not** create a new branch for each task.
-- Commit all Codex-generated changes to the `codex` branch.
+- Commit all Codex-generated changes to the `codex/codex` branch.
 - If the branch does not exist, create it once and reuse it.
 
 ---
