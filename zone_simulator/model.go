@@ -1,4 +1,4 @@
-// v1
+// v2
 // model.go
 
 package main
@@ -38,10 +38,6 @@ type Simulator struct {
 	cool HVACMode
 	vent int
 
-	heatKWh float64
-	coolKWh float64
-	fanKWh  float64
-
 	lastE time.Time
 
 	tempSensorID string
@@ -63,38 +59,50 @@ func (s *Simulator) integrate(now time.Time) {
 
 	if s.heat == ModeOn {
 		s.tIn += s.cfg.HeatPowerW / 1000.0 * dt * 0.5
-		s.heatKWh += (s.cfg.HeatPowerW * dt) / 1000.0
 	}
 	if s.cool == ModeOn {
 		s.tIn -= s.cfg.CoolPowerW / 1000.0 * dt * 0.5
-		s.coolKWh += (s.cfg.CoolPowerW * dt) / 1000.0
 	}
 
 	ventEffect := float64(s.vent) / 100.0
 	s.tIn += (s.tOut - s.tIn) * (ventEffect * s.cfg.Beta * s.cfg.Step.Seconds())
 
-	var fanPower float64
-	switch s.vent {
-	case 25:
-		fanPower = s.cfg.FanW25
-	case 50:
-		fanPower = s.cfg.FanW50
-	case 75:
-		fanPower = s.cfg.FanW75
-	case 100:
-		fanPower = s.cfg.FanW100
-	default:
-		fanPower = 0
-	}
-	s.fanKWh += (fanPower * dt) / 1000.0
-
 	s.lastE = now
 }
 
-func (s *Simulator) snapshot() (tIn float64, tOut float64, heat HVACMode, cool HVACMode, vent int, heatKWh, coolKWh, fanKWh float64) {
+func (s *Simulator) snapshot() (tIn float64, tOut float64, heat HVACMode, cool HVACMode, vent int, heatKW, coolKW, fanKW float64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.tIn, s.tOut, s.heat, s.cool, s.vent, s.heatKWh, s.coolKWh, s.fanKWh
+
+	if s.heat == ModeOn {
+		heatKW = s.cfg.HeatPowerW / 1000.0
+	}
+	if s.cool == ModeOn {
+		coolKW = s.cfg.CoolPowerW / 1000.0
+	}
+
+	switch s.vent {
+	case 25:
+		fanKW = s.cfg.FanW25 / 1000.0
+	case 50:
+		fanKW = s.cfg.FanW50 / 1000.0
+	case 75:
+		fanKW = s.cfg.FanW75 / 1000.0
+	case 100:
+		fanKW = s.cfg.FanW100 / 1000.0
+	}
+
+	return s.tIn, s.tOut, s.heat, s.cool, s.vent, heatKW, coolKW, fanKW
+}
+
+func (s *Simulator) logActuatorSample() {
+	tIn, tOut, heat, cool, vent, heatKW, coolKW, fanKW := s.snapshot()
+	sample := map[string]ActuatorReading{
+		"heating":     {State: string(heat), PowerKW: heatKW},
+		"cooling":     {State: string(cool), PowerKW: coolKW},
+		"ventilation": {State: strconv.Itoa(vent), PowerKW: fanKW},
+	}
+	s.log.Info("actuator power sample", "zoneId", s.cfg.ZoneID, "t_in", tIn, "t_out", tOut, "sample", sample)
 }
 
 func (s *Simulator) ventState() string {
