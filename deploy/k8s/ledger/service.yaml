@@ -1,5 +1,5 @@
-// v1
-// k8s/service.yaml
+# v1
+# k8s/service.yaml
 apiVersion: v1
 kind: Service
 metadata:

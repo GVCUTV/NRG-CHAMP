@@ -1,10 +1,12 @@
-# v1
+# v2
 # Dockerfile
 FROM golang:1.22-alpine AS build
 WORKDIR /src
 COPY . .
-RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-	go build -o /out/ledger ./...
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    mkdir -p /out && \
+    go build -trimpath -ldflags="-s -w" -o /out/ledger .
 
 FROM alpine:3.20
 WORKDIR /app
