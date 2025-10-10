@@ -12,9 +12,9 @@ type Epoch struct {
 }
 
 type Summary struct {
-	AvgEnergyKWh float64 `json:"avgEnergyKWh"`
-	AvgPowerW    float64 `json:"avgPowerW"`
-	AvgTemp      float64 `json:"avgTemp"`
+	EpochEnergyKWh float64 `json:"epochEnergyKWh"`
+	AvgPowerW      float64 `json:"avgPowerW"`
+	AvgTemp        float64 `json:"avgTemp"`
 }
 
 type AggregatedReport struct {

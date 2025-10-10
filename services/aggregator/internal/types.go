@@ -24,8 +24,7 @@ type Reading struct {
 	Timestamp     time.Time      `json:"timestamp"`
 	Temperature   *float64       `json:"temperature,omitempty"`   // tempC for temp_sensor
 	ActuatorState *string        `json:"actuatorState,omitempty"` // ON/OFF or 0/25/50/75/100
-	PowerW        *float64       `json:"powerW,omitempty"`
-	EnergyKWh     *float64       `json:"energyKWh,omitempty"`
+	PowerKW       *float64       `json:"powerKW,omitempty"`
 	Extra         map[string]any `json:"-"` // removed in aggregated payloads
 }
 

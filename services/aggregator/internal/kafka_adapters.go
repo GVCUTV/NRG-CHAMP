@@ -122,11 +122,11 @@ func decodeReadingNewSchema(b []byte, topic string, brokerTS time.Time) (Reading
 		if s, ok := readingObj["state"].(string); ok {
 			r.ActuatorState = &s
 		}
-		if v, ok := toFloat(readingObj["powerW"]); ok {
-			r.PowerW = &v
-		}
-		if v, ok := toFloat(readingObj["energyKWh"]); ok {
-			r.EnergyKWh = &v
+		if v, ok := toFloat(readingObj["powerKW"]); ok {
+			r.PowerKW = &v
+		} else if v, ok := toFloat(readingObj["powerW"]); ok {
+			conv := v / 1000.0
+			r.PowerKW = &conv
 		}
 	}
 	return r, true

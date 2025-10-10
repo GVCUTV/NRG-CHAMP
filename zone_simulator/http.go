@@ -22,12 +22,31 @@ func (s *Simulator) handleStatus(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	tIn, tOut, heat, cool, vent, hKWh, cKWh, fKWh := s.snapshot()
+	tIn, tOut, heat, cool, vent := s.snapshot()
+	heatingKW := 0.0
+	if heat == ModeOn {
+		heatingKW = s.cfg.HeatPowerW / 1000.0
+	}
+	coolingKW := 0.0
+	if cool == ModeOn {
+		coolingKW = s.cfg.CoolPowerW / 1000.0
+	}
+	var fanW float64
+	switch vent {
+	case 25:
+		fanW = s.cfg.FanW25
+	case 50:
+		fanW = s.cfg.FanW50
+	case 75:
+		fanW = s.cfg.FanW75
+	case 100:
+		fanW = s.cfg.FanW100
+	}
 	resp := map[string]any{
 		"zoneId": s.cfg.ZoneID, "t_in": tIn, "t_out": tOut,
 		"heating": heat, "cooling": cool, "ventilation": vent,
-		"energyKWh": map[string]float64{"heating": hKWh, "cooling": cKWh, "fan": fKWh},
-		"devices":   map[string]string{"tempSensor": s.tempSensorID, "heater": s.heatID, "cooler": s.coolID, "ventilation": s.fanID},
+		"powerKW": map[string]float64{"heating": heatingKW, "cooling": coolingKW, "fan": fanW / 1000.0},
+		"devices": map[string]string{"tempSensor": s.tempSensorID, "heater": s.heatID, "cooler": s.coolID, "ventilation": s.fanID},
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
