@@ -9,6 +9,7 @@ import (
 )
 
 // aggregate cleans overhead, removes outliers, and groups by device.
+// The zone parameter must be a pure zone identifier such as "zone-A".
 func aggregate(zone string, epoch EpochID, readings []Reading, zThresh float64, energyState *EnergyState) AggregatedEpoch {
 	clean := removeOutliers(readings, zThresh)
 	byDev := map[string][]Reading{}

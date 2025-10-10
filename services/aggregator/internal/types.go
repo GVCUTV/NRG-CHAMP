@@ -66,7 +66,7 @@ type ProducerMulti interface {
 // KafkaConsumer abstracts partitioned reads.
 type KafkaConsumer interface {
 	Partitions(ctx context.Context, topic string) ([]int, error)
-	ReadFromPartition(ctx context.Context, topic string, partition int, epoch EpochID, max int) (parsed []Reading, lastCommitted, nextOffset int64, sawNextEpoch bool, err error)
+	ReadFromPartition(ctx context.Context, topic string, partition int, epoch EpochID, max int) (parsed []Reading, raw int, lastCommitted, nextOffset int64, sawNextEpoch bool, err error)
 }
 
 // CircuitBreakerFactory creates CB-wrapped producers.
