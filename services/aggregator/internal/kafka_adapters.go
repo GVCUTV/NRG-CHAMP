@@ -1,5 +1,5 @@
-// Package internal v9
-// file: internal/kafka_adapters.go
+// v10
+// services/aggregator/internal/kafka_adapters.go
 package internal
 
 import (
@@ -10,19 +10,35 @@ import (
 	"strings"
 	"time"
 
+	circuitbreaker "github.com/nrg-champ/circuitbreaker"
 	"github.com/segmentio/kafka-go"
 )
 
 // --- Consumer implementation using kafka-go ---
 
 type KafkaGoConsumer struct {
-	log     *slog.Logger
-	brokers []string
-	offsets *Offsets
+	log           *slog.Logger
+	brokers       []string
+	offsets       *Offsets
+	readerBreaker *circuitbreaker.KafkaBreaker
 }
 
 func NewKafkaGoConsumer(log *slog.Logger, brokers []string, offsets *Offsets) *KafkaGoConsumer {
-	return &KafkaGoConsumer{log: log, brokers: brokers, offsets: offsets}
+	breaker, err := circuitbreaker.NewKafkaBreakerFromEnv("aggregator-consumer", nil)
+	if err != nil {
+		if log != nil {
+			log.Error("consumer_cb_init_err", "name", "aggregator-consumer", "err", err)
+		}
+	} else {
+		if log != nil {
+			if breaker != nil && breaker.Enabled() {
+				log.Info("consumer_cb_enabled", "name", "aggregator-consumer")
+			} else {
+				log.Info("consumer_cb_disabled", "name", "aggregator-consumer")
+			}
+		}
+	}
+	return &KafkaGoConsumer{log: log, brokers: brokers, offsets: offsets, readerBreaker: breaker}
 }
 
 func (c *KafkaGoConsumer) Partitions(ctx context.Context, topic string) ([]int, error) {
@@ -55,6 +71,7 @@ func (c *KafkaGoConsumer) ReadFromPartition(ctx context.Context, topic string, p
 		start = kafka.FirstOffset
 	}
 	r := kafka.NewReader(kafka.ReaderConfig{Brokers: c.brokers, Topic: topic, Partition: partition, MinBytes: 1, MaxBytes: 10e6})
+	wrappedReader := circuitbreaker.NewCBKafkaReader(r, c.readerBreaker)
 	defer func(r *kafka.Reader) {
 		err := r.Close()
 		if err != nil {
@@ -72,7 +89,7 @@ func (c *KafkaGoConsumer) ReadFromPartition(ctx context.Context, topic string, p
 	sawNext := false
 
 	for i := 0; i < max; i++ {
-		m, err := r.FetchMessage(ctx)
+		m, err := wrappedReader.FetchMessage(ctx)
 		if err != nil {
 			break
 		}
@@ -216,18 +233,32 @@ func parseTimestamp(v any, fallbackTS time.Time) time.Time {
 
 // --- Producer implementation using kafka-go ---
 
-type writerAdapter struct{ w *kafka.Writer }
+type writerAdapter struct{ w *circuitbreaker.CBKafkaWriter }
 
 func (wa *writerAdapter) Send(ctx context.Context, topic string, key, value []byte) error {
 	return wa.w.WriteMessages(ctx, kafka.Message{Topic: topic, Key: key, Value: value, Time: time.Now()})
 }
 
-type DefaultCBFactory struct{}
+type DefaultCBFactory struct{ log *slog.Logger }
 
-func NewDefaultCBFactory() *DefaultCBFactory { return &DefaultCBFactory{} }
-func (f *DefaultCBFactory) NewKafkaProducer(_ string, brokers []string) CBWrappedProducer {
+func NewDefaultCBFactory(log *slog.Logger) *DefaultCBFactory { return &DefaultCBFactory{log: log} }
+func (f *DefaultCBFactory) NewKafkaProducer(name string, brokers []string) CBWrappedProducer {
+	breaker, err := circuitbreaker.NewKafkaBreakerFromEnv(name, nil)
+	if err != nil {
+		if f.log != nil {
+			f.log.Error("producer_cb_init_err", "name", name, "err", err)
+		}
+	} else {
+		if f.log != nil {
+			if breaker != nil && breaker.Enabled() {
+				f.log.Info("producer_cb_enabled", "name", name)
+			} else {
+				f.log.Info("producer_cb_disabled", "name", name)
+			}
+		}
+	}
 	w := &kafka.Writer{Addr: kafka.TCP(brokers...), Async: false, Balancer: &kafka.Hash{}, RequiredAcks: kafka.RequireAll, BatchTimeout: 5 * time.Millisecond, AllowAutoTopicCreation: false}
-	return &writerAdapter{w: w}
+	return &writerAdapter{w: circuitbreaker.NewCBKafkaWriter(w, breaker)}
 }
 
 type MAPEWriter struct {

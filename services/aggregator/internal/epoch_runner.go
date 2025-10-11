@@ -1,5 +1,5 @@
-// Package internal v9
-// file: internal/epoch_runner.go
+// v10
+// services/aggregator/internal/epoch_runner.go
 package internal
 
 import (
@@ -16,7 +16,7 @@ func Start(ctx context.Context, log *slog.Logger, cfg Config, io IO, h *Health) 
 		io.Consumer = NewKafkaGoConsumer(log, cfg.Brokers, off)
 	}
 	if io.CB == nil {
-		io.CB = NewDefaultCBFactory()
+		io.CB = NewDefaultCBFactory(log)
 	}
 	if io.Producer == nil {
 		io.Producer = NewWriters(io.CB, cfg)
