@@ -1,4 +1,4 @@
-// v2
+// v3
 // internal/models/models.go
 package models
 
@@ -42,9 +42,179 @@ func (e *Event) ComputeHash() (string, error) {
 }
 
 const (
-	BlockVersionV2  = "v2"
-	BlockNonceBytes = 16
+	BlockVersionV2             = "v2"
+	BlockNonceBytes            = 16
+	TransactionSchemaVersionV1 = "v1"
 )
+
+type AggregatedEpoch struct {
+	SchemaVersion string                         `json:"schemaVersion"`
+	ZoneID        string                         `json:"zoneId"`
+	Epoch         EpochWindow                    `json:"epoch"`
+	ByDevice      map[string][]AggregatedReading `json:"byDevice"`
+	Summary       map[string]float64             `json:"summary"`
+	ProducedAt    time.Time                      `json:"producedAt"`
+}
+
+type EpochWindow struct {
+	Start time.Time     `json:"start"`
+	End   time.Time     `json:"end"`
+	Index int64         `json:"index"`
+	Len   time.Duration `json:"len"`
+}
+
+type AggregatedReading struct {
+	DeviceID      string    `json:"deviceId"`
+	ZoneID        string    `json:"zoneId"`
+	DeviceType    string    `json:"deviceType"`
+	Timestamp     time.Time `json:"timestamp"`
+	Temperature   *float64  `json:"temperature,omitempty"`
+	ActuatorState *string   `json:"actuatorState,omitempty"`
+	PowerW        *float64  `json:"powerW,omitempty"`
+	EnergyKWh     *float64  `json:"energyKWh,omitempty"`
+}
+
+type MAPELedgerEvent struct {
+	SchemaVersion string  `json:"schemaVersion"`
+	EpochIndex    int64   `json:"epochIndex"`
+	ZoneID        string  `json:"zoneId"`
+	Planned       string  `json:"planned"`
+	TargetC       float64 `json:"targetC"`
+	HystC         float64 `json:"hysteresisC"`
+	DeltaC        float64 `json:"deltaC"`
+	Fan           int     `json:"fan"`
+	Start         string  `json:"epochStart"`
+	End           string  `json:"epochEnd"`
+	Timestamp     int64   `json:"timestamp"`
+}
+
+type MatchRecord struct {
+	ZoneID             string          `json:"zoneId"`
+	EpochIndex         int64           `json:"epochIndex"`
+	Aggregator         AggregatedEpoch `json:"aggregator"`
+	AggregatorReceived time.Time       `json:"aggregatorReceivedAt"`
+	MAPE               MAPELedgerEvent `json:"mape"`
+	MAPEReceived       time.Time       `json:"mapeReceivedAt"`
+	MatchedAt          time.Time       `json:"matchedAt"`
+}
+
+type Transaction struct {
+	ID                   int64           `json:"id"`
+	Type                 string          `json:"type"`
+	SchemaVersion        string          `json:"schemaVersion"`
+	ZoneID               string          `json:"zoneId"`
+	EpochIndex           int64           `json:"epochIndex"`
+	Aggregator           AggregatedEpoch `json:"aggregator"`
+	AggregatorReceivedAt time.Time       `json:"aggregatorReceivedAt"`
+	MAPE                 MAPELedgerEvent `json:"mape"`
+	MAPEReceivedAt       time.Time       `json:"mapeReceivedAt"`
+	MatchedAt            time.Time       `json:"matchedAt"`
+	PrevHash             string          `json:"prevHash"`
+	Hash                 string          `json:"hash"`
+}
+
+func (tx *Transaction) MatchRecord() MatchRecord {
+	if tx == nil {
+		return MatchRecord{}
+	}
+	return MatchRecord{
+		ZoneID:             tx.ZoneID,
+		EpochIndex:         tx.EpochIndex,
+		Aggregator:         canonicalAggregatedEpoch(tx.Aggregator),
+		AggregatorReceived: tx.AggregatorReceivedAt.UTC(),
+		MAPE:               tx.MAPE,
+		MAPEReceived:       tx.MAPEReceivedAt.UTC(),
+		MatchedAt:          tx.MatchedAt.UTC(),
+	}
+}
+
+func (tx *Transaction) CanonicalJSON() ([]byte, error) {
+	if tx == nil {
+		return nil, errors.New("nil transaction")
+	}
+	payload := struct {
+		Type                 string          `json:"type"`
+		SchemaVersion        string          `json:"schemaVersion"`
+		ZoneID               string          `json:"zoneId"`
+		EpochIndex           int64           `json:"epochIndex"`
+		Aggregator           AggregatedEpoch `json:"aggregator"`
+		AggregatorReceivedAt time.Time       `json:"aggregatorReceivedAt"`
+		MAPE                 MAPELedgerEvent `json:"mape"`
+		MAPEReceivedAt       time.Time       `json:"mapeReceivedAt"`
+		MatchedAt            time.Time       `json:"matchedAt"`
+		PrevHash             string          `json:"prevHash"`
+	}{
+		Type:                 tx.Type,
+		SchemaVersion:        tx.SchemaVersion,
+		ZoneID:               tx.ZoneID,
+		EpochIndex:           tx.EpochIndex,
+		Aggregator:           canonicalAggregatedEpoch(tx.Aggregator),
+		AggregatorReceivedAt: tx.AggregatorReceivedAt.UTC(),
+		MAPE:                 tx.MAPE,
+		MAPEReceivedAt:       tx.MAPEReceivedAt.UTC(),
+		MatchedAt:            tx.MatchedAt.UTC(),
+		PrevHash:             tx.PrevHash,
+	}
+	return json.Marshal(&payload)
+}
+
+func (tx *Transaction) ComputeHash() (string, error) {
+	payload, err := tx.CanonicalJSON()
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func (tx *Transaction) Clone() *Transaction {
+	if tx == nil {
+		return nil
+	}
+	cp := *tx
+	cp.Aggregator = canonicalAggregatedEpoch(tx.Aggregator)
+	cp.AggregatorReceivedAt = cp.AggregatorReceivedAt.UTC()
+	cp.MAPEReceivedAt = cp.MAPEReceivedAt.UTC()
+	cp.MatchedAt = cp.MatchedAt.UTC()
+	return &cp
+}
+
+func canonicalAggregatedEpoch(src AggregatedEpoch) AggregatedEpoch {
+	out := src
+	out.ProducedAt = out.ProducedAt.UTC()
+	out.Epoch = canonicalEpochWindow(out.Epoch)
+	if out.ByDevice != nil {
+		dup := make(map[string][]AggregatedReading, len(out.ByDevice))
+		for k, readings := range out.ByDevice {
+			rr := make([]AggregatedReading, len(readings))
+			for i := range readings {
+				rr[i] = readings[i]
+				rr[i].Timestamp = rr[i].Timestamp.UTC()
+			}
+			dup[k] = rr
+		}
+		out.ByDevice = dup
+	}
+	if out.Summary != nil {
+		dup := make(map[string]float64, len(out.Summary))
+		for k, v := range out.Summary {
+			dup[k] = v
+		}
+		out.Summary = dup
+	}
+	return out
+}
+
+func canonicalEpochWindow(src EpochWindow) EpochWindow {
+	out := src
+	if !out.Start.IsZero() {
+		out.Start = out.Start.UTC()
+	}
+	if !out.End.IsZero() {
+		out.End = out.End.UTC()
+	}
+	return out
+}
 
 type BlockHeaderV2 struct {
 	Version        string    `json:"version"`
@@ -58,7 +228,7 @@ type BlockHeaderV2 struct {
 }
 
 type BlockDataV2 struct {
-	Transactions []*Event `json:"transactions"`
+	Transactions []*Transaction `json:"transactions"`
 }
 
 type BlockV2 struct {
@@ -82,13 +252,13 @@ func (e *Event) CanonicalJSON() ([]byte, error) {
 	return b, nil
 }
 
-func ComputeDataHashV2(events []*Event) (string, error) {
-	if len(events) == 0 {
+func ComputeDataHashV2(transactions []*Transaction) (string, error) {
+	if len(transactions) == 0 {
 		return "", errors.New("block data requires at least one transaction")
 	}
-	leaves := make([][]byte, 0, len(events))
-	for _, ev := range events {
-		payload, err := ev.CanonicalJSON()
+	leaves := make([][]byte, 0, len(transactions))
+	for _, tx := range transactions {
+		payload, err := tx.CanonicalJSON()
 		if err != nil {
 			return "", err
 		}
@@ -167,6 +337,14 @@ func (b *BlockV2) Validate() error {
 	}
 	if len(b.Data.Transactions) == 0 {
 		return errors.New("block must contain at least one transaction")
+	}
+	for _, tx := range b.Data.Transactions {
+		if tx == nil {
+			return errors.New("nil transaction")
+		}
+		if tx.SchemaVersion != TransactionSchemaVersionV1 {
+			return fmt.Errorf("unsupported transaction schema version: %s", tx.SchemaVersion)
+		}
 	}
 	return nil
 }
