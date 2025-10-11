@@ -25,7 +25,7 @@ func TestZoneConsumerMatchesOutOfOrder(t *testing.T) {
 		t.Fatalf("new ledger: %v", err)
 	}
 
-	consumer := newZoneConsumer("zone-A", "ledger-zone-A", nil, st, logger, 0, 1, 200*time.Millisecond, 10)
+	consumer := newZoneConsumer("zone-A", "ledger-zone-A", nil, nil, st, logger, 0, 1, 200*time.Millisecond, 10)
 
 	start := time.Now().Add(-time.Second).UTC()
 	end := start.Add(time.Second)
@@ -101,7 +101,7 @@ func TestZoneConsumerImputesAfterGrace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new ledger: %v", err)
 	}
-	consumer := newZoneConsumer("zone-A", "ledger-zone-A", nil, st, logger, 0, 1, 20*time.Millisecond, 10)
+	consumer := newZoneConsumer("zone-A", "ledger-zone-A", nil, nil, st, logger, 0, 1, 20*time.Millisecond, 10)
 
 	agg := aggregatedEpoch{
 		ZoneID:     "zone-A",
@@ -159,7 +159,7 @@ func TestZoneConsumerDedupSkipsFinalized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ledger: %v", err)
 	}
-	consumer := newZoneConsumer("zone-A", "ledger-zone-A", nil, st, logger, 0, 1, 50*time.Millisecond, 2)
+	consumer := newZoneConsumer("zone-A", "ledger-zone-A", nil, nil, st, logger, 0, 1, 50*time.Millisecond, 2)
 
 	agg := aggregatedEpoch{ZoneID: "zone-A", Epoch: epochWindow{Index: 3}, Summary: map[string]float64{"targetC": 19.0}, ByDevice: map[string][]aggregatedReading{}, ProducedAt: time.Now().UTC()}
 	aggBytes, err := json.Marshal(agg)
