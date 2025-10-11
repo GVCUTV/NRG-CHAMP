@@ -1,4 +1,4 @@
-// v10
+// v11
 // services/aggregator/internal/kafka_adapters.go
 package internal
 
@@ -239,6 +239,10 @@ func (wa *writerAdapter) Send(ctx context.Context, topic string, key, value []by
 	return wa.w.WriteMessages(ctx, kafka.Message{Topic: topic, Key: key, Value: value, Time: time.Now()})
 }
 
+func (wa *writerAdapter) SendToPartition(ctx context.Context, topic string, partition int, key, value []byte) error {
+	return wa.w.WriteMessages(ctx, kafka.Message{Topic: topic, Partition: partition, Key: key, Value: value, Time: time.Now()})
+}
+
 type DefaultCBFactory struct{ log *slog.Logger }
 
 func NewDefaultCBFactory(log *slog.Logger) *DefaultCBFactory { return &DefaultCBFactory{log: log} }
@@ -294,7 +298,10 @@ func (w *LedgerWriter) Send(ctx context.Context, zone string, epoch AggregatedEp
 	}
 	topic := strings.ReplaceAll(w.tmpl, "{zone}", zone)
 	key := []byte(fmt.Sprintf("%s|agg", zone))
-	return w.prod.Send(ctx, topic, key, b)
+	if w.partAgg < 0 {
+		return fmt.Errorf("invalid aggregator partition: %d", w.partAgg)
+	}
+	return w.prod.SendToPartition(ctx, topic, w.partAgg, key, b)
 }
 
 func truncatePayload(b []byte, max int) string {

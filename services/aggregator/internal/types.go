@@ -1,4 +1,4 @@
-// Package internal v9
+// Package internal v10
 // file: internal/types.go
 package internal
 
@@ -77,6 +77,7 @@ type CircuitBreakerFactory interface {
 // CBWrappedProducer is the minimal interface used by our writers.
 type CBWrappedProducer interface {
 	Send(ctx context.Context, topic string, key, value []byte) error
+	SendToPartition(ctx context.Context, topic string, partition int, key, value []byte) error
 }
 
 // Stats are exported counters for observability.

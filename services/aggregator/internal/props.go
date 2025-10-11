@@ -1,4 +1,4 @@
-// Package internal v8
+// Package internal v9
 // file: internal/props.go
 package internal
 
@@ -27,7 +27,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{Brokers: []string{"kafka:9092"}, Epoch: 500 * time.Millisecond, MaxPerPartition: 1000, OffsetsPath: filepath.Join("data", "offsets.json"), MAPETopic: "agg-to-mape", LedgerTopicTmpl: "ledger-{zone}", LedgerPartAgg: 0, LedgerPartMAPE: 1, OutlierZ: 4.0, LogPath: filepath.Join("data", "aggregator.log")}
+	return Config{Brokers: []string{"kafka:9092"}, Epoch: 500 * time.Millisecond, MaxPerPartition: 1000, OffsetsPath: filepath.Join("data", "offsets.json"), MAPETopic: "agg-to-mape", LedgerTopicTmpl: "zone.ledger.{zone}", LedgerPartAgg: 0, LedgerPartMAPE: 1, OutlierZ: 4.0, LogPath: filepath.Join("data", "aggregator.log")}
 }
 
 func LoadProps(path string) Config {

@@ -1,4 +1,4 @@
-# v3
+# v4
 # file: k8s/aggregator/configmap.yaml
 apiVersion: v1
 kind: ConfigMap
@@ -11,7 +11,7 @@ data:
     epoch_ms=500
     offsets_path=/app/data/offsets.json
     mape_topic=agg-to-mape
-    ledger_topic_template=ledger-{zone}
+    ledger_topic_template=zone.ledger.{zone}
     ledger_partition_aggregator=0
     ledger_partition_mape=1
     outlier_z=4.0
