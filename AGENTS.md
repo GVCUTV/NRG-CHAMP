@@ -177,4 +177,28 @@ A Codex task is considered **complete** only if all of the following hold:
 
 ---
 
+### 18) Docker & Compose Pre‑flight Rules
+
+- **Build context discipline**: For monorepo local modules (e.g., `circuit_breaker/`), set each service’s Compose `build.context` to the **repo root**, and set `build.dockerfile` to the per‑service Dockerfile path (e.g., `services/ledger/Dockerfile`). This guarantees local shared modules are copyable during image builds.
+- **Local module replace**: When a service requires a local module, add a Go `replace` in `go.mod` that matches the **container path the Dockerfile copies to**. Prefer absolute container paths to avoid ambiguity, e.g.
+  ```
+  replace github.com/nrg-champ/circuitbreaker => /circuit_breaker
+  ```
+- **Dockerfile copies**: For services depending on local modules, the Dockerfile **must** include:
+    - `COPY circuit_breaker /circuit_breaker` (or the correct module folder);
+    - `COPY services/<svc>/go.mod services/<svc>/go.sum ./` (for dependency resolution cache);
+    - `COPY services/<svc>/ ./` (the service sources).
+- **Unique stage names**: Ensure all multi‑stage `FROM ... AS <name>` identifiers are **unique** within a Dockerfile. Update all `COPY --from=<name>` references accordingly.
+- **Pre‑merge checks (mandatory for every PR that touches Docker/Go modules)**:
+    1. `docker compose build <service>` succeeds for all changed services.
+    2. `docker compose up -d <service>` starts without crash‑looping.
+    3. `go mod tidy` has been executed and any changes committed whenever `go.mod`/`go.sum` are edited.
+    4. No linter warnings such as **DuplicateStageName** or unresolved `replace` directives.
+    5. If a non‑standard `replace` is used, explain it briefly in the PR body.
+
+**Violation reporting**:  
+If Codex must deviate from any rule (e.g., CI limitations), it must **explicitly report** the deviation **at the top of the PR body**, stating which rule, why it was broken, and how risk is mitigated.
+
+---
+
 **End of AGENTS.md — Codex Operational Rules**
