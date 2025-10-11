@@ -1,4 +1,4 @@
-<!-- v2 -->
+<!-- v3 -->
 <!-- README.md -->
 # Zone Simulator (NRG CHAMP) - final
 
@@ -17,3 +17,9 @@ Consumer behavior:
 - This minimizes the read overhead and isolates actuators to their partitions (Option B requested).
 
 Deployment artifacts are included in the deploy package (Dockerfile, docker-compose.yml and Kubernetes manifests). See DEPLOY_README.md for instructions.
+
+## Circuit Breaker Integration
+
+- **Environment variables**: `CB_ENABLED`, `CB_KAFKA_FAILURE_THRESHOLD`, `CB_KAFKA_SUCCESS_THRESHOLD`, `CB_KAFKA_OPEN_SECONDS`, `CB_KAFKA_TIMEOUT_MS`, `CB_KAFKA_BACKOFF_MS` (defaults wired in Dockerfile/configmap).
+- **Logging**: circuit breaker initialization emits `[CB] kafka: initialized with failureThreshold=<N>, openSeconds=<S>` and transitions log `[CB] kafka: state=OPEN after <failures> consecutive failures` / `[CB] kafka: state=CLOSED after <successes> consecutive successes`.
+- **Exclusions**: none — all Kafka producers/consumers in the simulator are breaker-protected.

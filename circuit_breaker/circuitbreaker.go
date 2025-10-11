@@ -1,4 +1,4 @@
-// v2
+// v3
 // circuitbreaker.go
 package circuitbreaker
 
@@ -143,9 +143,12 @@ func (b *Breaker) onSuccess(prev State) {
 	b.mu.Lock()
 	hook := b.stateChangeHook
 	notifyClosed := false
+	successes := 0
 	if prev == HalfOpen {
 		b.halfOpenSuccesses++
+		successes = b.halfOpenSuccesses
 		if b.halfOpenSuccesses >= b.cfg.SuccessesToClose {
+			successes = b.cfg.SuccessesToClose
 			b.halfOpenSuccesses = 0
 			notifyClosed = b.setStateLocked(Closed)
 		}
@@ -160,6 +163,9 @@ func (b *Breaker) onSuccess(prev State) {
 	b.logger.Info("operation_success", "name", b.name)
 	b.mu.Unlock()
 	if notifyClosed {
+		if prev == HalfOpen {
+			log.Printf("[CB] kafka: state=CLOSED after %d consecutive successes", successes)
+		}
 		b.notifyStateChange(Closed, hook)
 	}
 }
@@ -169,6 +175,7 @@ func (b *Breaker) onFailure(err error) {
 	b.recentFails++
 	hook := b.stateChangeHook
 	shouldNotify := false
+	failures := b.recentFails
 	if b.recentFails >= b.cfg.MaxFailures {
 		shouldNotify = b.setStateLocked(Open)
 		b.openedAt = time.Now()
@@ -180,6 +187,7 @@ func (b *Breaker) onFailure(err error) {
 	}
 	b.mu.Unlock()
 	if shouldNotify {
+		log.Printf("[CB] kafka: state=OPEN after %d consecutive failures", failures)
 		b.notifyStateChange(Open, hook)
 	}
 }
@@ -205,14 +213,6 @@ func (b *Breaker) setStateLocked(state State) bool {
 }
 
 func (b *Breaker) notifyStateChange(state State, hook func(State)) {
-	switch state {
-	case Open:
-		log.Printf("[CB] open breaker=%s", b.name)
-	case HalfOpen:
-		log.Printf("[CB] half-open breaker=%s", b.name)
-	case Closed:
-		log.Printf("[CB] closed breaker=%s", b.name)
-	}
 	if hook != nil {
 		hook(state)
 	}

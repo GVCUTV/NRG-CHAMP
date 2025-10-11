@@ -1,4 +1,4 @@
-// v4
+// v5
 // kafka.go
 
 package main
@@ -133,6 +133,11 @@ func (s *Simulator) startPartitionConsumerForDevice(ctx context.Context, deviceI
 		Partition: partition,
 		MinBytes:  1, MaxBytes: 10e6,
 	})
+	readerBreaker, err := circuitbreaker.NewKafkaBreakerFromEnv("zone-simulator-reader", nil)
+	if err != nil {
+		s.log.Error("circuit breaker configuration invalid", "err", err)
+	}
+	wrappedReader := circuitbreaker.NewCBKafkaReader(r, readerBreaker)
 	go func() {
 		defer func(r *kafka.Reader) {
 			err := r.Close()
@@ -141,7 +146,7 @@ func (s *Simulator) startPartitionConsumerForDevice(ctx context.Context, deviceI
 			}
 		}(r)
 		for {
-			m, err := r.ReadMessage(ctx)
+			m, err := wrappedReader.FetchMessage(ctx)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					return
@@ -149,6 +154,9 @@ func (s *Simulator) startPartitionConsumerForDevice(ctx context.Context, deviceI
 				s.log.Warn("read error", "err", err, "deviceId", deviceID)
 				time.Sleep(500 * time.Millisecond)
 				continue
+			}
+			if commitErr := r.CommitMessages(ctx, m); commitErr != nil {
+				s.log.Warn("commit failed", "err", commitErr, "deviceId", deviceID)
 			}
 			var rd ActuatorCommand
 			if err := json.Unmarshal(m.Value, &rd); err != nil {
