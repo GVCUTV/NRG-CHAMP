@@ -1,16 +1,35 @@
-// v11
+// v12
 // services/aggregator/internal/epoch_runner.go
 package internal
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math/rand"
+	"sort"
 	"time"
 )
 
 // Start runs the service main loop with epoch-based RR scheduling.
 func Start(ctx context.Context, log *slog.Logger, cfg Config, io IO, h *Health) error {
+	zones := map[string]struct{}{}
+	for _, topic := range cfg.Topics {
+		zone := extractZoneFromTopic(topic)
+		if zone == "" {
+			continue
+		}
+		zones[zone] = struct{}{}
+	}
+	orderedZones := make([]string, 0, len(zones))
+	for zone := range zones {
+		orderedZones = append(orderedZones, zone)
+	}
+	sort.Strings(orderedZones)
+	if err := validateLedgerTopics(ctx, log, cfg.Brokers, cfg.LedgerTopicTmpl, orderedZones); err != nil {
+		return fmt.Errorf("ledger topic validation failed: %w", err)
+	}
+
 	off := NewOffsets(cfg.OffsetsPath)
 	if io.Consumer == nil {
 		io.Consumer = NewKafkaGoConsumer(log, cfg.Brokers, off)

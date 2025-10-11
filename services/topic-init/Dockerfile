@@ -1,0 +1,15 @@
+# v0
+# services/topic-init/Dockerfile
+FROM golang:1.23-alpine AS topic_init_builder
+WORKDIR /src
+COPY services/topic-init/go.mod services/topic-init/go.sum ./services/topic-init/
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY services/topic-init/ ./services/topic-init/
+RUN CGO_ENABLED=0 go build -o /topic-init ./services/topic-init/cmd/topic-init
+
+FROM alpine:3.20 AS topic_init_runtime
+WORKDIR /app
+RUN adduser -D -H appuser
+COPY --from=topic_init_builder /topic-init /app/topic-init
+USER appuser
+ENTRYPOINT ["/app/topic-init"]

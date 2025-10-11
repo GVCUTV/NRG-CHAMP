@@ -1,4 +1,4 @@
-// v10
+// v11
 // services/mape/internal/kafka.go
 package internal
 
@@ -49,7 +49,7 @@ func NewKafkaIO(cfg *AppConfig, lg *slog.Logger) (*KafkaIO, error) {
 		ledgerCB:       map[string]*circuitbreaker.CBKafkaWriter{},
 	}
 	if err := io.ensureTopics(context.Background()); err != nil {
-		lg.Warn("topic ensure failed", "error", err)
+		return nil, err
 	}
 	lg.Info("kafka breaker", "component", "reader", "enabled", readerBreaker != nil && readerBreaker.Enabled())
 	lg.Info("kafka breaker", "component", "writer", "enabled", writerBreaker != nil && writerBreaker.Enabled())
@@ -105,10 +105,16 @@ func (ioh *KafkaIO) ensureTopics(ctx context.Context) error {
 	cfgs := []kafka.TopicConfig{{Topic: ioh.cfg.AggregatorTopic, NumPartitions: len(ioh.cfg.Zones), ReplicationFactor: ioh.cfg.TopicReplication}}
 	for _, z := range ioh.cfg.Zones {
 		cfgs = append(cfgs, kafka.TopicConfig{Topic: ioh.cfg.ActuatorTopicPref + z, NumPartitions: ioh.cfg.ActuatorPartitions, ReplicationFactor: ioh.cfg.TopicReplication})
-		cfgs = append(cfgs, kafka.TopicConfig{Topic: ioh.cfg.LedgerTopicPref + z, NumPartitions: 2, ReplicationFactor: ioh.cfg.TopicReplication})
 	}
 	if err := c.CreateTopics(cfgs...); err != nil {
 		ioh.lg.Warn("CreateTopics", "error", err)
+	}
+	ledgerTopics := make([]string, 0, len(ioh.cfg.Zones))
+	for _, z := range ioh.cfg.Zones {
+		ledgerTopics = append(ledgerTopics, ioh.cfg.LedgerTopicPref+z)
+	}
+	if err := ioh.validateLedgerTopics(ctx, c, ledgerTopics); err != nil {
+		return err
 	}
 	ioh.lg.Info("topics ensured", "zones", ioh.cfg.Zones, "act.partitions", ioh.cfg.ActuatorPartitions)
 	return nil
