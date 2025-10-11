@@ -78,7 +78,9 @@ services:
     networks: [nrg-net]
 
   mape:
-    build: ./services/mape
+    build:
+      context: .
+      dockerfile: services/mape/Dockerfile
     image: nrg-champ/mape:dev
     container_name: mape
     environment:

@@ -1,9 +1,14 @@
-# v7
+# v8
 # Dockerfile
-FROM golang:1.22-alpine AS build
+FROM golang:1.23-alpine AS build
 WORKDIR /app
-COPY . .
-RUN go mod download && CGO_ENABLED=0 go build -o /mape ./cmd/mape
+
+COPY services/mape/go.mod services/mape/go.sum ./
+COPY circuit_breaker /circuit_breaker
+RUN go mod download
+
+COPY services/mape/ ./
+RUN CGO_ENABLED=0 go build -o /mape ./cmd/mape
 
 FROM alpine:3.20
 WORKDIR /app
