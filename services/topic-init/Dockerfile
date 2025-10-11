@@ -1,5 +1,5 @@
-# v0
-# services/topic-init/Dockerfile
+# // v1
+# // file: services/topic-init/Dockerfile
 FROM golang:1.23-alpine AS topic_init_builder
 WORKDIR /src
 COPY services/topic-init/go.mod services/topic-init/go.sum ./services/topic-init/

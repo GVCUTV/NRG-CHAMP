@@ -170,6 +170,10 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 }
 ```
 
+## Container Hygiene Notes
+
+The service images now standardize on the mandated `golang:1.23-alpine` build stage and copy the shared `circuit_breaker` module into `/circuit_breaker` for reliable module replacement during Docker builds. Corresponding `go.mod` files reference that absolute path so local module code resolves consistently across builders. Stage identifiers were made unique per Dockerfile to silence duplicate-name warnings, and runtime stages are explicitly labeled for clarity during multi-stage builds.
+
 *The ellipses above denote truncated hashes for brevity; real blocks contain full 64-character hex digests.*
 
 ---
