@@ -1,5 +1,5 @@
-// Package internal v8
-// plan.go
+// v9
+// services/mape/internal/plan.go
 package internal
 
 import (
@@ -12,13 +12,21 @@ import (
 type Plan struct {
 	cfg *AppConfig
 	lg  *slog.Logger
+	sp  *ZoneSetpoints
 }
 
-func NewPlan(cfg *AppConfig, lg *slog.Logger) *Plan { return &Plan{cfg: cfg, lg: lg} }
+func NewPlan(cfg *AppConfig, sp *ZoneSetpoints, lg *slog.Logger) *Plan {
+	return &Plan{cfg: cfg, lg: lg, sp: sp}
+}
 
 func (p *Plan) Build(zone string, epochIndex int64, epochStart, epochEnd string, res AnalysisResult) ([]PlanCommand, LedgerEvent) {
 	acts := p.cfg.Actuators[zone]
 	cmds := make([]PlanCommand, 0, len(acts.Heating)+len(acts.Cooling)+len(acts.Ventilation))
+	target, ok := p.sp.Get(zone)
+	if !ok {
+		target = p.cfg.ZoneTargets[zone]
+		p.lg.Warn("plan setpoint missing", "zone", zone, "fallback", target)
+	}
 	appendCmds := func(ids []string, mode string, fan int, reason string) {
 		for _, id := range ids {
 			cmds = append(cmds, PlanCommand{
@@ -30,24 +38,24 @@ func (p *Plan) Build(zone string, epochIndex int64, epochStart, epochEnd string,
 	switch res.Action {
 	case "HEAT":
 		{
-			p.lg.Info("plan", "zone", zone, "action", "HEAT", "fan", res.Fan, "heaters", len(acts.Heating), "coolers_off", len(acts.Cooling), "vents", len(acts.Ventilation), "zone_energy_kwh_epoch", res.ZoneEnergyKWhEpoch, "energy_source", res.ZoneEnergySource, "actuator_energy_entries", len(res.ActuatorEnergyKWh))
+			p.lg.Info("plan", "zone", zone, "action", "HEAT", "fan", res.Fan, "setpoint_c", target, "heaters", len(acts.Heating), "coolers_off", len(acts.Cooling), "vents", len(acts.Ventilation), "zone_energy_kwh_epoch", res.ZoneEnergyKWhEpoch, "energy_source", res.ZoneEnergySource, "actuator_energy_entries", len(res.ActuatorEnergyKWh))
 			appendCmds(acts.Heating, "ON", res.Fan, res.Reason)
 			appendCmds(acts.Cooling, "OFF", 0, "complementary off (heating active)")
 			appendCmds(acts.Ventilation, itoa(res.Fan), res.Fan, res.Reason)
 		}
 	case "COOL":
 		{
-			p.lg.Info("plan", "zone", zone, "action", "COOL", "fan", res.Fan, "coolers", len(acts.Cooling), "heaters_off", len(acts.Heating), "vents", len(acts.Ventilation), "zone_energy_kwh_epoch", res.ZoneEnergyKWhEpoch, "energy_source", res.ZoneEnergySource, "actuator_energy_entries", len(res.ActuatorEnergyKWh))
+			p.lg.Info("plan", "zone", zone, "action", "COOL", "fan", res.Fan, "setpoint_c", target, "coolers", len(acts.Cooling), "heaters_off", len(acts.Heating), "vents", len(acts.Ventilation), "zone_energy_kwh_epoch", res.ZoneEnergyKWhEpoch, "energy_source", res.ZoneEnergySource, "actuator_energy_entries", len(res.ActuatorEnergyKWh))
 			appendCmds(acts.Cooling, "ON", res.Fan, res.Reason)
 			appendCmds(acts.Heating, "OFF", 0, "complementary off (cooling active)")
 			appendCmds(acts.Ventilation, itoa(res.Fan), res.Fan, res.Reason)
 		}
 	default:
 		{
-			p.lg.Info("plan", "zone", zone, "action", "OFF", "all_off", len(acts.Heating)+len(acts.Cooling)+len(acts.Ventilation), "zone_energy_kwh_epoch", res.ZoneEnergyKWhEpoch, "energy_source", res.ZoneEnergySource, "actuator_energy_entries", len(res.ActuatorEnergyKWh))
-			appendCmds(acts.Heating, "OFF", 0, "within hysteresis")
-			appendCmds(acts.Cooling, "OFF", 0, "within hysteresis")
-			appendCmds(acts.Ventilation, itoa(0), 0, "within hysteresis")
+			p.lg.Info("plan", "zone", zone, "action", "OFF", "fan", res.Fan, "setpoint_c", target, "coolers_off", len(acts.Cooling), "heaters_off", len(acts.Heating), "vents", len(acts.Ventilation), "zone_energy_kwh_epoch", res.ZoneEnergyKWhEpoch, "energy_source", res.ZoneEnergySource, "actuator_energy_entries", len(res.ActuatorEnergyKWh))
+			appendCmds(acts.Heating, "OFF", 0, res.Reason)
+			appendCmds(acts.Cooling, "OFF", 0, res.Reason)
+			appendCmds(acts.Ventilation, itoa(res.Fan), res.Fan, res.Reason)
 		}
 	}
 	p.lg.Info("commands", "list", cmds)
