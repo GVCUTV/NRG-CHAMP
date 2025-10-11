@@ -3,9 +3,9 @@
 FROM golang:1.23-alpine AS topic_init_builder
 WORKDIR /src
 COPY services/topic-init/go.mod services/topic-init/go.sum ./services/topic-init/
-RUN --mount=type=cache,target=/go/pkg/mod go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download -C services/topic-init
 COPY services/topic-init/ ./services/topic-init/
-RUN CGO_ENABLED=0 go build -o /topic-init ./services/topic-init/cmd/topic-init
+RUN CGO_ENABLED=0 go build -o /topic-init -C services/topic-init ./cmd/topic-init
 
 FROM alpine:3.20 AS topic_init_runtime
 WORKDIR /app
