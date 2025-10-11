@@ -1,4 +1,4 @@
-// v4
+// v5
 // README.md
 # Ledger Service (NRG CHAMP) — Standalone
 
@@ -38,3 +38,15 @@ docker compose up --build -d
 ```bash
 kubectl apply -k ledger/k8s
 ```
+
+## Operational Metrics
+
+The service exposes Prometheus-formatted metrics at `GET /metrics`. Scrape the endpoint from the same listener configured via `LEDGER_ADDR`.
+
+Exported series:
+
+* `ledger_ingest_imputed_total{zone="<zone>"}` — number of epochs finalized via fallback imputation per zone.
+* `ledger_ingest_decode_errors_total{side="aggregator|mape"}` — count of payload decode errors per Kafka partition side.
+* `ledger_ingest_match_latency_seconds` — histogram tracking how long it took to pair Aggregator and MAPE counterparts.
+
+Use these metrics alongside `LEDGER_EPOCH_GRACE_MS` to detect increases in imputation or decode failures.
