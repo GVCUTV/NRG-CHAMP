@@ -1,5 +1,5 @@
-// v8
-// engine.go
+// v9
+// services/mape/internal/engine.go
 package internal
 
 import (
@@ -12,6 +12,7 @@ type Engine struct {
 	cfg   *AppConfig
 	lg    *slog.Logger
 	io    *KafkaIO
+	sp    *ZoneSetpoints
 	mon   *Monitor
 	an    *Analyze
 	pln   *Plan
@@ -21,11 +22,11 @@ type Engine struct {
 
 var engineRef *Engine
 
-func NewEngine(cfg *AppConfig, lg *slog.Logger, io *KafkaIO) *Engine {
-	e := &Engine{cfg: cfg, lg: lg, io: io}
+func NewEngine(cfg *AppConfig, sp *ZoneSetpoints, lg *slog.Logger, io *KafkaIO) *Engine {
+	e := &Engine{cfg: cfg, sp: sp, lg: lg, io: io}
 	e.mon = NewMonitor(cfg, lg, io)
-	e.an = NewAnalyze(cfg, lg)
-	e.pln = NewPlan(cfg, lg)
+	e.an = NewAnalyze(cfg, sp, lg)
+	e.pln = NewPlan(cfg, sp, lg)
 	e.exe = NewExecute(lg, io)
 	e.stats.ZoneEnergy = map[string]float64{}
 	e.stats.EnergyField = map[string]string{}

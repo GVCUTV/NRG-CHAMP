@@ -1,3 +1,5 @@
+// v1
+// docs/project_documentation.md
 # NRG CHAMP
 
 ## Responsive Goal-driven Cooling and Heating Automated Monitoring Platform
@@ -1520,6 +1522,7 @@ This prevents cascading failures and thundering herds while standardizing resili
 ## 8.3. MAPE Targets & Decision Logic
 
 - **Temperature targets per zone** are defined in a **`.properties` file** (user‑editable).
+- **Per-zone runtime overrides** are initialized from `target.<zoneId>=<float>` entries and can be adjusted at runtime via `PUT /config/temperature/{zoneId}`; updates live in memory only and revert to file defaults after a restart.
 - **Monitor:** consumes zone batches from Kafka, maintains **sliding windows** per zone.
 - **Analyze:** uses **outlier‑cleaned** signals from the aggregator; computes deviations from target and detects anomalies.
 - **Plan:** when actual temperature differs from target, it **engages heating/cooling** considering **hysteresis** from the properties file; **fan speed** is set proportionally to the temperature delta.
