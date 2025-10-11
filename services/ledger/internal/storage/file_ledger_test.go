@@ -1,4 +1,4 @@
-// v3
+// v4
 // internal/storage/file_ledger_test.go
 package storage
 
@@ -172,6 +172,144 @@ func TestVerifyDetectsHeaderTamper(t *testing.T) {
 	}
 	if _, err := st.Verify(); err == nil || !strings.Contains(err.Error(), "prevHeaderHash mismatch") {
 		t.Fatalf("expected prevHeaderHash mismatch, got %v", err)
+	}
+}
+
+func TestVerifyLegacyV1File(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "legacy-ledger.jsonl")
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	now := time.Date(2023, time.December, 31, 23, 0, 0, 0, time.UTC)
+	prevHash := ""
+	var lines [][]byte
+	for i := 0; i < 3; i++ {
+		ev := &models.Event{
+			ID:        int64(i + 1),
+			Type:      "legacy.event",
+			ZoneID:    "Z-LEG",
+			Timestamp: now.Add(time.Duration(i) * time.Minute),
+			Source:    "test",
+			PrevHash:  prevHash,
+		}
+		hash, err := ev.ComputeHash()
+		if err != nil {
+			t.Fatalf("compute hash %d: %v", i, err)
+		}
+		ev.Hash = hash
+		prevHash = hash
+		payload, err := json.Marshal(ev)
+		if err != nil {
+			t.Fatalf("marshal legacy event %d: %v", i, err)
+		}
+		lines = append(lines, payload)
+	}
+	content := bytes.Join(lines, []byte("\n"))
+	content = append(content, '\n')
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write legacy ledger: %v", err)
+	}
+	st, err := NewFileLedger(path, log)
+	if err != nil {
+		t.Fatalf("new ledger: %v", err)
+	}
+	report, err := st.Verify()
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if report.V1Events != 3 {
+		t.Fatalf("expected 3 v1 events, got %d", report.V1Events)
+	}
+	if report.V2Blocks != 0 {
+		t.Fatalf("expected 0 v2 blocks, got %d", report.V2Blocks)
+	}
+	if report.LastHeight != -1 {
+		t.Fatalf("expected last height -1, got %d", report.LastHeight)
+	}
+}
+
+func TestVerifyPureV2File(t *testing.T) {
+	st, path := newTestLedger(t)
+	for i := 0; i < 2; i++ {
+		if _, err := st.Append(sampleTransaction("Z2", int64(i))); err != nil {
+			t.Fatalf("append %d: %v", i, err)
+		}
+	}
+	if err := st.file.Close(); err != nil {
+		t.Fatalf("close original ledger: %v", err)
+	}
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	reopened, err := NewFileLedger(path, log)
+	if err != nil {
+		t.Fatalf("reopen ledger: %v", err)
+	}
+	report, err := reopened.Verify()
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if report.V1Events != 0 {
+		t.Fatalf("expected 0 v1 events, got %d", report.V1Events)
+	}
+	if report.V2Blocks != 2 {
+		t.Fatalf("expected 2 v2 blocks, got %d", report.V2Blocks)
+	}
+	if report.LastHeight != 1 {
+		t.Fatalf("expected last height 1, got %d", report.LastHeight)
+	}
+}
+
+func TestVerifyLegacyTamperDetection(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "legacy-ledger.jsonl")
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	legacy := []*models.Event{
+		{ID: 1, Type: "legacy", ZoneID: "Z-LEG", Timestamp: time.Now().UTC(), Source: "test"},
+		{ID: 2, Type: "legacy", ZoneID: "Z-LEG", Timestamp: time.Now().UTC().Add(time.Minute), Source: "test"},
+	}
+	for i := range legacy {
+		if i == 0 {
+			legacy[i].PrevHash = ""
+		} else {
+			legacy[i].PrevHash = legacy[i-1].Hash
+		}
+		hash, err := legacy[i].ComputeHash()
+		if err != nil {
+			t.Fatalf("compute hash %d: %v", i, err)
+		}
+		legacy[i].Hash = hash
+	}
+	writeEvents := func(events []*models.Event) {
+		lines := make([][]byte, len(events))
+		for i, ev := range events {
+			payload, err := json.Marshal(ev)
+			if err != nil {
+				t.Fatalf("marshal legacy %d: %v", i, err)
+			}
+			lines[i] = payload
+		}
+		content := bytes.Join(lines, []byte("\n"))
+		content = append(content, '\n')
+		if err := os.WriteFile(path, content, 0o644); err != nil {
+			t.Fatalf("write legacy: %v", err)
+		}
+	}
+	writeEvents(legacy)
+	st, err := NewFileLedger(path, log)
+	if err != nil {
+		t.Fatalf("new ledger: %v", err)
+	}
+	if err := st.file.Close(); err != nil {
+		t.Fatalf("close ledger: %v", err)
+	}
+	// Tamper with the second record by breaking its hash link and recomputing its digest.
+	legacy[1].PrevHash = "corrupted"
+	tamperedHash, err := legacy[1].ComputeHash()
+	if err != nil {
+		t.Fatalf("compute tampered hash: %v", err)
+	}
+	legacy[1].Hash = tamperedHash
+	writeEvents(legacy)
+	if _, err := st.Verify(); err == nil || !strings.Contains(err.Error(), "prevHash mismatch") {
+		t.Fatalf("expected prevHash mismatch, got %v", err)
 	}
 }
 
