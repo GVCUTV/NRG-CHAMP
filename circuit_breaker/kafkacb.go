@@ -1,4 +1,4 @@
-// v2
+// v3
 // kafkacb.go
 package circuitbreaker
 
@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -134,6 +135,8 @@ func NewKafkaBreakerFromEnv(name string, probe func(ctx context.Context) error) 
 		backoff:          time.Duration(backoffMS) * time.Millisecond,
 	}
 
+	formattedOpen := strconv.FormatFloat(openSeconds, 'f', -1, 64)
+
 	if enabled {
 		cfg := Config{
 			MaxFailures:      failureThreshold,
@@ -141,6 +144,11 @@ func NewKafkaBreakerFromEnv(name string, probe func(ctx context.Context) error) 
 			SuccessesToClose: successThreshold,
 		}
 		kb.breaker = New(name, cfg, probe)
+		log.Printf("[CB] kafka: initialized with failureThreshold=%d, openSeconds=%s", failureThreshold, formattedOpen)
+	}
+
+	if !enabled {
+		log.Printf("[CB] kafka: initialized with failureThreshold=%d, openSeconds=%s (disabled)", failureThreshold, formattedOpen)
 	}
 
 	return kb, nil
