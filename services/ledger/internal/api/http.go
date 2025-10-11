@@ -1,4 +1,4 @@
-// v3
+// v4
 // internal/api/http.go
 package api
 
@@ -10,6 +10,7 @@ import (
 	"path"
 	"strconv"
 
+	"nrgchamp/ledger/internal/metrics"
 	"nrgchamp/ledger/internal/storage"
 )
 
@@ -23,6 +24,7 @@ func RegisterRoutes(mux *http.ServeMux, st *storage.FileLedger, log *slog.Logger
 	mux.HandleFunc("/health", s.health)
 	mux.HandleFunc("/events", s.events)
 	mux.HandleFunc("/events/", s.eventByID)
+	mux.HandleFunc("/metrics", s.metrics)
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +83,17 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(v)
+}
+
+func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	body := metrics.Render()
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(body))
 }
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
