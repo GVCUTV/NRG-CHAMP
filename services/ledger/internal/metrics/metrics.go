@@ -36,6 +36,27 @@ func (c *counterVec) snapshot() map[string]uint64 {
 	return out
 }
 
+type counter struct {
+	mu    sync.Mutex
+	value uint64
+}
+
+func newCounter() *counter {
+	return &counter{}
+}
+
+func (c *counter) inc() {
+	c.mu.Lock()
+	c.value++
+	c.mu.Unlock()
+}
+
+func (c *counter) snapshot() uint64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.value
+}
+
 type histogram struct {
 	mu      sync.RWMutex
 	buckets []float64
@@ -76,9 +97,10 @@ func (h *histogram) snapshot() (buckets []float64, counts []uint64, sum float64,
 }
 
 var (
-	imputedTotal   = newCounterVec()
-	decodeErrTotal = newCounterVec()
-	matchLatency   = newHistogram([]float64{0.5, 1, 2, 5, 10, 30})
+	imputedTotal           = newCounterVec()
+	decodeErrTotal         = newCounterVec()
+	matchLatency           = newHistogram([]float64{0.5, 1, 2, 5, 10, 30})
+	loadTxSchemaEmptyTotal = newCounter()
 )
 
 // IncImputed increments the imputation counter for the provided zone label.
@@ -89,6 +111,11 @@ func IncImputed(zone string) {
 // IncDecodeError increments the decode error counter for the provided side label.
 func IncDecodeError(side string) {
 	decodeErrTotal.inc(strings.TrimSpace(side))
+}
+
+// IncLedgerLoadTxSchemaEmpty increments the ledger loader counter for transactions missing an explicit schema version.
+func IncLedgerLoadTxSchemaEmpty() {
+	loadTxSchemaEmptyTotal.inc()
 }
 
 // ObserveMatchLatency records the latency, expressed in seconds, required to match both sides of an epoch.
@@ -108,6 +135,10 @@ func Render() string {
 
 	writeMetricHeader(&b, "ledger_ingest_decode_errors_total", "counter")
 	writeCounter(&b, "ledger_ingest_decode_errors_total", "side", decodeErrTotal.snapshot())
+	b.WriteByte('\n')
+
+	writeMetricHeader(&b, "ledger_load_tx_schema_empty_total", "counter")
+	writeSimpleCounter(&b, "ledger_load_tx_schema_empty_total", loadTxSchemaEmptyTotal.snapshot())
 	b.WriteByte('\n')
 
 	writeMetricHeader(&b, "ledger_ingest_match_latency_seconds", "histogram")
@@ -161,4 +192,8 @@ func writeHistogram(b *strings.Builder, name string, h *histogram) {
 func escapeLabel(v string) string {
 	replacer := strings.NewReplacer("\\", "\\\\", "\n", "\\n", "\"", "\\\"")
 	return replacer.Replace(v)
+}
+
+func writeSimpleCounter(b *strings.Builder, name string, value uint64) {
+	fmt.Fprintf(b, "%s{} %d\n", name, value)
 }

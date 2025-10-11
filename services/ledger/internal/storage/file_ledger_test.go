@@ -5,6 +5,7 @@ package storage
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -257,6 +258,113 @@ func TestVerifyPureV2File(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultsEmptySchemaVersion(t *testing.T) {
+	st, path := newTestLedger(t)
+	if _, err := st.Append(sampleTransaction("Z3", 0)); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if err := st.file.Close(); err != nil {
+		t.Fatalf("close ledger: %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read ledger: %v", err)
+	}
+	lines := bytes.Split(bytes.TrimSpace(raw), []byte("\n"))
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 block, got %d", len(lines))
+	}
+	var blk models.BlockV2
+	if err := json.Unmarshal(lines[0], &blk); err != nil {
+		t.Fatalf("unmarshal block: %v", err)
+	}
+	if len(blk.Data.Transactions) != 1 {
+		t.Fatalf("expected 1 transaction, got %d", len(blk.Data.Transactions))
+	}
+	tx := blk.Data.Transactions[0]
+	tx.SchemaVersion = ""
+	hash, err := tx.ComputeHash()
+	if err != nil {
+		t.Fatalf("compute hash: %v", err)
+	}
+	tx.Hash = hash
+	dataHash, err := models.ComputeDataHashV2(blk.Data.Transactions)
+	if err != nil {
+		t.Fatalf("compute data hash: %v", err)
+	}
+	blk.Header.DataHash = dataHash
+	payload, err := finalizeBlockWithoutValidation(&blk)
+	if err != nil {
+		t.Fatalf("finalize block: %v", err)
+	}
+	lines[0] = payload
+	content := bytes.Join(lines, []byte("\n"))
+	content = append(content, '\n')
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write ledger: %v", err)
+	}
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	reopened, err := NewFileLedger(path, log)
+	if err != nil {
+		t.Fatalf("reload ledger: %v", err)
+	}
+	if len(reopened.transactions) != 1 {
+		t.Fatalf("expected 1 transaction in memory, got %d", len(reopened.transactions))
+	}
+	loaded := reopened.transactions[0]
+	if loaded.SchemaVersion != models.TransactionSchemaVersionV1 {
+		t.Fatalf("expected schema version v1, got %q", loaded.SchemaVersion)
+	}
+	if loaded.Hash != tx.Hash {
+		t.Fatalf("expected hash %s, got %s", tx.Hash, loaded.Hash)
+	}
+	if report, err := reopened.Verify(); err != nil {
+		t.Fatalf("verify: %v", err)
+	} else if report.V2Blocks != 1 {
+		t.Fatalf("expected 1 v2 block, got %d", report.V2Blocks)
+	}
+}
+
+func TestLoadRejectsUnknownTransactionSchema(t *testing.T) {
+	st, path := newTestLedger(t)
+	if _, err := st.Append(sampleTransaction("Z4", 0)); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if err := st.file.Close(); err != nil {
+		t.Fatalf("close ledger: %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read ledger: %v", err)
+	}
+	lines := bytes.Split(bytes.TrimSpace(raw), []byte("\n"))
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 block, got %d", len(lines))
+	}
+	var blk models.BlockV2
+	if err := json.Unmarshal(lines[0], &blk); err != nil {
+		t.Fatalf("unmarshal block: %v", err)
+	}
+	if len(blk.Data.Transactions) == 0 {
+		t.Fatalf("expected transactions in block")
+	}
+	blk.Data.Transactions[0].SchemaVersion = "vX"
+	payload, err := json.Marshal(&blk)
+	if err != nil {
+		t.Fatalf("marshal block: %v", err)
+	}
+	lines[0] = payload
+	content := bytes.Join(lines, []byte("\n"))
+	content = append(content, '\n')
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write ledger: %v", err)
+	}
+	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	if _, err := NewFileLedger(path, log); err == nil || !strings.Contains(err.Error(), "unsupported transaction schema version") {
+		t.Fatalf("expected schema version error, got %v", err)
+	}
+}
+
 func TestVerifyLegacyTamperDetection(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "legacy-ledger.jsonl")
@@ -398,4 +506,31 @@ func sampleTransaction(zone string, epoch int64) *models.Transaction {
 		MAPEReceivedAt:       matched.Add(-250 * time.Millisecond),
 		MatchedAt:            matched,
 	}
+}
+
+func finalizeBlockWithoutValidation(block *models.BlockV2) ([]byte, error) {
+	if block == nil {
+		return nil, fmt.Errorf("nil block")
+	}
+	block.Header.Timestamp = block.Header.Timestamp.UTC()
+	block.Header.BlockSize = 0
+	block.Header.HeaderHash = ""
+	var payload []byte
+	for i := 0; i < 5; i++ {
+		headerHash, err := models.ComputeHeaderHashV2(&block.Header)
+		if err != nil {
+			return nil, err
+		}
+		block.Header.HeaderHash = headerHash
+		payload, err = json.Marshal(block)
+		if err != nil {
+			return nil, err
+		}
+		size := int64(len(payload))
+		if block.Header.BlockSize == size {
+			return payload, nil
+		}
+		block.Header.BlockSize = size
+	}
+	return nil, fmt.Errorf("failed to finalize block without validation")
 }

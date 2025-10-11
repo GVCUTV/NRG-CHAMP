@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"nrgchamp/ledger/internal/metrics"
 	"nrgchamp/ledger/internal/models"
 )
 
@@ -79,10 +80,12 @@ func (fl *FileLedger) load() error {
 		}
 		var blk models.BlockV2
 		if err := json.Unmarshal(raw, &blk); err == nil && blk.Header.Version == models.BlockVersionV2 {
+			defaulted := normalizeTransactionSchemas(&blk, fl.log, line, true)
 			if err := blk.Validate(); err != nil {
 				return fmt.Errorf("line %d: %w", line, err)
 			}
-			for _, tx := range blk.Data.Transactions {
+			restoreTransactionSchemas(&blk, defaulted)
+			for idx, tx := range blk.Data.Transactions {
 				if tx == nil {
 					return fmt.Errorf("line %d: block transaction is nil", line)
 				}
@@ -92,6 +95,9 @@ func (fl *FileLedger) load() error {
 				storedTx := tx.Clone()
 				if storedTx == nil {
 					return fmt.Errorf("line %d: failed to clone transaction", line)
+				}
+				if idx < len(defaulted) && defaulted[idx] {
+					storedTx.SchemaVersion = models.TransactionSchemaVersionV1
 				}
 				ev, err := transactionToEvent(storedTx)
 				if err != nil {
@@ -310,9 +316,11 @@ func (fl *FileLedger) Verify() (*VerifyReport, error) {
 		}
 		var blk models.BlockV2
 		if err := json.Unmarshal(raw, &blk); err == nil && blk.Header.Version == models.BlockVersionV2 {
+			defaulted := normalizeTransactionSchemas(&blk, nil, line, false)
 			if err := blk.Validate(); err != nil {
 				return report, fmt.Errorf("line %d: %w", line, err)
 			}
+			restoreTransactionSchemas(&blk, defaulted)
 			if prevHeight == -1 {
 				if blk.Header.Height != 0 {
 					return report, fmt.Errorf("line %d: height mismatch", line)
@@ -438,6 +446,57 @@ func (fl *FileLedger) validateTransactionChain(tx *models.Transaction) error {
 		return fmt.Errorf("hash mismatch id=%d", tx.ID)
 	}
 	return nil
+}
+
+// normalizeTransactionSchemas promotes empty transaction schema versions to the canonical v1 identifier so legacy records load
+// successfully. It records observability signals when requested and returns a bitmap describing which transactions were
+// defaulted, allowing callers to restore the original values before performing hash validation.
+func normalizeTransactionSchemas(block *models.BlockV2, logger *slog.Logger, line int, countMetric bool) []bool {
+	if block == nil {
+		return nil
+	}
+	defaulted := make([]bool, len(block.Data.Transactions))
+	for idx, tx := range block.Data.Transactions {
+		if tx == nil {
+			continue
+		}
+		if tx.SchemaVersion != "" {
+			continue
+		}
+		if countMetric {
+			metrics.IncLedgerLoadTxSchemaEmpty()
+		}
+		if logger != nil {
+			logger.Warn(
+				"ledger_default_transaction_schema_version",
+				slog.Int("line", line),
+				slog.Int("transactionIndex", idx),
+				slog.Int64("transactionID", tx.ID),
+				slog.Int64("blockHeight", block.Header.Height),
+				slog.String("fallback", models.TransactionSchemaVersionV1),
+			)
+		}
+		tx.SchemaVersion = models.TransactionSchemaVersionV1
+		defaulted[idx] = true
+	}
+	return defaulted
+}
+
+// restoreTransactionSchemas reverts schemaVersion fields to empty strings for transactions previously defaulted by
+// normalizeTransactionSchemas so that hash verification uses the original payload.
+func restoreTransactionSchemas(block *models.BlockV2, defaulted []bool) {
+	if block == nil {
+		return
+	}
+	for idx, tx := range block.Data.Transactions {
+		if tx == nil {
+			continue
+		}
+		if idx >= len(defaulted) || !defaulted[idx] {
+			continue
+		}
+		tx.SchemaVersion = ""
+	}
 }
 
 func cloneEvent(ev *models.Event) *models.Event {
