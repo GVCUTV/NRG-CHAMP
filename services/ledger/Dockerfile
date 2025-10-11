@@ -1,6 +1,6 @@
-# v3
-# Dockerfile
-FROM golang:1.22-alpine AS build
+# // v4
+# // file: services/ledger/Dockerfile
+FROM golang:1.23-alpine AS ledger_build
 WORKDIR /src
 COPY services/ledger/go.mod services/ledger/go.sum ./
 COPY circuit_breaker /circuit_breaker
@@ -10,9 +10,9 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     mkdir -p /out && \
     go build -trimpath -ldflags="-s -w" -o /out/ledger .
 
-FROM alpine:3.20
+FROM alpine:3.20 AS ledger_runtime
 WORKDIR /app
-COPY --from=build /out/ledger /usr/local/bin/ledger
+COPY --from=ledger_build /out/ledger /usr/local/bin/ledger
 RUN adduser -D -H -u 10001 ledger && mkdir -p /app/data /app/logs && chown -R ledger:ledger /app
 USER ledger
 EXPOSE 8083

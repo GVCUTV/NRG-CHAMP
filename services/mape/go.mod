@@ -1,8 +1,8 @@
-// v8
-// services/mape/go.mod
+// v9
+// file: services/mape/go.mod
 module nrgchamp/mape
 
-go 1.22.3
+go 1.23
 
 require (
         github.com/nrg-champ/circuitbreaker v0.0.0
@@ -14,4 +14,4 @@ require (
         github.com/pierrec/lz4/v4 v4.1.15 // indirect
 )
 
-replace github.com/nrg-champ/circuitbreaker => ../../circuit_breaker
+replace github.com/nrg-champ/circuitbreaker => /circuit_breaker
