@@ -1,4 +1,4 @@
-// v9
+// v10
 // services/mape/internal/plan.go
 package internal
 
@@ -60,7 +60,8 @@ func (p *Plan) Build(zone string, epochIndex int64, epochStart, epochEnd string,
 	}
 	p.lg.Info("commands", "list", cmds)
 	led := LedgerEvent{
-		EpochIndex: epochIndex, ZoneID: zone,
+		SchemaVersion: LedgerSchemaVersion,
+		EpochIndex:    epochIndex, ZoneID: zone,
 		Planned: "action=" + res.Action + " heaters=" + itoa(len(acts.Heating)) + " coolers=" + itoa(len(acts.Cooling)) + " vents=" + itoa(len(acts.Ventilation)) + " fan=" + itoa(res.Fan),
 		TargetC: res.Target, HystC: res.Hyst, DeltaC: res.Delta, Fan: res.Fan, Start: epochStart, End: epochEnd, Timestamp: time.Now().UnixMilli(),
 		ZoneEnergy: res.ZoneEnergyKWhEpoch, EnergyFrom: res.ZoneEnergySource, ActEnergy: cloneEnergyMap(res.ActuatorEnergyKWh),

@@ -1,5 +1,5 @@
-// v1
-// internal/ingest/kafka_test.go
+// v2
+// services/ledger/internal/ingest/kafka_test.go
 package ingest
 
 import (
@@ -25,16 +25,18 @@ func TestZoneConsumerMatchesOutOfOrder(t *testing.T) {
 		t.Fatalf("new ledger: %v", err)
 	}
 
-	consumer := newZoneConsumer("zone-A", "zone.ledger.zone-A", nil, nil, st, logger, 0, 1, 200*time.Millisecond, 10)
+	counters := &Counters{}
+	consumer := newZoneConsumer("zone-A", "zone.ledger.zone-A", nil, nil, st, logger, counters, 0, 1, 200*time.Millisecond, 10)
 
 	start := time.Now().Add(-time.Second).UTC()
 	end := start.Add(time.Second)
 	agg := aggregatedEpoch{
-		ZoneID:     "zone-A",
-		Epoch:      epochWindow{Start: start, End: end, Index: 1, Len: time.Second},
-		Summary:    map[string]float64{"avgTemp": 21.5, "targetC": 21.0},
-		ByDevice:   map[string][]aggregatedReading{},
-		ProducedAt: time.Now().UTC(),
+		SchemaVersion: aggregatorSchemaVersionV1,
+		ZoneID:        "zone-A",
+		Epoch:         epochWindow{Start: start, End: end, Index: 1, Len: time.Second},
+		Summary:       map[string]float64{"avgTemp": 21.5, "targetC": 21.0},
+		ByDevice:      map[string][]aggregatedReading{},
+		ProducedAt:    time.Now().UTC(),
 	}
 	aggBytes, err := json.Marshal(agg)
 	if err != nil {
@@ -50,16 +52,17 @@ func TestZoneConsumerMatchesOutOfOrder(t *testing.T) {
 	}
 
 	mape := mapeLedgerEvent{
-		EpochIndex: 1,
-		ZoneID:     "zone-A",
-		Planned:    "cool",
-		TargetC:    21.0,
-		HystC:      0.5,
-		DeltaC:     1.0,
-		Fan:        2,
-		Start:      start.Format(time.RFC3339),
-		End:        end.Format(time.RFC3339),
-		Timestamp:  time.Now().UnixMilli(),
+		SchemaVersion: mapeSchemaVersionV1,
+		EpochIndex:    1,
+		ZoneID:        "zone-A",
+		Planned:       "cool",
+		TargetC:       21.0,
+		HystC:         0.5,
+		DeltaC:        1.0,
+		Fan:           2,
+		Start:         start.Format(time.RFC3339),
+		End:           end.Format(time.RFC3339),
+		Timestamp:     time.Now().UnixMilli(),
 	}
 	mapeBytes, err := json.Marshal(mape)
 	if err != nil {
@@ -101,14 +104,15 @@ func TestZoneConsumerImputesAfterGrace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new ledger: %v", err)
 	}
-	consumer := newZoneConsumer("zone-A", "zone.ledger.zone-A", nil, nil, st, logger, 0, 1, 20*time.Millisecond, 10)
+	consumer := newZoneConsumer("zone-A", "zone.ledger.zone-A", nil, nil, st, logger, &Counters{}, 0, 1, 20*time.Millisecond, 10)
 
 	agg := aggregatedEpoch{
-		ZoneID:     "zone-A",
-		Epoch:      epochWindow{Index: 2},
-		Summary:    map[string]float64{"targetC": 20.0},
-		ByDevice:   map[string][]aggregatedReading{},
-		ProducedAt: time.Now().UTC(),
+		SchemaVersion: aggregatorSchemaVersionV1,
+		ZoneID:        "zone-A",
+		Epoch:         epochWindow{Index: 2},
+		Summary:       map[string]float64{"targetC": 20.0},
+		ByDevice:      map[string][]aggregatedReading{},
+		ProducedAt:    time.Now().UTC(),
 	}
 	aggBytes, err := json.Marshal(agg)
 	if err != nil {
@@ -159,9 +163,9 @@ func TestZoneConsumerDedupSkipsFinalized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ledger: %v", err)
 	}
-	consumer := newZoneConsumer("zone-A", "zone.ledger.zone-A", nil, nil, st, logger, 0, 1, 50*time.Millisecond, 2)
+	consumer := newZoneConsumer("zone-A", "zone.ledger.zone-A", nil, nil, st, logger, &Counters{}, 0, 1, 50*time.Millisecond, 2)
 
-	agg := aggregatedEpoch{ZoneID: "zone-A", Epoch: epochWindow{Index: 3}, Summary: map[string]float64{"targetC": 19.0}, ByDevice: map[string][]aggregatedReading{}, ProducedAt: time.Now().UTC()}
+	agg := aggregatedEpoch{SchemaVersion: aggregatorSchemaVersionV1, ZoneID: "zone-A", Epoch: epochWindow{Index: 3}, Summary: map[string]float64{"targetC": 19.0}, ByDevice: map[string][]aggregatedReading{}, ProducedAt: time.Now().UTC()}
 	aggBytes, err := json.Marshal(agg)
 	if err != nil {
 		t.Fatalf("marshal agg: %v", err)
@@ -169,7 +173,7 @@ func TestZoneConsumerDedupSkipsFinalized(t *testing.T) {
 	if _, err := consumer.handleMessage(kafka.Message{Partition: 0, Offset: 4, Value: aggBytes}); err != nil {
 		t.Fatalf("agg: %v", err)
 	}
-	mape := mapeLedgerEvent{EpochIndex: 3, ZoneID: "zone-A", Planned: "heat", TargetC: 19.0, HystC: 0.3, DeltaC: 1.2, Fan: 1, Timestamp: time.Now().UnixMilli()}
+	mape := mapeLedgerEvent{SchemaVersion: mapeSchemaVersionV1, EpochIndex: 3, ZoneID: "zone-A", Planned: "heat", TargetC: 19.0, HystC: 0.3, DeltaC: 1.2, Fan: 1, Timestamp: time.Now().UnixMilli()}
 	mapeBytes, err := json.Marshal(mape)
 	if err != nil {
 		t.Fatalf("marshal mape: %v", err)
@@ -190,5 +194,97 @@ func TestZoneConsumerDedupSkipsFinalized(t *testing.T) {
 	events, total := st.Query("epoch.match", "zone-A", "", "", 1, 10)
 	if total != 1 || len(events) != 1 {
 		t.Fatalf("expected single ledger event, got total=%d len=%d", total, len(events))
+	}
+}
+
+func TestHandleAggregatorRejectsUnknownVersion(t *testing.T) {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	tmp := t.TempDir()
+	st, err := storage.NewFileLedger(filepath.Join(tmp, "ledger.jsonl"), logger)
+	if err != nil {
+		t.Fatalf("ledger: %v", err)
+	}
+	counters := &Counters{}
+	consumer := newZoneConsumer("zone-A", "zone.ledger.zone-A", nil, nil, st, logger, counters, 0, 1, 200*time.Millisecond, 10)
+
+	now := time.Now().UTC()
+	agg := aggregatedEpoch{SchemaVersion: "v2", ZoneID: "zone-A", Epoch: epochWindow{Index: 7, Start: now.Add(-time.Second), End: now}, ByDevice: map[string][]aggregatedReading{}, Summary: map[string]float64{}, ProducedAt: now}
+	aggBytes, err := json.Marshal(agg)
+	if err != nil {
+		t.Fatalf("marshal agg: %v", err)
+	}
+	commits, err := consumer.handleMessage(kafka.Message{Partition: 0, Offset: 11, Value: aggBytes})
+	if err != nil {
+		t.Fatalf("handle agg: %v", err)
+	}
+	if len(commits) != 1 {
+		t.Fatalf("expected 1 commit for rejected aggregator, got %d", len(commits))
+	}
+	if counters.UnknownAggregatorVersion() != 1 {
+		t.Fatalf("expected aggregator version counter 1, got %d", counters.UnknownAggregatorVersion())
+	}
+	if _, ok := consumer.pending[7]; ok {
+		t.Fatalf("expected no pending state for rejected epoch")
+	}
+
+	led := mapeLedgerEvent{SchemaVersion: mapeSchemaVersionV1, EpochIndex: 7, ZoneID: "zone-A", Planned: "hold", TargetC: 0, HystC: 0, DeltaC: 0, Fan: 0, Start: now.Format(time.RFC3339), End: now.Add(time.Second).Format(time.RFC3339), Timestamp: now.UnixMilli()}
+	ledBytes, err := json.Marshal(led)
+	if err != nil {
+		t.Fatalf("marshal mape: %v", err)
+	}
+	commits, err = consumer.handleMessage(kafka.Message{Partition: 1, Offset: 12, Value: ledBytes})
+	if err != nil {
+		t.Fatalf("handle mape: %v", err)
+	}
+	if len(commits) != 1 {
+		t.Fatalf("expected mape drop commit, got %d", len(commits))
+	}
+	if _, err := st.GetByID(1); err == nil {
+		t.Fatalf("expected no ledger event persisted for rejected epoch")
+	}
+}
+
+func TestHandleMapeRejectsUnknownVersion(t *testing.T) {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	tmp := t.TempDir()
+	st, err := storage.NewFileLedger(filepath.Join(tmp, "ledger.jsonl"), logger)
+	if err != nil {
+		t.Fatalf("ledger: %v", err)
+	}
+	counters := &Counters{}
+	consumer := newZoneConsumer("zone-A", "zone.ledger.zone-A", nil, nil, st, logger, counters, 0, 1, 200*time.Millisecond, 10)
+
+	now := time.Now().UTC()
+	agg := aggregatedEpoch{SchemaVersion: aggregatorSchemaVersionV1, ZoneID: "zone-A", Epoch: epochWindow{Index: 8, Start: now.Add(-time.Second), End: now}, ByDevice: map[string][]aggregatedReading{}, Summary: map[string]float64{}, ProducedAt: now}
+	aggBytes, err := json.Marshal(agg)
+	if err != nil {
+		t.Fatalf("marshal agg: %v", err)
+	}
+	if commits, err := consumer.handleMessage(kafka.Message{Partition: 0, Offset: 20, Value: aggBytes}); err != nil || len(commits) != 0 {
+		t.Fatalf("expected pending aggregator without commits, got commits=%d err=%v", len(commits), err)
+	}
+
+	led := mapeLedgerEvent{SchemaVersion: "v2", EpochIndex: 8, ZoneID: "zone-A", Planned: "cool", TargetC: 19.0, HystC: 0.2, DeltaC: 0.5, Fan: 1, Start: now.Format(time.RFC3339), End: now.Add(time.Second).Format(time.RFC3339), Timestamp: now.UnixMilli()}
+	ledBytes, err := json.Marshal(led)
+	if err != nil {
+		t.Fatalf("marshal led: %v", err)
+	}
+	commits, err := consumer.handleMessage(kafka.Message{Partition: 1, Offset: 21, Value: ledBytes})
+	if err != nil {
+		t.Fatalf("handle led: %v", err)
+	}
+	if len(commits) != 2 {
+		t.Fatalf("expected aggregator and mape commits, got %d", len(commits))
+	}
+	if counters.UnknownMapeVersion() != 1 {
+		t.Fatalf("expected mape version counter 1, got %d", counters.UnknownMapeVersion())
+	}
+	if counters.UnknownAggregatorVersion() != 0 {
+		t.Fatalf("unexpected aggregator counter %d", counters.UnknownAggregatorVersion())
+	}
+	if _, err := st.GetByID(1); err == nil {
+		t.Fatalf("expected no ledger event persisted for rejected mape epoch")
 	}
 }

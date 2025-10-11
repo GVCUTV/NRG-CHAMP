@@ -1,5 +1,5 @@
-// v3
-// internal/ingest/kafka.go
+// v4
+// services/ledger/internal/ingest/kafka.go
 package ingest
 
 import (
@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	circuitbreaker "github.com/nrg-champ/circuitbreaker"
@@ -18,6 +19,71 @@ import (
 	"nrgchamp/ledger/internal/models"
 	"nrgchamp/ledger/internal/storage"
 )
+
+const (
+	aggregatorSchemaVersionV1 = "v1"
+	mapeSchemaVersionV1       = "v1"
+)
+
+var (
+	validAggregatorSchemaVersions = map[string]struct{}{aggregatorSchemaVersionV1: {}}
+	validMapeSchemaVersions       = map[string]struct{}{mapeSchemaVersionV1: {}}
+
+	errUnknownAggregatorVersion = errors.New("unknown aggregator schema version")
+	errUnknownMapeVersion       = errors.New("unknown mape schema version")
+)
+
+// Counters tracks ingest-level error counters for observability.
+type Counters struct {
+	unknownAggregatorVersion atomic.Int64
+	unknownMapeVersion       atomic.Int64
+}
+
+// IncUnknownAggregatorVersion increments the Aggregator schema version error counter.
+func (c *Counters) IncUnknownAggregatorVersion() {
+	if c == nil {
+		return
+	}
+	c.unknownAggregatorVersion.Add(1)
+}
+
+// IncUnknownMapeVersion increments the MAPE schema version error counter.
+func (c *Counters) IncUnknownMapeVersion() {
+	if c == nil {
+		return
+	}
+	c.unknownMapeVersion.Add(1)
+}
+
+// UnknownAggregatorVersion returns the number of Aggregator messages rejected for schema version mismatches.
+func (c *Counters) UnknownAggregatorVersion() int64 {
+	if c == nil {
+		return 0
+	}
+	return c.unknownAggregatorVersion.Load()
+}
+
+// UnknownMapeVersion returns the number of MAPE messages rejected for schema version mismatches.
+func (c *Counters) UnknownMapeVersion() int64 {
+	if c == nil {
+		return 0
+	}
+	return c.unknownMapeVersion.Load()
+}
+
+func validateAggregatorVersion(version string) error {
+	if _, ok := validAggregatorSchemaVersions[version]; !ok {
+		return fmt.Errorf("%w: %q", errUnknownAggregatorVersion, version)
+	}
+	return nil
+}
+
+func validateMapeVersion(version string) error {
+	if _, ok := validMapeSchemaVersions[version]; !ok {
+		return fmt.Errorf("%w: %q", errUnknownMapeVersion, version)
+	}
+	return nil
+}
 
 // Config groups the Kafka ingestion settings required by the ledger.
 type Config struct {
@@ -35,6 +101,7 @@ type Config struct {
 type Manager struct {
 	wg        sync.WaitGroup
 	consumers []*zoneConsumer
+	counters  *Counters
 }
 
 // Start wires Kafka readers for each configured zone and begins ingestion.
@@ -55,7 +122,8 @@ func Start(ctx context.Context, cfg Config, st *storage.FileLedger, log *slog.Lo
 		return nil, fmt.Errorf("no zones configured")
 	}
 
-	mgr := &Manager{}
+	counters := &Counters{}
+	mgr := &Manager{counters: counters}
 
 	readerBreaker, err := circuitbreaker.NewKafkaBreakerFromEnv("ledger-consumer", nil)
 	if err != nil {
@@ -86,7 +154,7 @@ func Start(ctx context.Context, cfg Config, st *storage.FileLedger, log *slog.Lo
 			MaxBytes:    10e6,
 		})
 		wrappedReader := circuitbreaker.NewCBKafkaReader(reader, readerBreaker)
-		consumer := newZoneConsumer(zone, topic, reader, wrappedReader, st, log.With(slog.String("zone", zone)), cfg.PartitionAggregator, cfg.PartitionMAPE, grace, bufferMax)
+		consumer := newZoneConsumer(zone, topic, reader, wrappedReader, st, log.With(slog.String("zone", zone)), counters, cfg.PartitionAggregator, cfg.PartitionMAPE, grace, bufferMax)
 		mgr.consumers = append(mgr.consumers, consumer)
 		mgr.wg.Add(1)
 		go func(zc *zoneConsumer) {
@@ -102,6 +170,14 @@ func (m *Manager) Wait() {
 	m.wg.Wait()
 }
 
+// Counters exposes read-only access to ingest error counters.
+func (m *Manager) Counters() *Counters {
+	if m == nil {
+		return nil
+	}
+	return m.counters
+}
+
 // kafkaMessageFetcher captures the FetchMessage capability shared by kafka.Reader and the circuit-breaker wrapper.
 // It keeps the zone consumer decoupled from the specific implementation, while still allowing commits via the raw reader.
 type kafkaMessageFetcher interface {
@@ -109,22 +185,25 @@ type kafkaMessageFetcher interface {
 }
 
 type zoneConsumer struct {
-	zone    string
-	topic   string
-	reader  *kafka.Reader
-	fetcher kafkaMessageFetcher
-	storage *storage.FileLedger
-	log     *slog.Logger
+	zone     string
+	topic    string
+	reader   *kafka.Reader
+	fetcher  kafkaMessageFetcher
+	storage  *storage.FileLedger
+	log      *slog.Logger
+	counters *Counters
 
 	partAgg  int
 	partMape int
 	grace    time.Duration
 	buffer   int
 
-	mu        sync.Mutex
-	pending   map[int64]*matchState
-	finalized map[int64]time.Time
-	order     []int64
+	mu            sync.Mutex
+	pending       map[int64]*matchState
+	finalized     map[int64]time.Time
+	order         []int64
+	rejected      map[int64]string
+	rejectedOrder []int64
 }
 
 type pendingAgg struct {
@@ -152,7 +231,7 @@ type pendingFinalize struct {
 	state *matchState
 }
 
-func newZoneConsumer(zone, topic string, reader *kafka.Reader, fetcher kafkaMessageFetcher, st *storage.FileLedger, log *slog.Logger, partAgg, partMape int, grace time.Duration, buffer int) *zoneConsumer {
+func newZoneConsumer(zone, topic string, reader *kafka.Reader, fetcher kafkaMessageFetcher, st *storage.FileLedger, log *slog.Logger, counters *Counters, partAgg, partMape int, grace time.Duration, buffer int) *zoneConsumer {
 	return &zoneConsumer{
 		zone:      zone,
 		topic:     topic,
@@ -160,12 +239,14 @@ func newZoneConsumer(zone, topic string, reader *kafka.Reader, fetcher kafkaMess
 		fetcher:   fetcher,
 		storage:   st,
 		log:       log,
+		counters:  counters,
 		partAgg:   partAgg,
 		partMape:  partMape,
 		grace:     grace,
 		buffer:    buffer,
 		pending:   make(map[int64]*matchState),
 		finalized: make(map[int64]time.Time),
+		rejected:  make(map[int64]string),
 	}
 }
 
@@ -246,6 +327,21 @@ func (zc *zoneConsumer) handleAggregator(msg kafka.Message) ([]kafka.Message, er
 	if err := json.Unmarshal(msg.Value, &agg); err != nil {
 		return []kafka.Message{msg}, fmt.Errorf("decode aggregator: %w", err)
 	}
+	if err := validateAggregatorVersion(agg.SchemaVersion); err != nil {
+		if errors.Is(err, errUnknownAggregatorVersion) {
+			if zc.counters != nil {
+				zc.counters.IncUnknownAggregatorVersion()
+			}
+			zc.log.Error("aggregator_schema_version_unknown", slog.String("schemaVersion", agg.SchemaVersion), slog.Int64("epoch", agg.Epoch.Index))
+			commits := zc.rejectEpoch(agg.Epoch.Index, err.Error(), msg)
+			return commits, nil
+		}
+		return []kafka.Message{msg}, err
+	}
+	if reason, rejected := zc.rejectionReason(agg.Epoch.Index); rejected {
+		zc.log.Warn("epoch_rejected_drop_aggregator", slog.Int64("epoch", agg.Epoch.Index), slog.String("reason", reason))
+		return []kafka.Message{msg}, nil
+	}
 	if agg.ZoneID != "" && !strings.EqualFold(agg.ZoneID, zc.zone) {
 		zc.log.Warn("zone_mismatch", slog.String("payloadZone", agg.ZoneID), slog.String("topic", zc.topic))
 	}
@@ -285,6 +381,21 @@ func (zc *zoneConsumer) handleMape(msg kafka.Message) ([]kafka.Message, error) {
 	var led mapeLedgerEvent
 	if err := json.Unmarshal(msg.Value, &led); err != nil {
 		return []kafka.Message{msg}, fmt.Errorf("decode mape: %w", err)
+	}
+	if err := validateMapeVersion(led.SchemaVersion); err != nil {
+		if errors.Is(err, errUnknownMapeVersion) {
+			if zc.counters != nil {
+				zc.counters.IncUnknownMapeVersion()
+			}
+			zc.log.Error("mape_schema_version_unknown", slog.String("schemaVersion", led.SchemaVersion), slog.Int64("epoch", led.EpochIndex))
+			commits := zc.rejectEpoch(led.EpochIndex, err.Error(), msg)
+			return commits, nil
+		}
+		return []kafka.Message{msg}, err
+	}
+	if reason, rejected := zc.rejectionReason(led.EpochIndex); rejected {
+		zc.log.Warn("epoch_rejected_drop_mape", slog.Int64("epoch", led.EpochIndex), slog.String("reason", reason))
+		return []kafka.Message{msg}, nil
 	}
 	if led.ZoneID != "" && !strings.EqualFold(led.ZoneID, zc.zone) {
 		zc.log.Warn("zone_mismatch", slog.String("payloadZone", led.ZoneID), slog.String("topic", zc.topic))
@@ -412,6 +523,46 @@ func (zc *zoneConsumer) markFinalizedLocked(epoch int64) {
 	}
 }
 
+func (zc *zoneConsumer) markRejectedLocked(epoch int64, reason string) {
+	if zc.buffer <= 0 {
+		zc.buffer = 200
+	}
+	if zc.rejected == nil {
+		zc.rejected = make(map[int64]string)
+	}
+	zc.rejected[epoch] = reason
+	zc.rejectedOrder = append(zc.rejectedOrder, epoch)
+	if len(zc.rejectedOrder) > zc.buffer {
+		oldest := zc.rejectedOrder[0]
+		zc.rejectedOrder = zc.rejectedOrder[1:]
+		delete(zc.rejected, oldest)
+	}
+}
+
+func (zc *zoneConsumer) rejectionReason(epoch int64) (string, bool) {
+	zc.mu.Lock()
+	defer zc.mu.Unlock()
+	reason, ok := zc.rejected[epoch]
+	return reason, ok
+}
+
+func (zc *zoneConsumer) rejectEpoch(epoch int64, reason string, msg kafka.Message) []kafka.Message {
+	zc.mu.Lock()
+	defer zc.mu.Unlock()
+	commits := []kafka.Message{msg}
+	if state, ok := zc.pending[epoch]; ok {
+		if state.agg != nil && state.agg.msg.Offset != msg.Offset {
+			commits = append(commits, state.agg.msg)
+		}
+		if state.mape != nil && state.mape.msg.Offset != msg.Offset {
+			commits = append(commits, state.mape.msg)
+		}
+		delete(zc.pending, epoch)
+	}
+	zc.markRejectedLocked(epoch, reason)
+	return commits
+}
+
 // messagesForCommit returns the Kafka messages that should be acknowledged after persistence.
 func (zc *zoneConsumer) messagesForCommit(state *matchState) []kafka.Message {
 	commits := make([]kafka.Message, 0, 2)
@@ -512,11 +663,12 @@ func imputeMissingSide(zone string, epoch int64, agg *pendingAgg, mape *pendingM
 	} else {
 		aggImputed = true
 		aggData = aggregatedEpoch{
-			ZoneID:     zone,
-			Epoch:      epochWindow{Index: epoch},
-			ByDevice:   map[string][]aggregatedReading{},
-			Summary:    map[string]float64{"imputed": 1},
-			ProducedAt: now,
+			SchemaVersion: aggregatorSchemaVersionV1,
+			ZoneID:        zone,
+			Epoch:         epochWindow{Index: epoch},
+			ByDevice:      map[string][]aggregatedReading{},
+			Summary:       map[string]float64{"imputed": 1},
+			ProducedAt:    now,
 		}
 		if mape != nil {
 			if start, err := time.Parse(time.RFC3339, mape.data.Start); err == nil {
@@ -555,21 +707,28 @@ func imputeMissingSide(zone string, epoch int64, agg *pendingAgg, mape *pendingM
 			target = aggData.Summary["targetC"]
 		}
 		mapeData = mapeLedgerEvent{
-			EpochIndex: epoch,
-			ZoneID:     zone,
-			Planned:    "hold",
-			TargetC:    target,
-			HystC:      0,
-			DeltaC:     0,
-			Fan:        0,
-			Start:      start,
-			End:        end,
-			Timestamp:  now.UnixMilli(),
+			SchemaVersion: mapeSchemaVersionV1,
+			EpochIndex:    epoch,
+			ZoneID:        zone,
+			Planned:       "hold",
+			TargetC:       target,
+			HystC:         0,
+			DeltaC:        0,
+			Fan:           0,
+			Start:         start,
+			End:           end,
+			Timestamp:     now.UnixMilli(),
 		}
 		mapeReceived = now
 	}
 	mapeData.ZoneID = zone
 	mapeData.EpochIndex = epoch
+	if mapeData.SchemaVersion == "" {
+		mapeData.SchemaVersion = mapeSchemaVersionV1
+	}
+	if aggData.SchemaVersion == "" {
+		aggData.SchemaVersion = aggregatorSchemaVersionV1
+	}
 
 	return aggData, aggReceived, aggImputed, mapeData, mapeReceived, mapeImputed
 }
@@ -585,11 +744,12 @@ type combinedPayload struct {
 }
 
 type aggregatedEpoch struct {
-	ZoneID     string                         `json:"zoneId"`
-	Epoch      epochWindow                    `json:"epoch"`
-	ByDevice   map[string][]aggregatedReading `json:"byDevice"`
-	Summary    map[string]float64             `json:"summary"`
-	ProducedAt time.Time                      `json:"producedAt"`
+	SchemaVersion string                         `json:"schemaVersion"`
+	ZoneID        string                         `json:"zoneId"`
+	Epoch         epochWindow                    `json:"epoch"`
+	ByDevice      map[string][]aggregatedReading `json:"byDevice"`
+	Summary       map[string]float64             `json:"summary"`
+	ProducedAt    time.Time                      `json:"producedAt"`
 }
 
 type epochWindow struct {
@@ -611,14 +771,15 @@ type aggregatedReading struct {
 }
 
 type mapeLedgerEvent struct {
-	EpochIndex int64   `json:"epochIndex"`
-	ZoneID     string  `json:"zoneId"`
-	Planned    string  `json:"planned"`
-	TargetC    float64 `json:"targetC"`
-	HystC      float64 `json:"hysteresisC"`
-	DeltaC     float64 `json:"deltaC"`
-	Fan        int     `json:"fan"`
-	Start      string  `json:"epochStart"`
-	End        string  `json:"epochEnd"`
-	Timestamp  int64   `json:"timestamp"`
+	SchemaVersion string  `json:"schemaVersion"`
+	EpochIndex    int64   `json:"epochIndex"`
+	ZoneID        string  `json:"zoneId"`
+	Planned       string  `json:"planned"`
+	TargetC       float64 `json:"targetC"`
+	HystC         float64 `json:"hysteresisC"`
+	DeltaC        float64 `json:"deltaC"`
+	Fan           int     `json:"fan"`
+	Start         string  `json:"epochStart"`
+	End           string  `json:"epochEnd"`
+	Timestamp     int64   `json:"timestamp"`
 }

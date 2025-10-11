@@ -1,4 +1,4 @@
-// v2
+// v3
 // docs/project_documentation.md
 # NRG CHAMP
 
@@ -157,6 +157,15 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
   * Integrate with an appropriate blockchain platform that supports immutable data storage and smart contracts.
 * **Database Systems:**
   * Use distributed databases where needed to manage sensor data and system logs.
+
+### 2.3.2. Message Schema Versioning
+
+* **Aggregator → Ledger:**
+  * Kafka payloads emitted by the Aggregator include a `schemaVersion` field. The current version identifier is `"v1"` and must be recognised by the Ledger before the message is accepted.
+* **MAPE → Ledger:**
+  * Control events produced by the MAPE service for the Ledger also advertise `schemaVersion: "v1"`. Unknown versions are rejected and counted for observability.
+* **Ledger Enforcement:**
+  * The Ledger validates incoming versions and logs a clear error while incrementing counters whenever a payload cannot be decoded due to an unsupported schema.
 
 ### 2.3.2. Architectural Patterns
 

@@ -1,5 +1,5 @@
-// Package internal v10
-// file: internal/types.go
+// v11
+// services/aggregator/internal/types.go
 package internal
 
 import (
@@ -7,6 +7,9 @@ import (
 	"log/slog"
 	"time"
 )
+
+// LedgerSchemaVersion identifies the schema version used for Aggregator -> Ledger payloads.
+const LedgerSchemaVersion = "v1"
 
 // EpochID identifies a time window of fixed length.
 type EpochID struct {
@@ -32,6 +35,7 @@ type Reading struct {
 
 // AggregatedEpoch groups readings for a zone within one epoch.
 type AggregatedEpoch struct {
+	SchemaVersion          string               `json:"schemaVersion"`
 	ZoneID                 string               `json:"zoneId"`
 	Epoch                  EpochID              `json:"epoch"`
 	ByDevice               map[string][]Reading `json:"byDevice"`

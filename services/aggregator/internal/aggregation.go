@@ -1,5 +1,5 @@
-// Package internal v9
-// file: internal/aggregation.go
+// v10
+// services/aggregator/internal/aggregation.go
 package internal
 
 import (
@@ -41,6 +41,7 @@ func aggregate(zone string, epoch EpochID, readings []Reading, zThresh float64, 
 	deviceEnergies, zoneEnergy := computeActuatorEnergy(zone, epoch, byDev, energyState)
 	summary["zoneEnergyKWhEpoch"] = zoneEnergy
 	return AggregatedEpoch{
+		SchemaVersion:          LedgerSchemaVersion,
 		ZoneID:                 zone,
 		Epoch:                  epoch,
 		ByDevice:               byDev,
