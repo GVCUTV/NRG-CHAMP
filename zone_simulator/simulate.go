@@ -1,10 +1,9 @@
-// v3
+// v4
 // simulate.go
 package main
 
 import (
 	"context"
-	"github.com/segmentio/kafka-go"
 	"strconv"
 	"time"
 )
@@ -62,7 +61,7 @@ func (s *Simulator) startPhysicsLoop(ctx context.Context) {
 }
 
 // startPublisher keeps publishing device readings at per-type rates.
-func (s *Simulator) startPublisher(ctx context.Context, w *kafka.Writer, deviceID string, devType DeviceType) {
+func (s *Simulator) startPublisher(ctx context.Context, w kafkaMessageWriter, deviceID string, devType DeviceType) {
 	rate := s.cfg.RateForType(devType)
 	if rate <= 0 {
 		rate = time.Second
