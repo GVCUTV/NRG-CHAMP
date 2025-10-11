@@ -1,4 +1,4 @@
-// v1
+// v2
 // properties.go
 package circuitbreaker
 
@@ -14,9 +14,10 @@ import (
 
 // Config holds the circuit breaker tunables loaded from a .properties file.
 type Config struct {
-	MaxFailures  int           // number of consecutive failures before opening
-	ResetTimeout time.Duration // how long to wait before probing again
-	LogFile      string        // path to the logfile (optional)
+	MaxFailures      int           // number of consecutive failures before opening
+	ResetTimeout     time.Duration // how long to wait before probing again
+	SuccessesToClose int           // number of successes required in HalfOpen before closing
+	LogFile          string        // path to the logfile (optional)
 }
 
 // LoadConfigFromProperties parses a simple key=value .properties file.
@@ -32,7 +33,7 @@ func LoadConfigFromProperties(path string) (Config, error) {
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
-	cfg := Config{MaxFailures: 5, ResetTimeout: 30 * time.Second}
+	cfg := Config{MaxFailures: 5, ResetTimeout: 30 * time.Second, SuccessesToClose: 1}
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -67,6 +68,9 @@ func LoadConfigFromProperties(path string) (Config, error) {
 	}
 	if cfg.ResetTimeout <= 0 {
 		return Config{}, errors.New("ResetTimeout must be > 0")
+	}
+	if cfg.SuccessesToClose < 1 {
+		return Config{}, errors.New("SuccessesToClose must be >= 1")
 	}
 	logger = newLogger(cfg.LogFile)
 	logger.Info("properties_loaded", "maxFailures", cfg.MaxFailures, "resetTimeout", cfg.ResetTimeout.String(), "logFile", cfg.LogFile)
