@@ -1,12 +1,16 @@
-// v1
+// v2
 // internal/storage/file_ledger.go
 package storage
 
 import (
 	"bufio"
+	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -21,14 +25,16 @@ import (
 var ErrNotFound = errors.New("not found")
 
 type FileLedger struct {
-	mu       sync.RWMutex
-	path     string
-	log      *slog.Logger
-	file     *os.File
-	writer   *bufio.Writer
-	lastID   int64
-	lastHash string
-	events   []*models.Event
+	mu             sync.RWMutex
+	path           string
+	log            *slog.Logger
+	file           *os.File
+	writer         *bufio.Writer
+	lastID         int64
+	lastHash       string
+	lastHeight     int64
+	lastHeaderHash string
+	events         []*models.Event
 }
 
 func NewFileLedger(path string, log *slog.Logger) (*FileLedger, error) {
@@ -39,7 +45,7 @@ func NewFileLedger(path string, log *slog.Logger) (*FileLedger, error) {
 	if err != nil {
 		return nil, err
 	}
-	fl := &FileLedger{path: path, log: log, file: f, writer: bufio.NewWriter(f)}
+	fl := &FileLedger{path: path, log: log, file: f, writer: bufio.NewWriter(f), lastHeight: -1}
 	if err := fl.load(); err != nil {
 		f.Close()
 		return nil, err
@@ -52,33 +58,72 @@ func (fl *FileLedger) load() error {
 	if _, err := fl.file.Seek(0, 0); err != nil {
 		return err
 	}
-	s := bufio.NewScanner(fl.file)
-	for s.Scan() {
+	fl.events = nil
+	fl.lastID = 0
+	fl.lastHash = ""
+	fl.lastHeaderHash = ""
+	fl.lastHeight = -1
+	scanner := bufio.NewScanner(fl.file)
+	var (
+		v1Events int
+		v2Blocks int
+		line     int
+	)
+	for scanner.Scan() {
+		line++
+		raw := bytes.TrimSpace(scanner.Bytes())
+		if len(raw) == 0 {
+			continue
+		}
+		var blk models.BlockV2
+		if err := json.Unmarshal(raw, &blk); err == nil && blk.Header.Version == models.BlockVersionV2 {
+			if err := blk.Validate(); err != nil {
+				return fmt.Errorf("line %d: %w", line, err)
+			}
+			for _, tx := range blk.Data.Transactions {
+				if tx == nil {
+					return fmt.Errorf("line %d: block transaction is nil", line)
+				}
+				if err := fl.validateEventChain(tx); err != nil {
+					return fmt.Errorf("line %d: %w", line, err)
+				}
+				tx.Timestamp = tx.Timestamp.UTC()
+				stored := cloneEvent(tx)
+				fl.events = append(fl.events, stored)
+				if stored.ID > fl.lastID {
+					fl.lastID = stored.ID
+				}
+				fl.lastHash = stored.Hash
+			}
+			fl.lastHeaderHash = blk.Header.HeaderHash
+			fl.lastHeight = blk.Header.Height
+			v2Blocks++
+			continue
+		}
 		var ev models.Event
-		if err := json.Unmarshal(s.Bytes(), &ev); err != nil {
-			return err
+		if err := json.Unmarshal(raw, &ev); err != nil {
+			return fmt.Errorf("line %d: %w", line, err)
 		}
-		h, err := ev.ComputeHash()
-		if err != nil {
-			return err
+		if err := fl.validateEventChain(&ev); err != nil {
+			return fmt.Errorf("line %d: %w", line, err)
 		}
-		if h != ev.Hash {
-			return fmt.Errorf("integrity mismatch id=%d", ev.ID)
+		ev.Timestamp = ev.Timestamp.UTC()
+		stored := cloneEvent(&ev)
+		fl.events = append(fl.events, stored)
+		if stored.ID > fl.lastID {
+			fl.lastID = stored.ID
 		}
-		fl.events = append(fl.events, &ev)
-		if ev.ID > fl.lastID {
-			fl.lastID = ev.ID
-		}
-		fl.lastHash = ev.Hash
+		fl.lastHash = stored.Hash
+		v1Events++
 	}
-	if err := s.Err(); err != nil {
+	if err := scanner.Err(); err != nil {
 		return err
 	}
-	if _, err := fl.file.Seek(0, os.SEEK_END); err != nil {
+	if _, err := fl.file.Seek(0, io.SeekEnd); err != nil {
 		return err
 	}
 	fl.writer = bufio.NewWriter(fl.file)
-	fl.log.Info("loaded", slog.Int("records", len(fl.events)), slog.Int64("lastID", fl.lastID))
+	fl.log.Info("loaded", slog.Int("records", len(fl.events)), slog.Int("v1Events", v1Events), slog.Int("v2Blocks", v2Blocks), slog.Int64("lastID", fl.lastID), slog.Int64("lastHeight", fl.lastHeight))
 	return nil
 }
 
@@ -89,18 +134,48 @@ func (fl *FileLedger) Append(ev *models.Event) (*models.Event, error) {
 	ev.ID = fl.lastID
 	if ev.Timestamp.IsZero() {
 		ev.Timestamp = time.Now().UTC()
+	} else {
+		ev.Timestamp = ev.Timestamp.UTC()
 	}
 	ev.PrevHash = fl.lastHash
+	if len(fl.events) == 0 {
+		if ev.PrevHash != "" {
+			return nil, fmt.Errorf("prevHash mismatch id=%d", ev.ID)
+		}
+	} else if ev.PrevHash != fl.lastHash {
+		return nil, fmt.Errorf("prevHash mismatch id=%d", ev.ID)
+	}
 	h, err := ev.ComputeHash()
 	if err != nil {
 		return nil, err
 	}
 	ev.Hash = h
-	b, err := json.Marshal(ev)
+	stored := cloneEvent(ev)
+	block := models.BlockV2{
+		Header: models.BlockHeaderV2{
+			Version:        models.BlockVersionV2,
+			Height:         fl.lastHeight + 1,
+			PrevHeaderHash: fl.lastHeaderHash,
+			Timestamp:      time.Now().UTC(),
+			Nonce:          "",
+		},
+		Data: models.BlockDataV2{Transactions: []*models.Event{stored}},
+	}
+	dataHash, err := models.ComputeDataHashV2(block.Data.Transactions)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := fl.writer.Write(b); err != nil {
+	block.Header.DataHash = dataHash
+	nonce, err := newNonce()
+	if err != nil {
+		return nil, err
+	}
+	block.Header.Nonce = nonce
+	payload, err := finalizeBlock(&block)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := fl.writer.Write(payload); err != nil {
 		return nil, err
 	}
 	if err := fl.writer.WriteByte('\n'); err != nil {
@@ -112,13 +187,12 @@ func (fl *FileLedger) Append(ev *models.Event) (*models.Event, error) {
 	if err := fl.file.Sync(); err != nil {
 		return nil, err
 	}
-	fl.lastHash = ev.Hash
-	cpy := *ev
-	if ev.Payload != nil {
-		cpy.Payload = append([]byte(nil), ev.Payload...)
-	}
-	fl.events = append(fl.events, &cpy)
-	return &cpy, nil
+	fl.lastHash = stored.Hash
+	fl.lastHeaderHash = block.Header.HeaderHash
+	fl.lastHeight = block.Header.Height
+	fl.events = append(fl.events, stored)
+	fl.log.Info("appended block", slog.Int64("height", block.Header.Height), slog.String("headerHash", block.Header.HeaderHash), slog.Int64("eventID", stored.ID))
+	return cloneEvent(stored), nil
 }
 
 func (fl *FileLedger) GetByID(id int64) (*models.Event, error) {
@@ -188,23 +262,191 @@ func (fl *FileLedger) Query(typ, zoneID, from, to string, page, size int) ([]*mo
 	return filtered[start:end], total
 }
 
-func (fl *FileLedger) Verify() error {
+type VerifyReport struct {
+	V1Events   int   `json:"v1Events"`
+	V2Blocks   int   `json:"v2Blocks"`
+	LastHeight int64 `json:"lastHeight"`
+}
+
+func (fl *FileLedger) Verify() (*VerifyReport, error) {
 	fl.mu.RLock()
 	defer fl.mu.RUnlock()
-	for i := range fl.events {
-		e := fl.events[i]
-		h, err := e.ComputeHash()
+	report := &VerifyReport{LastHeight: -1}
+	f, err := os.Open(fl.path)
+	if err != nil {
+		return report, err
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	var (
+		prevEventHash  string
+		prevHeaderHash string
+		prevHeight     int64 = -1
+		line           int
+	)
+	for scanner.Scan() {
+		line++
+		raw := bytes.TrimSpace(scanner.Bytes())
+		if len(raw) == 0 {
+			continue
+		}
+		var blk models.BlockV2
+		if err := json.Unmarshal(raw, &blk); err == nil && blk.Header.Version == models.BlockVersionV2 {
+			if err := blk.Validate(); err != nil {
+				return report, fmt.Errorf("line %d: %w", line, err)
+			}
+			if prevHeight == -1 {
+				if blk.Header.Height != 0 {
+					return report, fmt.Errorf("line %d: height mismatch", line)
+				}
+				if blk.Header.PrevHeaderHash != "" {
+					return report, fmt.Errorf("line %d: prevHeaderHash mismatch", line)
+				}
+			} else if blk.Header.Height != prevHeight+1 {
+				return report, fmt.Errorf("line %d: height mismatch", line)
+			}
+			if prevHeight >= 0 && blk.Header.PrevHeaderHash != prevHeaderHash {
+				return report, fmt.Errorf("line %d: prevHeaderHash mismatch", line)
+			}
+			dataHash, err := models.ComputeDataHashV2(blk.Data.Transactions)
+			if err != nil {
+				return report, fmt.Errorf("line %d: %w", line, err)
+			}
+			if dataHash != blk.Header.DataHash {
+				return report, fmt.Errorf("line %d: dataHash mismatch", line)
+			}
+			headerHash, err := models.ComputeHeaderHashV2(&blk.Header)
+			if err != nil {
+				return report, fmt.Errorf("line %d: %w", line, err)
+			}
+			if headerHash != blk.Header.HeaderHash {
+				return report, fmt.Errorf("line %d: headerHash mismatch", line)
+			}
+			if int64(len(raw)) != blk.Header.BlockSize {
+				return report, fmt.Errorf("line %d: blockSize mismatch", line)
+			}
+			for _, tx := range blk.Data.Transactions {
+				if tx == nil {
+					return report, fmt.Errorf("line %d: block transaction is nil", line)
+				}
+				h, err := tx.ComputeHash()
+				if err != nil {
+					return report, fmt.Errorf("line %d: %w", line, err)
+				}
+				if h != tx.Hash {
+					return report, fmt.Errorf("line %d: transaction hash mismatch id=%d", line, tx.ID)
+				}
+				if prevEventHash == "" {
+					if tx.PrevHash != "" {
+						return report, fmt.Errorf("line %d: prevHash mismatch id=%d", line, tx.ID)
+					}
+				} else if tx.PrevHash != prevEventHash {
+					return report, fmt.Errorf("line %d: prevHash mismatch id=%d", line, tx.ID)
+				}
+				prevEventHash = tx.Hash
+			}
+			prevHeaderHash = blk.Header.HeaderHash
+			prevHeight = blk.Header.Height
+			report.V2Blocks++
+			report.LastHeight = blk.Header.Height
+			continue
+		}
+		var ev models.Event
+		if err := json.Unmarshal(raw, &ev); err != nil {
+			return report, fmt.Errorf("line %d: %w", line, err)
+		}
+		h, err := ev.ComputeHash()
 		if err != nil {
-			return err
+			return report, fmt.Errorf("line %d: %w", line, err)
 		}
-		if h != e.Hash {
-			return fmt.Errorf("hash mismatch id=%d", e.ID)
+		if h != ev.Hash {
+			return report, fmt.Errorf("line %d: hash mismatch id=%d", line, ev.ID)
 		}
-		if i > 0 && e.PrevHash != fl.events[i-1].Hash {
-			return fmt.Errorf("prevHash mismatch id=%d", e.ID)
+		if prevEventHash == "" {
+			if ev.PrevHash != "" {
+				return report, fmt.Errorf("line %d: prevHash mismatch id=%d", line, ev.ID)
+			}
+		} else if ev.PrevHash != prevEventHash {
+			return report, fmt.Errorf("line %d: prevHash mismatch id=%d", line, ev.ID)
 		}
+		prevEventHash = ev.Hash
+		report.V1Events++
+	}
+	if err := scanner.Err(); err != nil {
+		return report, err
+	}
+	return report, nil
+}
+
+func (fl *FileLedger) validateEventChain(ev *models.Event) error {
+	if ev == nil {
+		return errors.New("nil event")
+	}
+	expectedPrev := fl.lastHash
+	if len(fl.events) == 0 {
+		if ev.PrevHash != "" {
+			return fmt.Errorf("prevHash mismatch id=%d", ev.ID)
+		}
+	} else if ev.PrevHash != expectedPrev {
+		return fmt.Errorf("prevHash mismatch id=%d", ev.ID)
+	}
+	h, err := ev.ComputeHash()
+	if err != nil {
+		return err
+	}
+	if h != ev.Hash {
+		return fmt.Errorf("hash mismatch id=%d", ev.ID)
 	}
 	return nil
+}
+
+func cloneEvent(ev *models.Event) *models.Event {
+	if ev == nil {
+		return nil
+	}
+	cp := *ev
+	if ev.Payload != nil {
+		cp.Payload = append([]byte(nil), ev.Payload...)
+	}
+	return &cp
+}
+
+func finalizeBlock(block *models.BlockV2) ([]byte, error) {
+	if block == nil {
+		return nil, errors.New("nil block")
+	}
+	if err := block.Validate(); err != nil {
+		return nil, err
+	}
+	block.Header.Timestamp = block.Header.Timestamp.UTC()
+	block.Header.BlockSize = 0
+	block.Header.HeaderHash = ""
+	var payload []byte
+	for i := 0; i < 5; i++ {
+		headerHash, err := models.ComputeHeaderHashV2(&block.Header)
+		if err != nil {
+			return nil, err
+		}
+		block.Header.HeaderHash = headerHash
+		payload, err = json.Marshal(block)
+		if err != nil {
+			return nil, err
+		}
+		size := int64(len(payload))
+		if block.Header.BlockSize == size {
+			return payload, nil
+		}
+		block.Header.BlockSize = size
+	}
+	return nil, errors.New("failed to finalize block")
+}
+
+func newNonce() (string, error) {
+	buf := make([]byte, models.BlockNonceBytes)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
 }
 
 func parseTime(s string) (time.Time, error) {
