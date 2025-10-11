@@ -1,3 +1,5 @@
+// v0
+// AGENTS.md
 # AGENTS.md — Codex Operational Rules for NRG CHAMP
 
 > **Purpose:**  
@@ -180,10 +182,8 @@ A Codex task is considered **complete** only if all of the following hold:
 ### 18) Docker & Compose Pre‑flight Rules
 
 - **Build context discipline**: For monorepo local modules (e.g., `circuit_breaker/`), set each service’s Compose `build.context` to the **repo root**, and set `build.dockerfile` to the per‑service Dockerfile path (e.g., `services/ledger/Dockerfile`). This guarantees local shared modules are copyable during image builds.
-- **Local module replace**: When a service requires a local module, add a Go `replace` in `go.mod` that matches the **container path the Dockerfile copies to**. Prefer absolute container paths to avoid ambiguity, e.g.
-  ```
-  replace github.com/nrg-champ/circuitbreaker => /circuit_breaker
-  ```
+- **Go workspace discipline**: The repository root `go.work` is **mandatory**. It MUST list `./circuit_breaker`, `./services/aggregator`, `./services/assessment`, `./services/gamification`, `./services/ledger`, `./services/mape`, `./services/topic-init`, and `./zone_simulator`. Docker builds copy this file to `/src/go.work`, and `go work sync` MUST run whenever module dependencies change so that `go.work.sum` stays current.
+- **Local module replace**: Avoid absolute paths. Prefer workspace resolution; if a `replace` is unavoidable, use a relative path that remains valid once the repo is copied to `/src` inside the builder.
 - **Dockerfile copies**: For services depending on local modules, the Dockerfile **must** include:
     - `COPY circuit_breaker /circuit_breaker` (or the correct module folder);
     - `COPY services/<svc>/go.mod services/<svc>/go.sum ./` (for dependency resolution cache);

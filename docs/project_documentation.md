@@ -1,4 +1,4 @@
-// v6
+// v7
 // docs/project_documentation.md
 # NRG CHAMP
 
@@ -172,11 +172,25 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
 
 ## Container Hygiene Notes
 
-The service images now standardize on the mandated `golang:1.23-alpine` build stage and copy the shared `circuit_breaker` module into `/circuit_breaker` for reliable module replacement during Docker builds. Corresponding `go.mod` files reference that absolute path so local module code resolves consistently across builders. Stage identifiers were made unique per Dockerfile to silence duplicate-name warnings, and runtime stages are explicitly labeled for clarity during multi-stage builds.
+The service images now standardize on the mandated `golang:1.23-alpine` build stage and copy the shared `circuit_breaker` module into `/circuit_breaker` for reliable module replacement during Docker builds. Corresponding `go.mod` files rely on the workspace (or relative replacements when unavoidable) so local module code resolves consistently across builders. Stage identifiers were made unique per Dockerfile to silence duplicate-name warnings, and runtime stages are explicitly labeled for clarity during multi-stage builds.
 
 *The ellipses above denote truncated hashes for brevity; real blocks contain full 64-character hex digests.*
 
 ---
+
+## Build System & Module Layout
+
+### Go Workspace Policy
+
+To keep local development and container builds aligned, the repository root owns the canonical Go workspace:
+
+* `go.work` MUST live at the repo root and be copied into `/src/go.work` during image builds.
+* The workspace MUST `use` each local module: `./circuit_breaker`, `./services/aggregator`, `./services/assessment`, `./services/gamification`, `./services/ledger`, `./services/mape`, `./services/topic-init`, and `./zone_simulator`.
+* `go.work.sync` (or `go work sync`) MUST be run whenever module dependencies change so that `go.work.sum` stays in lock-step with the individual `go.sum` files.
+* Local module wiring MUST avoid absolute host paths. Prefer the workspace for dependency resolution; if a `replace` is unavoidable, it MUST be expressed with a relative path that remains valid inside the Docker build context at `/src`.
+* Docker build contexts MUST remain rooted at the repository, ensuring every workspace module is copied alongside service sources.
+
+This workspace-first policy guarantees that `go` tooling behaves consistently on developer machines, in CI, and within containerized builds.
 
 
 ## 2.2. Non-Functional Requirements
