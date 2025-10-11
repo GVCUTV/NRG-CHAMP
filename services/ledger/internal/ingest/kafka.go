@@ -1,4 +1,4 @@
-// v1
+// v2
 // internal/ingest/kafka.go
 package ingest
 
@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	circuitbreaker "github.com/nrg-champ/circuitbreaker"
 	"github.com/segmentio/kafka-go"
 
 	"nrgchamp/ledger/internal/models"
@@ -55,6 +56,17 @@ func Start(ctx context.Context, cfg Config, st *storage.FileLedger, log *slog.Lo
 	}
 
 	mgr := &Manager{}
+
+	readerBreaker, err := circuitbreaker.NewKafkaBreakerFromEnv("ledger-consumer", nil)
+	if err != nil {
+		log.Error("consumer_cb_init_err", slog.String("name", "ledger-consumer"), slog.Any("err", err))
+	} else {
+		if readerBreaker != nil && readerBreaker.Enabled() {
+			log.Info("consumer_cb_enabled", slog.String("name", "ledger-consumer"))
+		} else {
+			log.Info("consumer_cb_disabled", slog.String("name", "ledger-consumer"))
+		}
+	}
 	grace := cfg.GracePeriod
 	if grace <= 0 {
 		grace = 2 * time.Second
@@ -73,7 +85,8 @@ func Start(ctx context.Context, cfg Config, st *storage.FileLedger, log *slog.Lo
 			MinBytes:    1,
 			MaxBytes:    10e6,
 		})
-		consumer := newZoneConsumer(zone, topic, reader, st, log.With(slog.String("zone", zone)), cfg.PartitionAggregator, cfg.PartitionMAPE, grace, bufferMax)
+		wrappedReader := circuitbreaker.NewCBKafkaReader(reader, readerBreaker)
+		consumer := newZoneConsumer(zone, topic, reader, wrappedReader, st, log.With(slog.String("zone", zone)), cfg.PartitionAggregator, cfg.PartitionMAPE, grace, bufferMax)
 		mgr.consumers = append(mgr.consumers, consumer)
 		mgr.wg.Add(1)
 		go func(zc *zoneConsumer) {
@@ -89,10 +102,17 @@ func (m *Manager) Wait() {
 	m.wg.Wait()
 }
 
+// kafkaMessageFetcher captures the FetchMessage capability shared by kafka.Reader and the circuit-breaker wrapper.
+// It keeps the zone consumer decoupled from the specific implementation, while still allowing commits via the raw reader.
+type kafkaMessageFetcher interface {
+	FetchMessage(ctx context.Context) (kafka.Message, error)
+}
+
 type zoneConsumer struct {
 	zone    string
 	topic   string
 	reader  *kafka.Reader
+	fetcher kafkaMessageFetcher
 	storage *storage.FileLedger
 	log     *slog.Logger
 
@@ -132,11 +152,12 @@ type pendingFinalize struct {
 	state *matchState
 }
 
-func newZoneConsumer(zone, topic string, reader *kafka.Reader, st *storage.FileLedger, log *slog.Logger, partAgg, partMape int, grace time.Duration, buffer int) *zoneConsumer {
+func newZoneConsumer(zone, topic string, reader *kafka.Reader, fetcher kafkaMessageFetcher, st *storage.FileLedger, log *slog.Logger, partAgg, partMape int, grace time.Duration, buffer int) *zoneConsumer {
 	return &zoneConsumer{
 		zone:      zone,
 		topic:     topic,
 		reader:    reader,
+		fetcher:   fetcher,
 		storage:   st,
 		log:       log,
 		partAgg:   partAgg,
@@ -163,7 +184,11 @@ func (zc *zoneConsumer) run(ctx context.Context) {
 	}
 	for {
 		fetchCtx, cancel := context.WithTimeout(ctx, wait)
-		msg, err := zc.reader.FetchMessage(fetchCtx)
+		fetcher := zc.fetcher
+		if fetcher == nil {
+			fetcher = zc.reader
+		}
+		msg, err := fetcher.FetchMessage(fetchCtx)
 		cancel()
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
