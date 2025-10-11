@@ -1,4 +1,4 @@
-// v2
+// v3
 // internal/storage/file_ledger_test.go
 package storage
 
@@ -17,8 +17,7 @@ import (
 
 func TestAppendCreatesGenesisBlockV2(t *testing.T) {
 	st, path := newTestLedger(t)
-	payload := json.RawMessage([]byte(`{"a":1}`))
-	if _, err := st.Append(&models.Event{Type: "test", ZoneID: "Z1", Source: "unit-test", Payload: payload}); err != nil {
+	if _, err := st.Append(sampleTransaction("Z1", 0)); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 	data, err := os.ReadFile(path)
@@ -55,6 +54,9 @@ func TestAppendCreatesGenesisBlockV2(t *testing.T) {
 	if tx.PrevHash != "" {
 		t.Fatalf("expected empty prev hash for genesis tx")
 	}
+	if tx.SchemaVersion != models.TransactionSchemaVersionV1 {
+		t.Fatalf("unexpected transaction schema version: %s", tx.SchemaVersion)
+	}
 	hash, err := tx.ComputeHash()
 	if err != nil {
 		t.Fatalf("compute hash: %v", err)
@@ -80,9 +82,8 @@ func TestAppendCreatesGenesisBlockV2(t *testing.T) {
 
 func TestVerifyThreeBlockChain(t *testing.T) {
 	st, _ := newTestLedger(t)
-	payload := json.RawMessage([]byte(`{"a":2}`))
 	for i := 0; i < 3; i++ {
-		if _, err := st.Append(&models.Event{Type: "test", ZoneID: "Z1", Source: "unit-test", Payload: payload}); err != nil {
+		if _, err := st.Append(sampleTransaction("Z1", int64(i))); err != nil {
 			t.Fatalf("append %d: %v", i, err)
 		}
 	}
@@ -103,9 +104,8 @@ func TestVerifyThreeBlockChain(t *testing.T) {
 
 func TestVerifyDetectsDataTamper(t *testing.T) {
 	st, path := newTestLedger(t)
-	payload := json.RawMessage([]byte(`{"a":3}`))
 	for i := 0; i < 2; i++ {
-		if _, err := st.Append(&models.Event{Type: "test", ZoneID: "Z1", Source: "unit-test", Payload: payload}); err != nil {
+		if _, err := st.Append(sampleTransaction("Z1", int64(i))); err != nil {
 			t.Fatalf("append %d: %v", i, err)
 		}
 	}
@@ -124,7 +124,7 @@ func TestVerifyDetectsDataTamper(t *testing.T) {
 	if err := json.Unmarshal(lines[0], &blk); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	blk.Data.Transactions[0].Payload = json.RawMessage([]byte(`{"a":999}`))
+	blk.Data.Transactions[0].Aggregator.Summary["targetC"] = 999
 	tampered, err := json.Marshal(&blk)
 	if err != nil {
 		t.Fatalf("marshal tampered: %v", err)
@@ -142,9 +142,8 @@ func TestVerifyDetectsDataTamper(t *testing.T) {
 
 func TestVerifyDetectsHeaderTamper(t *testing.T) {
 	st, path := newTestLedger(t)
-	payload := json.RawMessage([]byte(`{"a":4}`))
 	for i := 0; i < 2; i++ {
-		if _, err := st.Append(&models.Event{Type: "test", ZoneID: "Z1", Source: "unit-test", Payload: payload}); err != nil {
+		if _, err := st.Append(sampleTransaction("Z1", int64(i))); err != nil {
 			t.Fatalf("append %d: %v", i, err)
 		}
 	}
@@ -197,8 +196,7 @@ func TestVerifyMixedV1V2File(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new ledger: %v", err)
 	}
-	payload := json.RawMessage([]byte(`{"a":5}`))
-	if _, err := st.Append(&models.Event{Type: "modern", ZoneID: "Z9", Source: "unit-test", Payload: payload}); err != nil {
+	if _, err := st.Append(sampleTransaction("Z9", 0)); err != nil {
 		t.Fatalf("append modern: %v", err)
 	}
 	report, err := st.Verify()
@@ -226,4 +224,40 @@ func newTestLedger(t *testing.T) (*FileLedger, string) {
 		t.Fatalf("new ledger: %v", err)
 	}
 	return st, path
+}
+
+func sampleTransaction(zone string, epoch int64) *models.Transaction {
+	matched := time.Date(2024, time.January, 1, 12, 0, 0, 0, time.UTC).Add(time.Duration(epoch) * time.Minute)
+	start := matched.Add(-5 * time.Minute)
+	aggregator := models.AggregatedEpoch{
+		SchemaVersion: "v1",
+		ZoneID:        zone,
+		Epoch: models.EpochWindow{
+			Start: start,
+			End:   matched,
+			Index: epoch,
+			Len:   5 * time.Minute,
+		},
+		Summary:    map[string]float64{"targetC": 21.5},
+		ProducedAt: matched.Add(-time.Second),
+	}
+	mape := models.MAPELedgerEvent{
+		SchemaVersion: "v1",
+		EpochIndex:    epoch,
+		ZoneID:        zone,
+		Planned:       "hold",
+		TargetC:       21.5,
+		Timestamp:     matched.UnixMilli(),
+	}
+	return &models.Transaction{
+		Type:                 "epoch.match",
+		SchemaVersion:        models.TransactionSchemaVersionV1,
+		ZoneID:               zone,
+		EpochIndex:           epoch,
+		Aggregator:           aggregator,
+		AggregatorReceivedAt: matched.Add(-500 * time.Millisecond),
+		MAPE:                 mape,
+		MAPEReceivedAt:       matched.Add(-250 * time.Millisecond),
+		MatchedAt:            matched,
+	}
 }

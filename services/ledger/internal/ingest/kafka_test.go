@@ -1,4 +1,4 @@
-// v2
+// v3
 // services/ledger/internal/ingest/kafka_test.go
 // The tests in this file validate ingestion behaviour for versioned Kafka payloads.
 package ingest
@@ -13,6 +13,7 @@ import (
 
 	"github.com/segmentio/kafka-go"
 
+	"nrgchamp/ledger/internal/models"
 	"nrgchamp/ledger/internal/storage"
 )
 
@@ -81,7 +82,7 @@ func TestZoneConsumerMatchesOutOfOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ledger get: %v", err)
 	}
-	var payload combinedPayload
+	var payload models.MatchRecord
 	if err := json.Unmarshal(ev.Payload, &payload); err != nil {
 		t.Fatalf("unmarshal payload: %v", err)
 	}
@@ -140,7 +141,7 @@ func TestZoneConsumerImputesAfterGrace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ledger get: %v", err)
 	}
-	var payload combinedPayload
+	var payload models.MatchRecord
 	if err := json.Unmarshal(ev.Payload, &payload); err != nil {
 		t.Fatalf("payload: %v", err)
 	}

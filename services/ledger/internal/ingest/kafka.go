@@ -1,4 +1,4 @@
-// v4
+// v5
 // services/ledger/internal/ingest/kafka.go
 // Package ingest coordinates the Kafka pipelines that populate the ledger storage.
 package ingest
@@ -369,28 +369,19 @@ func (zc *zoneConsumer) finalize(epoch int64, state *matchState, allowImpute boo
 }
 
 func (zc *zoneConsumer) persistMatch(epoch int64, agg aggregatedEpoch, aggReceived time.Time, led mapeLedgerEvent, ledReceived time.Time) error {
-	payload := combinedPayload{
-		ZoneID:             zc.zone,
-		EpochIndex:         epoch,
-		Aggregator:         agg,
-		AggregatorReceived: aggReceived,
-		MAPE:               led,
-		MAPEReceived:       ledReceived,
-		MatchedAt:          time.Now().UTC(),
+	matchedAt := time.Now().UTC()
+	tx := &models.Transaction{
+		Type:                 "epoch.match",
+		SchemaVersion:        models.TransactionSchemaVersionV1,
+		ZoneID:               zc.zone,
+		EpochIndex:           epoch,
+		Aggregator:           agg,
+		AggregatorReceivedAt: aggReceived.UTC(),
+		MAPE:                 led,
+		MAPEReceivedAt:       ledReceived.UTC(),
+		MatchedAt:            matchedAt,
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("marshal payload: %w", err)
-	}
-	event := &models.Event{
-		Type:          "epoch.match",
-		ZoneID:        zc.zone,
-		Timestamp:     payload.MatchedAt,
-		Source:        "ledger.kafka",
-		CorrelationID: fmt.Sprintf("%s-%d", zc.zone, epoch),
-		Payload:       body,
-	}
-	if _, err := zc.storage.Append(event); err != nil {
+	if _, err := zc.storage.Append(tx); err != nil {
 		return fmt.Errorf("append ledger: %w", err)
 	}
 	return nil
@@ -599,53 +590,7 @@ func imputeMissingSide(zone string, epoch int64, agg *pendingAgg, mape *pendingM
 	return aggData, aggReceived, aggImputed, mapeData, mapeReceived, mapeImputed
 }
 
-type combinedPayload struct {
-	ZoneID             string          `json:"zoneId"`
-	EpochIndex         int64           `json:"epochIndex"`
-	Aggregator         aggregatedEpoch `json:"aggregator"`
-	AggregatorReceived time.Time       `json:"aggregatorReceivedAt"`
-	MAPE               mapeLedgerEvent `json:"mape"`
-	MAPEReceived       time.Time       `json:"mapeReceivedAt"`
-	MatchedAt          time.Time       `json:"matchedAt"`
-}
-
-type aggregatedEpoch struct {
-	SchemaVersion string                         `json:"schemaVersion"`
-	ZoneID        string                         `json:"zoneId"`
-	Epoch         epochWindow                    `json:"epoch"`
-	ByDevice      map[string][]aggregatedReading `json:"byDevice"`
-	Summary       map[string]float64             `json:"summary"`
-	ProducedAt    time.Time                      `json:"producedAt"`
-}
-
-type epochWindow struct {
-	Start time.Time     `json:"start"`
-	End   time.Time     `json:"end"`
-	Index int64         `json:"index"`
-	Len   time.Duration `json:"len"`
-}
-
-type aggregatedReading struct {
-	DeviceID      string    `json:"deviceId"`
-	ZoneID        string    `json:"zoneId"`
-	DeviceType    string    `json:"deviceType"`
-	Timestamp     time.Time `json:"timestamp"`
-	Temperature   *float64  `json:"temperature,omitempty"`
-	ActuatorState *string   `json:"actuatorState,omitempty"`
-	PowerW        *float64  `json:"powerW,omitempty"`
-	EnergyKWh     *float64  `json:"energyKWh,omitempty"`
-}
-
-type mapeLedgerEvent struct {
-	SchemaVersion string  `json:"schemaVersion"`
-	EpochIndex    int64   `json:"epochIndex"`
-	ZoneID        string  `json:"zoneId"`
-	Planned       string  `json:"planned"`
-	TargetC       float64 `json:"targetC"`
-	HystC         float64 `json:"hysteresisC"`
-	DeltaC        float64 `json:"deltaC"`
-	Fan           int     `json:"fan"`
-	Start         string  `json:"epochStart"`
-	End           string  `json:"epochEnd"`
-	Timestamp     int64   `json:"timestamp"`
-}
+type aggregatedEpoch = models.AggregatedEpoch
+type epochWindow = models.EpochWindow
+type aggregatedReading = models.AggregatedReading
+type mapeLedgerEvent = models.MAPELedgerEvent
