@@ -1,5 +1,6 @@
-// v3
-// internal/ingest/kafka.go
+// v4
+// services/ledger/internal/ingest/kafka.go
+// Package ingest coordinates the Kafka pipelines that populate the ledger storage.
 package ingest
 
 import (
@@ -10,6 +11,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	circuitbreaker "github.com/nrg-champ/circuitbreaker"
@@ -30,6 +32,8 @@ type Config struct {
 	GracePeriod         time.Duration
 	BufferMaxEpochs     int
 }
+
+const schemaVersionV1 = "v1"
 
 // Manager tracks the lifecycle of all background consumers.
 type Manager struct {
@@ -125,6 +129,9 @@ type zoneConsumer struct {
 	pending   map[int64]*matchState
 	finalized map[int64]time.Time
 	order     []int64
+
+	aggVersionUnknown  atomic.Int64
+	mapeVersionUnknown atomic.Int64
 }
 
 type pendingAgg struct {
@@ -246,6 +253,11 @@ func (zc *zoneConsumer) handleAggregator(msg kafka.Message) ([]kafka.Message, er
 	if err := json.Unmarshal(msg.Value, &agg); err != nil {
 		return []kafka.Message{msg}, fmt.Errorf("decode aggregator: %w", err)
 	}
+	if agg.SchemaVersion != schemaVersionV1 {
+		zc.aggVersionUnknown.Add(1)
+		zc.log.Error("aggregator_schema_version_unknown", slog.String("schemaVersion", agg.SchemaVersion), slog.Bool("missing", agg.SchemaVersion == ""))
+		return []kafka.Message{msg}, fmt.Errorf("unsupported aggregator schema version %q", agg.SchemaVersion)
+	}
 	if agg.ZoneID != "" && !strings.EqualFold(agg.ZoneID, zc.zone) {
 		zc.log.Warn("zone_mismatch", slog.String("payloadZone", agg.ZoneID), slog.String("topic", zc.topic))
 	}
@@ -285,6 +297,11 @@ func (zc *zoneConsumer) handleMape(msg kafka.Message) ([]kafka.Message, error) {
 	var led mapeLedgerEvent
 	if err := json.Unmarshal(msg.Value, &led); err != nil {
 		return []kafka.Message{msg}, fmt.Errorf("decode mape: %w", err)
+	}
+	if led.SchemaVersion != schemaVersionV1 {
+		zc.mapeVersionUnknown.Add(1)
+		zc.log.Error("mape_schema_version_unknown", slog.String("schemaVersion", led.SchemaVersion), slog.Bool("missing", led.SchemaVersion == ""))
+		return []kafka.Message{msg}, fmt.Errorf("unsupported mape schema version %q", led.SchemaVersion)
 	}
 	if led.ZoneID != "" && !strings.EqualFold(led.ZoneID, zc.zone) {
 		zc.log.Warn("zone_mismatch", slog.String("payloadZone", led.ZoneID), slog.String("topic", zc.topic))
@@ -512,11 +529,12 @@ func imputeMissingSide(zone string, epoch int64, agg *pendingAgg, mape *pendingM
 	} else {
 		aggImputed = true
 		aggData = aggregatedEpoch{
-			ZoneID:     zone,
-			Epoch:      epochWindow{Index: epoch},
-			ByDevice:   map[string][]aggregatedReading{},
-			Summary:    map[string]float64{"imputed": 1},
-			ProducedAt: now,
+			SchemaVersion: schemaVersionV1,
+			ZoneID:        zone,
+			Epoch:         epochWindow{Index: epoch},
+			ByDevice:      map[string][]aggregatedReading{},
+			Summary:       map[string]float64{"imputed": 1},
+			ProducedAt:    now,
 		}
 		if mape != nil {
 			if start, err := time.Parse(time.RFC3339, mape.data.Start); err == nil {
@@ -533,6 +551,9 @@ func imputeMissingSide(zone string, epoch int64, agg *pendingAgg, mape *pendingM
 	}
 	aggData.ZoneID = zone
 	aggData.Epoch.Index = epoch
+	if aggData.SchemaVersion == "" {
+		aggData.SchemaVersion = schemaVersionV1
+	}
 
 	var mapeData mapeLedgerEvent
 	var mapeReceived time.Time
@@ -555,21 +576,25 @@ func imputeMissingSide(zone string, epoch int64, agg *pendingAgg, mape *pendingM
 			target = aggData.Summary["targetC"]
 		}
 		mapeData = mapeLedgerEvent{
-			EpochIndex: epoch,
-			ZoneID:     zone,
-			Planned:    "hold",
-			TargetC:    target,
-			HystC:      0,
-			DeltaC:     0,
-			Fan:        0,
-			Start:      start,
-			End:        end,
-			Timestamp:  now.UnixMilli(),
+			SchemaVersion: schemaVersionV1,
+			EpochIndex:    epoch,
+			ZoneID:        zone,
+			Planned:       "hold",
+			TargetC:       target,
+			HystC:         0,
+			DeltaC:        0,
+			Fan:           0,
+			Start:         start,
+			End:           end,
+			Timestamp:     now.UnixMilli(),
 		}
 		mapeReceived = now
 	}
 	mapeData.ZoneID = zone
 	mapeData.EpochIndex = epoch
+	if mapeData.SchemaVersion == "" {
+		mapeData.SchemaVersion = schemaVersionV1
+	}
 
 	return aggData, aggReceived, aggImputed, mapeData, mapeReceived, mapeImputed
 }
@@ -585,11 +610,12 @@ type combinedPayload struct {
 }
 
 type aggregatedEpoch struct {
-	ZoneID     string                         `json:"zoneId"`
-	Epoch      epochWindow                    `json:"epoch"`
-	ByDevice   map[string][]aggregatedReading `json:"byDevice"`
-	Summary    map[string]float64             `json:"summary"`
-	ProducedAt time.Time                      `json:"producedAt"`
+	SchemaVersion string                         `json:"schemaVersion"`
+	ZoneID        string                         `json:"zoneId"`
+	Epoch         epochWindow                    `json:"epoch"`
+	ByDevice      map[string][]aggregatedReading `json:"byDevice"`
+	Summary       map[string]float64             `json:"summary"`
+	ProducedAt    time.Time                      `json:"producedAt"`
 }
 
 type epochWindow struct {
@@ -611,14 +637,15 @@ type aggregatedReading struct {
 }
 
 type mapeLedgerEvent struct {
-	EpochIndex int64   `json:"epochIndex"`
-	ZoneID     string  `json:"zoneId"`
-	Planned    string  `json:"planned"`
-	TargetC    float64 `json:"targetC"`
-	HystC      float64 `json:"hysteresisC"`
-	DeltaC     float64 `json:"deltaC"`
-	Fan        int     `json:"fan"`
-	Start      string  `json:"epochStart"`
-	End        string  `json:"epochEnd"`
-	Timestamp  int64   `json:"timestamp"`
+	SchemaVersion string  `json:"schemaVersion"`
+	EpochIndex    int64   `json:"epochIndex"`
+	ZoneID        string  `json:"zoneId"`
+	Planned       string  `json:"planned"`
+	TargetC       float64 `json:"targetC"`
+	HystC         float64 `json:"hysteresisC"`
+	DeltaC        float64 `json:"deltaC"`
+	Fan           int     `json:"fan"`
+	Start         string  `json:"epochStart"`
+	End           string  `json:"epochEnd"`
+	Timestamp     int64   `json:"timestamp"`
 }

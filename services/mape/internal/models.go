@@ -1,6 +1,10 @@
-// Package internal v8
-// models.go
+// v9
+// services/mape/internal/models.go
+// Package internal declares data contracts shared across the MAPE pipeline stages.
 package internal
+
+// LedgerSchemaVersion identifies the version of the ledger-facing payload emitted by MAPE.
+const LedgerSchemaVersion = "v1"
 
 // Epoch Aggregator -> MAPE message schema (sample you shared).
 // Example payload: agg-to-mape.json. :contentReference[oaicite:0]{index=0}
@@ -53,19 +57,20 @@ type PlanCommand struct {
 }
 
 type LedgerEvent struct {
-	EpochIndex int64              `json:"epochIndex"`
-	ZoneID     string             `json:"zoneId"`
-	Planned    string             `json:"planned"`
-	TargetC    float64            `json:"targetC"`
-	HystC      float64            `json:"hysteresisC"`
-	DeltaC     float64            `json:"deltaC"`
-	Fan        int                `json:"fan"`
-	Start      string             `json:"epochStart"`
-	End        string             `json:"epochEnd"`
-	Timestamp  int64              `json:"timestamp"`
-	ZoneEnergy float64            `json:"zoneEnergyKWhEpoch,omitempty"`
-	EnergyFrom string             `json:"energySource,omitempty"`
-	ActEnergy  map[string]float64 `json:"actuatorEnergyKWhEpoch,omitempty"`
+	SchemaVersion string             `json:"schemaVersion"`
+	EpochIndex    int64              `json:"epochIndex"`
+	ZoneID        string             `json:"zoneId"`
+	Planned       string             `json:"planned"`
+	TargetC       float64            `json:"targetC"`
+	HystC         float64            `json:"hysteresisC"`
+	DeltaC        float64            `json:"deltaC"`
+	Fan           int                `json:"fan"`
+	Start         string             `json:"epochStart"`
+	End           string             `json:"epochEnd"`
+	Timestamp     int64              `json:"timestamp"`
+	ZoneEnergy    float64            `json:"zoneEnergyKWhEpoch,omitempty"`
+	EnergyFrom    string             `json:"energySource,omitempty"`
+	ActEnergy     map[string]float64 `json:"actuatorEnergyKWhEpoch,omitempty"`
 }
 
 type Stats struct {

@@ -1,5 +1,6 @@
-// v1
-// internal/ingest/kafka_test.go
+// v2
+// services/ledger/internal/ingest/kafka_test.go
+// The tests in this file validate ingestion behaviour for versioned Kafka payloads.
 package ingest
 
 import (
@@ -30,11 +31,12 @@ func TestZoneConsumerMatchesOutOfOrder(t *testing.T) {
 	start := time.Now().Add(-time.Second).UTC()
 	end := start.Add(time.Second)
 	agg := aggregatedEpoch{
-		ZoneID:     "zone-A",
-		Epoch:      epochWindow{Start: start, End: end, Index: 1, Len: time.Second},
-		Summary:    map[string]float64{"avgTemp": 21.5, "targetC": 21.0},
-		ByDevice:   map[string][]aggregatedReading{},
-		ProducedAt: time.Now().UTC(),
+		SchemaVersion: schemaVersionV1,
+		ZoneID:        "zone-A",
+		Epoch:         epochWindow{Start: start, End: end, Index: 1, Len: time.Second},
+		Summary:       map[string]float64{"avgTemp": 21.5, "targetC": 21.0},
+		ByDevice:      map[string][]aggregatedReading{},
+		ProducedAt:    time.Now().UTC(),
 	}
 	aggBytes, err := json.Marshal(agg)
 	if err != nil {
@@ -50,16 +52,17 @@ func TestZoneConsumerMatchesOutOfOrder(t *testing.T) {
 	}
 
 	mape := mapeLedgerEvent{
-		EpochIndex: 1,
-		ZoneID:     "zone-A",
-		Planned:    "cool",
-		TargetC:    21.0,
-		HystC:      0.5,
-		DeltaC:     1.0,
-		Fan:        2,
-		Start:      start.Format(time.RFC3339),
-		End:        end.Format(time.RFC3339),
-		Timestamp:  time.Now().UnixMilli(),
+		SchemaVersion: schemaVersionV1,
+		EpochIndex:    1,
+		ZoneID:        "zone-A",
+		Planned:       "cool",
+		TargetC:       21.0,
+		HystC:         0.5,
+		DeltaC:        1.0,
+		Fan:           2,
+		Start:         start.Format(time.RFC3339),
+		End:           end.Format(time.RFC3339),
+		Timestamp:     time.Now().UnixMilli(),
 	}
 	mapeBytes, err := json.Marshal(mape)
 	if err != nil {
@@ -104,11 +107,12 @@ func TestZoneConsumerImputesAfterGrace(t *testing.T) {
 	consumer := newZoneConsumer("zone-A", "zone.ledger.zone-A", nil, nil, st, logger, 0, 1, 20*time.Millisecond, 10)
 
 	agg := aggregatedEpoch{
-		ZoneID:     "zone-A",
-		Epoch:      epochWindow{Index: 2},
-		Summary:    map[string]float64{"targetC": 20.0},
-		ByDevice:   map[string][]aggregatedReading{},
-		ProducedAt: time.Now().UTC(),
+		SchemaVersion: schemaVersionV1,
+		ZoneID:        "zone-A",
+		Epoch:         epochWindow{Index: 2},
+		Summary:       map[string]float64{"targetC": 20.0},
+		ByDevice:      map[string][]aggregatedReading{},
+		ProducedAt:    time.Now().UTC(),
 	}
 	aggBytes, err := json.Marshal(agg)
 	if err != nil {
@@ -161,7 +165,7 @@ func TestZoneConsumerDedupSkipsFinalized(t *testing.T) {
 	}
 	consumer := newZoneConsumer("zone-A", "zone.ledger.zone-A", nil, nil, st, logger, 0, 1, 50*time.Millisecond, 2)
 
-	agg := aggregatedEpoch{ZoneID: "zone-A", Epoch: epochWindow{Index: 3}, Summary: map[string]float64{"targetC": 19.0}, ByDevice: map[string][]aggregatedReading{}, ProducedAt: time.Now().UTC()}
+	agg := aggregatedEpoch{SchemaVersion: schemaVersionV1, ZoneID: "zone-A", Epoch: epochWindow{Index: 3}, Summary: map[string]float64{"targetC": 19.0}, ByDevice: map[string][]aggregatedReading{}, ProducedAt: time.Now().UTC()}
 	aggBytes, err := json.Marshal(agg)
 	if err != nil {
 		t.Fatalf("marshal agg: %v", err)
@@ -169,7 +173,7 @@ func TestZoneConsumerDedupSkipsFinalized(t *testing.T) {
 	if _, err := consumer.handleMessage(kafka.Message{Partition: 0, Offset: 4, Value: aggBytes}); err != nil {
 		t.Fatalf("agg: %v", err)
 	}
-	mape := mapeLedgerEvent{EpochIndex: 3, ZoneID: "zone-A", Planned: "heat", TargetC: 19.0, HystC: 0.3, DeltaC: 1.2, Fan: 1, Timestamp: time.Now().UnixMilli()}
+	mape := mapeLedgerEvent{SchemaVersion: schemaVersionV1, EpochIndex: 3, ZoneID: "zone-A", Planned: "heat", TargetC: 19.0, HystC: 0.3, DeltaC: 1.2, Fan: 1, Timestamp: time.Now().UnixMilli()}
 	mapeBytes, err := json.Marshal(mape)
 	if err != nil {
 		t.Fatalf("marshal mape: %v", err)
@@ -190,5 +194,51 @@ func TestZoneConsumerDedupSkipsFinalized(t *testing.T) {
 	events, total := st.Query("epoch.match", "zone-A", "", "", 1, 10)
 	if total != 1 || len(events) != 1 {
 		t.Fatalf("expected single ledger event, got total=%d len=%d", total, len(events))
+	}
+}
+
+func TestHandleAggregatorRejectsUnknownVersion(t *testing.T) {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	tmp := t.TempDir()
+	st, err := storage.NewFileLedger(filepath.Join(tmp, "ledger.jsonl"), logger)
+	if err != nil {
+		t.Fatalf("ledger: %v", err)
+	}
+	consumer := newZoneConsumer("zone-A", "zone.ledger.zone-A", nil, nil, st, logger, 0, 1, 50*time.Millisecond, 2)
+
+	agg := aggregatedEpoch{SchemaVersion: "v2", ZoneID: "zone-A", Epoch: epochWindow{Index: 4}}
+	b, err := json.Marshal(agg)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if _, err := consumer.handleAggregator(kafka.Message{Partition: 0, Offset: 1, Value: b}); err == nil {
+		t.Fatalf("expected error for unknown schema version")
+	}
+	if got := consumer.aggVersionUnknown.Load(); got != 1 {
+		t.Fatalf("expected unknown counter to be 1, got %d", got)
+	}
+}
+
+func TestHandleMapeRejectsUnknownVersion(t *testing.T) {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	tmp := t.TempDir()
+	st, err := storage.NewFileLedger(filepath.Join(tmp, "ledger.jsonl"), logger)
+	if err != nil {
+		t.Fatalf("ledger: %v", err)
+	}
+	consumer := newZoneConsumer("zone-A", "zone.ledger.zone-A", nil, nil, st, logger, 0, 1, 50*time.Millisecond, 2)
+
+	led := mapeLedgerEvent{SchemaVersion: "v2", EpochIndex: 5, ZoneID: "zone-A"}
+	b, err := json.Marshal(led)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if _, err := consumer.handleMape(kafka.Message{Partition: 1, Offset: 2, Value: b}); err == nil {
+		t.Fatalf("expected error for unknown schema version")
+	}
+	if got := consumer.mapeVersionUnknown.Load(); got != 1 {
+		t.Fatalf("expected unknown counter to be 1, got %d", got)
 	}
 }
