@@ -1,8 +1,10 @@
-# v2
+# v3
 # Dockerfile
 FROM golang:1.22-alpine AS build
 WORKDIR /src
-COPY . .
+COPY services/ledger/go.mod services/ledger/go.sum ./
+COPY circuit_breaker /circuit_breaker
+COPY services/ledger/ ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     mkdir -p /out && \
