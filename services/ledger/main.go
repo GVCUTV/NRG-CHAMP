@@ -1,4 +1,4 @@
-// v7
+// v8
 // main.go
 package main
 
@@ -42,6 +42,7 @@ func main() {
 	publicPartitioner := flag.String("public-partitioner", string(ledgerinternal.PublicPartitionerHash), "Kafka partitioner for public epochs (hash|roundrobin)")
 	publicKeyMode := flag.String("public-key-mode", string(ledgerinternal.PublicKeyModeZone), "Kafka key mode for public epochs (zone|epoch|none)")
 	publicSchemaVersion := flag.String("public-schema-version", publicschema.SchemaVersionV1, "Public epoch schema version identifier")
+	publicPartitions := flag.Int("public-partitions", 3, "Expected partition count for the public ledger topic")
 	flag.Parse()
 
 	addrVal := envOrDefault("LEDGER_ADDR", *addr)
@@ -117,6 +118,11 @@ func main() {
 		KeyMode:       ledgerinternal.PublicKeyMode(publicKeyModeVal),
 		SchemaVersion: publicSchemaVersionVal,
 	}
+	publicPartitionsVal := envOrInt("LEDGER_PUBLIC_PARTITIONS", *publicPartitions)
+	if publicPartitionsVal <= 0 {
+		logger.Error("public_partitions_invalid", slog.Int("partitions", publicPartitionsVal))
+		os.Exit(1)
+	}
 	if err := publicCfg.Validate(); err != nil {
 		logger.Error("public_config_validation", slog.Any("err", err))
 		os.Exit(1)
@@ -129,6 +135,7 @@ func main() {
 		slog.String("partitioner", string(publicCfg.Partitioner)),
 		slog.String("keyMode", string(publicCfg.KeyMode)),
 		slog.String("schemaVersion", publicCfg.SchemaVersion),
+		slog.Int("partitions", publicPartitionsVal),
 	)
 
 	pubCfg := publicschema.Config{
@@ -148,7 +155,7 @@ func main() {
 
 	validateCtx, validateCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer validateCancel()
-	if err := ingest.ValidateLedgerTopics(validateCtx, logger, ingest.TopicValidationConfig{Brokers: brokers, Template: topicTemplateVal, Zones: zones}); err != nil {
+	if err := ingest.ValidateLedgerTopics(validateCtx, logger, ingest.TopicValidationConfig{Brokers: brokers, Template: topicTemplateVal, Zones: zones, PublicTopic: publicCfg.Topic, PublicPartitions: publicPartitionsVal}); err != nil {
 		logger.Error("ledger_topic_validation", slog.Any("err", err))
 		os.Exit(1)
 	}
