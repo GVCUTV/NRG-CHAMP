@@ -1,23 +1,40 @@
-# // v2
+# // v3
 # // file: zone_simulator/Dockerfile
 # Room Simulator (merged sensors+actuators -> Kafka)
-FROM golang:1.23-alpine AS zs_builder_base
-WORKDIR /app
+# ---- zone-simulator builder ----
 FROM golang:1.23-alpine AS zs_builder
-WORKDIR /app
-COPY zone_simulator/go.mod zone_simulator/go.sum ./
-COPY circuit_breaker /circuit_breaker
-COPY zone_simulator/*.go ./
-COPY zone_simulator/sim.properties ./
-# Popola correttamente go.sum (inclusi transitivi di circuit_breaker)
-RUN --mount=type=cache,target=/go/pkg/mod go mod download && go mod tidy
-RUN CGO_ENABLED=0 GOOS=linux go build -o zone-simulator ./
+WORKDIR /src
+
+# 0) Tools needed by `go mod download` (git) and TLS roots
+RUN apk add --no-cache git ca-certificates
+
+# 1) Copy workspace first so the `replace` in go.work applies in-container
+COPY go.work go.work.sum ./
+
+# 2) Copy only module manifests to leverage cache
+COPY zone_simulator/go.mod zone_simulator/go.sum ./zone_simulator/
+
+# 3) Pre-download dependencies (cacheable)
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go -C zone_simulator mod download
+
+# 4) Now copy the full repo (includes circuit_breaker and sources)
+COPY . .
+
+# 5) (Optional) Re-tidy to ensure sums are complete
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go -C zone_simulator mod tidy
+
+# 6) Build
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=linux go -C zone_simulator build -o /out/zone-simulator ./
 
 FROM alpine:3.20 AS zs_runtime
 WORKDIR /app
 RUN adduser -D -H appuser
-COPY --from=zs_builder /app/zone-simulator /app/zone-simulator
-COPY --from=zs_builder /app/sim.properties /app/sim.properties
+COPY --from=zs_builder /out/zone-simulator /app/zone-simulator
+COPY --from=zs_builder /src/zone_simulator/sim.properties /app/sim.properties
 ENV SIM_PROPERTIES=/app/sim.properties
 # Optional defaults
 ENV KAFKA_BROKERS=kafka:9092

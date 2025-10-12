@@ -1,16 +1,16 @@
-# // v6
+# // v7
 # // file: services/aggregator/Dockerfile
 FROM golang:1.23-alpine AS aggregator_build
 WORKDIR /app
+RUN apk add --no-cache git ca-certificates
 COPY go.work go.work.sum ./
 COPY services/aggregator/go.mod services/aggregator/go.sum ./services/aggregator/
-COPY circuit_breaker /circuit_breaker
 RUN --mount=type=cache,target=/go/pkg/mod \
     go -C services/aggregator mod download
 COPY . .
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=0 go -C services/aggregator build -o /aggregator ./cmd/server
+    CGO_ENABLED=0 GOOS=linux go -C services/aggregator build -o /aggregator ./cmd/server
 
 FROM alpine:3.20 AS aggregator_runtime
 WORKDIR /app
