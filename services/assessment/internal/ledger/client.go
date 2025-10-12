@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/ledger/client.go
 package ledger
 
@@ -21,6 +21,13 @@ type Event struct {
 	ZoneID  string         `json:"zoneId"`
 	Ts      time.Time      `json:"ts"`
 	Payload map[string]any `json:"payload"` // flexible
+}
+
+type paginatedResponse struct {
+	Total int     `json:"total"`
+	Page  int     `json:"page"`
+	Size  int     `json:"size"`
+	Items []Event `json:"items"`
 }
 
 type Client struct {
@@ -72,20 +79,53 @@ func (c *Client) FetchEvents(ctx context.Context, typ, zoneID string, from, to t
 		if err != nil {
 			return nil, err
 		}
-		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			b, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
 			return nil, fmt.Errorf("ledger %s returned %d: %s", u.String(), resp.StatusCode, string(b))
 		}
-		var pageEvents []Event
-		if err := json.NewDecoder(resp.Body).Decode(&pageEvents); err != nil {
+		var payload paginatedResponse
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			resp.Body.Close()
 			return nil, err
 		}
-		out = append(out, pageEvents...)
-		if len(pageEvents) < size {
+		resp.Body.Close()
+		if payload.Items == nil {
+			return nil, fmt.Errorf("ledger %s returned response without items", u.String())
+		}
+		out = append(out, payload.Items...)
+
+		effectiveSize := size
+		if payload.Size > 0 {
+			effectiveSize = payload.Size
+		}
+
+		if len(payload.Items) == 0 {
 			break
 		}
-		page++
+		if payload.Total > 0 && len(out) >= payload.Total {
+			break
+		}
+		if len(payload.Items) < effectiveSize {
+			break
+		}
+
+		if payload.Page > 0 {
+			page = payload.Page + 1
+		} else {
+			page++
+		}
+
+		if effectiveSize > 0 {
+			size = effectiveSize
+		}
+
+		if size <= 0 {
+			break
+		}
+		if page <= 0 {
+			break
+		}
 	}
 	return out, nil
 }
