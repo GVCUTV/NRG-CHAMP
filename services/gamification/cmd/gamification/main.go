@@ -1,4 +1,4 @@
-// v2
+// v3
 // cmd/gamification/main.go
 package main
 
@@ -38,7 +38,6 @@ func main() {
 	logger.Info("service_boot",
 		slog.String("listen_address", cfg.ListenAddress),
 		slog.String("log_path", cfg.LogFilePath),
-		slog.String("properties_path", cfg.PropertiesPath),
 		slog.String("ledger_topic", cfg.LedgerTopic),
 		slog.String("ledger_group", cfg.LedgerGroupID),
 		slog.String("kafka_brokers", strings.Join(cfg.KafkaBrokers, ",")),
