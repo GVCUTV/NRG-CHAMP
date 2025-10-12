@@ -16,6 +16,9 @@
 - `GET /kpi/series?metric=&zoneId=&from=&to=&bucket=`
 
 Times are RFC3339. If `from/to` omitted: last hour until now. Default bucket: 5m.
+Optional `pages` parameter allows clients to declare the number of ledger pages a request would consume; values must not exceed `ASSESSMENT_MAX_PAGES`.
+
+All requests are bounded by `ASSESSMENT_MAX_WINDOW`. When the caller omits `from`, the service trims the window to the smaller of one hour or the configured maximum.
 
 ## Environment
 - `LEDGER_BASE_URL` (default `http://ledger:8084`)
@@ -24,6 +27,8 @@ Times are RFC3339. If `from/to` omitted: last hour until now. Default bucket: 5m
 - `CACHE_TTL` (default `30s`)
 - `ASSESSMENT_BIND_ADDR` (default `:8085`)
 - `ASSESSMENT_LOGFILE` (default `./assessment.log`)
+- `ASSESSMENT_MAX_WINDOW` (default `24h`) — longest permissible `from`/`to` span per request.
+- `ASSESSMENT_MAX_PAGES` (default `100`) — highest acceptable ledger page budget declared via the `pages` query parameter.
 
 ## Run locally
 ```bash
