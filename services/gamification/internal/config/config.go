@@ -1,4 +1,4 @@
-// v2
+// v3
 // internal/config/config.go
 package config
 
@@ -37,6 +37,8 @@ type Config struct {
 	LedgerPollTimeout time.Duration
 	// MaxEpochsPerZone caps the buffered epochs per zone retained in memory.
 	MaxEpochsPerZone int
+	// LedgerSchemaAccept lists the schema identifiers that are considered valid.
+	LedgerSchemaAccept []string
 }
 
 const (
@@ -50,6 +52,7 @@ const (
 	defaultLedgerGroup   = "gamification-ledger"
 	defaultPollTimeout   = 5 * time.Second
 	defaultMaxEpochs     = 1000
+	defaultSchemaAccept  = "v1,legacy"
 )
 
 // Load resolves configuration by starting from defaults and applying
@@ -59,16 +62,17 @@ const (
 // retired.
 func Load() (Config, error) {
 	cfg := Config{
-		ListenAddress:     defaultListenAddress,
-		LogFilePath:       filepath.Clean(defaultLogFile),
-		HTTPReadTimeout:   defaultReadTimeout,
-		HTTPWriteTimeout:  defaultWriteTimeout,
-		ShutdownTimeout:   defaultShutdown,
-		KafkaBrokers:      splitAndTrim(defaultKafkaBrokers),
-		LedgerTopic:       defaultLedgerTopic,
-		LedgerGroupID:     defaultLedgerGroup,
-		LedgerPollTimeout: defaultPollTimeout,
-		MaxEpochsPerZone:  defaultMaxEpochs,
+		ListenAddress:      defaultListenAddress,
+		LogFilePath:        filepath.Clean(defaultLogFile),
+		HTTPReadTimeout:    defaultReadTimeout,
+		HTTPWriteTimeout:   defaultWriteTimeout,
+		ShutdownTimeout:    defaultShutdown,
+		KafkaBrokers:       splitAndTrim(defaultKafkaBrokers),
+		LedgerTopic:        defaultLedgerTopic,
+		LedgerGroupID:      defaultLedgerGroup,
+		LedgerPollTimeout:  defaultPollTimeout,
+		MaxEpochsPerZone:   defaultMaxEpochs,
+		LedgerSchemaAccept: splitAndTrim(defaultSchemaAccept),
 	}
 
 	addr, err := resolveListenAddress(cfg.ListenAddress)
@@ -150,6 +154,9 @@ func applyEnvOverrides(cfg *Config) error {
 	if err := maybeSetMaxEpochs(cfg); err != nil {
 		return err
 	}
+	if err := maybeSetLedgerSchemaAccept(cfg); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -226,6 +233,17 @@ func maybeSetMaxEpochs(cfg *Config) error {
 			cfg.MaxEpochsPerZone = n
 			return nil
 		}
+	}
+	return nil
+}
+
+func maybeSetLedgerSchemaAccept(cfg *Config) error {
+	if v, ok := lookupEnvTrimmed("LEDGER_SCHEMA_ACCEPT"); ok {
+		schemas := splitAndTrim(v)
+		if len(schemas) == 0 {
+			return errors.New("LEDGER_SCHEMA_ACCEPT cannot be empty")
+		}
+		cfg.LedgerSchemaAccept = schemas
 	}
 	return nil
 }

@@ -1,4 +1,4 @@
-# v2
+# v3
 # file: README.md
 # NRG CHAMP Gamification Service — Leaderboard MVP
 
@@ -43,6 +43,12 @@ environment variables. Keys not listed below are ignored.
 | `ledger_group_id` | `gamification-ledger` | `GAMIFICATION_LEDGER_GROUP` |
 | `ledger_poll_timeout_ms` | `5000` | `GAMIFICATION_LEDGER_POLL_TIMEOUT_MS` |
 | `max_epochs_per_zone` | `1000` | `GAMIF_MAX_EPOCHS_PER_ZONE` |
+
+Additional guardrails:
+
+- `LEDGER_SCHEMA_ACCEPT` (env, default `v1,legacy`): comma-separated list of
+  ledger schema identifiers accepted by the consumer. Messages outside this
+  allowlist are dropped and counted via telemetry.
 
 When running through Docker Compose, update `listen_address` (or set
 `GAMIFICATION_LISTEN_ADDRESS`) to `:8085` so the container port matches the

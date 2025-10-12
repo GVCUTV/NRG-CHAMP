@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/metrics/metrics.go
 package metrics
 
@@ -122,16 +122,48 @@ func (g *gauge) snapshot() float64 {
 }
 
 var (
-	ledgerMessagesTotal   = newCounter()
-	ledgerLagGauge        = newGauge()
-	scoreRefreshDurations = newHistogram([]float64{0.1, 0.25, 0.5, 1, 2, 5, 10, 30})
-	leaderboardRequests   = newCounterVec()
-	leaderboardLatencies  = newHistogram([]float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2})
+	ledgerMessagesTotal    = newCounter()
+	ledgerDecodeOKTotal    = newCounter()
+	ledgerDecodeDropTotals = newCounterVec()
+	ledgerEnergyMissing    = newCounter()
+	ledgerLagGauge         = newGauge()
+	scoreRefreshDurations  = newHistogram([]float64{0.1, 0.25, 0.5, 1, 2, 5, 10, 30})
+	leaderboardRequests    = newCounterVec()
+	leaderboardLatencies   = newHistogram([]float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2})
+)
+
+// Drop reason identifiers exported so ingest logic can increment counters without
+// stringly-typed constants.
+const (
+	DropReasonMissingMatchedAt = "missing_matchedAt"
+	DropReasonSchemaReject     = "schema_reject"
+	DropReasonJSONError        = "json_error"
 )
 
 // IncLedgerMessage increments the total count of consumed ledger messages.
 func IncLedgerMessage() {
 	ledgerMessagesTotal.inc()
+}
+
+// IncLedgerDecodeOK records a successfully decoded ledger message that passed
+// schema validation and entered the in-memory store.
+func IncLedgerDecodeOK() {
+	ledgerDecodeOKTotal.inc()
+}
+
+// IncLedgerDecodeDrop increments the classified drop counter for ledger
+// payloads that failed schema validation or decoding.
+func IncLedgerDecodeDrop(reason string) {
+	if strings.TrimSpace(reason) == "" {
+		reason = "unknown"
+	}
+	ledgerDecodeDropTotals.inc(reason)
+}
+
+// IncLedgerEnergyMissing tracks epochs lacking aggregator energy data so
+// operators can monitor upstream data quality issues.
+func IncLedgerEnergyMissing() {
+	ledgerEnergyMissing.inc()
 }
 
 // SetLedgerLag records the latest end-to-end consumer lag value observed from Kafka.
@@ -162,6 +194,18 @@ func Render() string {
 
 	writeMetricHeader(&b, "gamification_ledger_messages_consumed_total", "counter")
 	writeSimpleCounter(&b, "gamification_ledger_messages_consumed_total", ledgerMessagesTotal.snapshot())
+	b.WriteByte('\n')
+
+	writeMetricHeader(&b, "gamification_ledger_decode_ok_total", "counter")
+	writeSimpleCounter(&b, "gamification_ledger_decode_ok_total", ledgerDecodeOKTotal.snapshot())
+	b.WriteByte('\n')
+
+	writeMetricHeader(&b, "gamification_ledger_decode_drop_total", "counter")
+	writeCounter(&b, "gamification_ledger_decode_drop_total", "reason", ledgerDecodeDropTotals.snapshot())
+	b.WriteByte('\n')
+
+	writeMetricHeader(&b, "gamification_ledger_energy_missing_total", "counter")
+	writeSimpleCounter(&b, "gamification_ledger_energy_missing_total", ledgerEnergyMissing.snapshot())
 	b.WriteByte('\n')
 
 	writeMetricHeader(&b, "gamification_ledger_consumer_lag", "gauge")

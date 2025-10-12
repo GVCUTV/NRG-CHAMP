@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/guardrails/no_kafka_writer_test.go
 package guardrails
 
@@ -62,7 +62,7 @@ func TestNoKafkaWriterUsage(t *testing.T) {
 			}
 			if selector.Sel != nil {
 				switch selector.Sel.Name {
-				case "Writer", "NewWriter":
+				case "Writer", "NewWriter", "NewBalancedWriter":
 					t.Errorf("kafka producer usage detected in %s", path)
 				}
 			}
