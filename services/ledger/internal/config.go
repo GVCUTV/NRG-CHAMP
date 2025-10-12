@@ -6,28 +6,30 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	publicschema "nrgchamp/ledger/internal/public"
 )
 
 // PublicPartitioner enumerates supported Kafka partition strategies for public epochs.
-type PublicPartitioner string
+type PublicPartitioner = publicschema.Partitioner
 
 const (
 	// PublicPartitionerHash routes events using the default hash on message key.
-	PublicPartitionerHash PublicPartitioner = "hash"
+	PublicPartitionerHash PublicPartitioner = publicschema.PartitionerHash
 	// PublicPartitionerRoundRobin distributes events evenly without a key.
-	PublicPartitionerRoundRobin PublicPartitioner = "roundrobin"
+	PublicPartitionerRoundRobin PublicPartitioner = publicschema.PartitionerRoundRobin
 )
 
 // PublicKeyMode represents how the Kafka message key is derived when publishing public epochs.
-type PublicKeyMode string
+type PublicKeyMode = publicschema.KeyMode
 
 const (
 	// PublicKeyModeZone uses the zone identifier as the Kafka message key.
-	PublicKeyModeZone PublicKeyMode = "zone"
+	PublicKeyModeZone PublicKeyMode = publicschema.KeyModeZone
 	// PublicKeyModeEpoch uses the epoch index as the Kafka message key.
-	PublicKeyModeEpoch PublicKeyMode = "epoch"
+	PublicKeyModeEpoch PublicKeyMode = publicschema.KeyModeEpoch
 	// PublicKeyModeNone disables keyed publishing.
-	PublicKeyModeNone PublicKeyMode = "none"
+	PublicKeyModeNone PublicKeyMode = publicschema.KeyModeNone
 )
 
 // PublicPublisherConfig defines the knobs required to publish public epoch documents.
