@@ -1,4 +1,4 @@
-// v1
+// v2
 // httpcb.go
 package circuitbreaker
 
@@ -45,6 +45,7 @@ func NewHTTPClient(name string, cfg Config, probeURL string, httpClient *http.Cl
 // Do mirrors http.Client.Do, but runs behind the breaker.
 func (h *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 	var resp *http.Response
+	var opErr error
 	err := h.brk.Execute(req.Context(), func(ctx context.Context) error {
 		req = req.WithContext(ctx)
 		r, err := h.Client.Do(req)
@@ -52,7 +53,14 @@ func (h *HTTPClient) Do(req *http.Request) (*http.Response, error) {
 			return err
 		}
 		resp = r
+		if r.StatusCode >= http.StatusInternalServerError {
+			opErr = fmt.Errorf("httpcb: upstream returned status %d", r.StatusCode)
+			return opErr
+		}
 		return nil
 	})
+	if err == opErr {
+		return resp, opErr
+	}
 	return resp, err
 }

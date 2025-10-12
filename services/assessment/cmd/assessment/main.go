@@ -1,4 +1,4 @@
-// v0
+// v1
 // cmd/assessment/main.go
 package main
 
@@ -26,7 +26,7 @@ func main() {
 	log := lg.Logger
 
 	cfg := config.FromEnv()
-	log.Info("config loaded", "bind", cfg.BindAddr, "ledger", cfg.LedgerBaseURL, "cacheTTL", cfg.CacheTTL)
+	log.Info("config loaded", "bind", cfg.BindAddr, "ledger", cfg.LedgerBaseURL, "cacheTTL", cfg.CacheTTL, "cbFailures", cfg.CircuitBreaker.FailureThreshold, "cbReset", cfg.CircuitBreaker.ResetTimeout, "cbHalfOpen", cfg.CircuitBreaker.HalfOpenMax)
 
 	// Target & tolerance from env (default 22°C, tol 0.5°C)
 	target := 22.0
@@ -42,7 +42,16 @@ func main() {
 		}
 	}
 
-	cli := ledger.New(cfg.LedgerBaseURL)
+	cli, err := ledger.New(cfg.LedgerBaseURL, log, ledger.BreakerSettings{
+		FailureThreshold: cfg.CircuitBreaker.FailureThreshold,
+		ResetTimeout:     cfg.CircuitBreaker.ResetTimeout,
+		HalfOpenMax:      cfg.CircuitBreaker.HalfOpenMax,
+		LogFile:          cfg.LogFile,
+	})
+	if err != nil {
+		log.Error("failed to initialize ledger client", "err", err)
+		os.Exit(1)
+	}
 	c := cache.New[any](cfg.CacheTTL)
 	h := &api.Handlers{
 		Log:    log,

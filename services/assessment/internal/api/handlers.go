@@ -1,22 +1,24 @@
-// v0
+// v1
 // internal/api/handlers.go
 package api
 
 import (
-	"strings"
-	"context"
-	"encoding/json"
-	"log/slog"
-	"net/http"
+        "errors"
+        "strings"
+        "context"
+        "encoding/json"
+        "log/slog"
+        "net/http"
 	"strconv"
 	"time"
 
 	"crypto/sha1"
 	"encoding/hex"
 
-	"github.com/your-org/assessment/internal/cache"
-	"github.com/your-org/assessment/internal/kpi"
-	"github.com/your-org/assessment/internal/ledger"
+        circuitbreaker "github.com/nrg-champ/circuitbreaker"
+        "github.com/your-org/assessment/internal/cache"
+        "github.com/your-org/assessment/internal/kpi"
+        "github.com/your-org/assessment/internal/ledger"
 )
 
 type Handlers struct {
@@ -166,8 +168,13 @@ func (h *Handlers) badRequest(w http.ResponseWriter, msg string) {
 }
 
 func (h *Handlers) upstreamError(w http.ResponseWriter, err error) {
-	h.Log.Error("upstream error", "err", err)
-	writeJSON(w, http.StatusBadGateway, map[string]string{"error": "upstream ledger error"})
+        if errors.Is(err, circuitbreaker.ErrOpen) {
+                h.Log.Error("upstream error", "err", err, "status", http.StatusServiceUnavailable)
+                writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "ledger circuit breaker open; try again soon"})
+                return
+        }
+        h.Log.Error("upstream error", "err", err, "status", http.StatusBadGateway)
+        writeJSON(w, http.StatusBadGateway, map[string]string{"error": "upstream ledger error"})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

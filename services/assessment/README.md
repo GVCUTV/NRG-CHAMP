@@ -1,4 +1,4 @@
-// v0
+// v1
 // README.md
 # Assessment Service (Service 5)
 
@@ -24,6 +24,12 @@ Times are RFC3339. If `from/to` omitted: last hour until now. Default bucket: 5m
 - `CACHE_TTL` (default `30s`)
 - `ASSESSMENT_BIND_ADDR` (default `:8085`)
 - `ASSESSMENT_LOGFILE` (default `./assessment.log`)
+- `CB_FAILURE_THRESHOLD` (default `5`) consecutive Ledger failures before the breaker opens.
+- `CB_RESET_TIMEOUT` (default `30s`) wait before half-open probes after opening.
+- `CB_HALFOPEN_MAX` (default `1`) successful half-open calls required to close the breaker.
+
+## Circuit Breaker
+All outbound HTTP calls to the Ledger service are protected by the shared circuit breaker. The breaker performs bounded retries (max 2 attempts) for transient 5xx responses with a short jittered backoff. When the breaker is open, handlers respond with HTTP `503` and the JSON body `{"error":"ledger circuit breaker open; try again soon"}` so clients can distinguish outages from generic upstream errors.
 
 ## Run locally
 ```bash
