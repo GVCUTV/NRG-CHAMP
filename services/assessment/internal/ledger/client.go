@@ -37,6 +37,13 @@ func New(base string) *Client {
 
 // FetchEvents calls the Ledger: GET /events?type=&zoneId=&from=&to=&page=&size=
 // and returns the aggregated list for the requested window. Pagination is followed until exhaustion.
+type eventsPage struct {
+	Total int     `json:"total"`
+	Page  int     `json:"page"`
+	Size  int     `json:"size"`
+	Items []Event `json:"items"`
+}
+
 func (c *Client) FetchEvents(ctx context.Context, typ, zoneID string, from, to time.Time) ([]Event, error) {
 	var out []Event
 	page := 1
@@ -77,12 +84,28 @@ func (c *Client) FetchEvents(ctx context.Context, typ, zoneID string, from, to t
 			b, _ := io.ReadAll(resp.Body)
 			return nil, fmt.Errorf("ledger %s returned %d: %s", u.String(), resp.StatusCode, string(b))
 		}
-		var pageEvents []Event
-		if err := json.NewDecoder(resp.Body).Decode(&pageEvents); err != nil {
+		var decoded eventsPage
+		if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
 			return nil, err
 		}
-		out = append(out, pageEvents...)
-		if len(pageEvents) < size {
+		if decoded.Size > 0 {
+			size = decoded.Size
+		}
+		if len(decoded.Items) == 0 {
+			break
+		}
+		out = append(out, decoded.Items...)
+		if decoded.Total > 0 {
+			if len(out) >= decoded.Total {
+				break
+			}
+			if decoded.Page > 0 && decoded.Size > 0 {
+				consumed := decoded.Page * decoded.Size
+				if consumed >= decoded.Total {
+					break
+				}
+			}
+		} else if len(decoded.Items) < size {
 			break
 		}
 		page++
