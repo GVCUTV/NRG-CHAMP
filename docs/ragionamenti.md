@@ -1,6 +1,6 @@
-## Kafka
-// v1
+// v2
 // docs/ragionamenti.md
+## Kafka
 ### Device -> aggregator
 Ogni zona deve avere il suo proprio topic dedicato, denominato con lo stesso id della zona, ogni device deve avere la sua propria partizione denominata anche essa con l’id del device per evitare collisioni dovute all’alta frequenza di scrittura dei device.
 L'istanza di aggregator assegnata a quella zona legge in round robin dalle partizioni, etichettando come letti i messaggi, e passa alla prossima partizione appena trova un messaggio dell'epoca successiva, che non etichetta come letto.
@@ -57,6 +57,20 @@ Il ledger si occupa di fare il matching tra i dati sulle due partizioni di ogni 
 Ogni qualvolta l'area dati di un blocco raggiunge il limite, si calcola l'hash dei dati del blocco, lo aggiunge al suo header, ne calcola l'hash totale, apre un nuovo blocco e inserisce nell'header l'hash dell'header del blocco precedente. Si continua poi a scrivere su tale blocco.
 
 Il ledger contiene anche una mappatura dei blocchi che contengono le informazioni delle singole zone. (da ragionarci).
+
+### Razionale per il feed pubblico
+La replica pubblica degli epoch utilizza lo schema minimale `epoch.public` (vedere documentazione tecnica) perché permette di:
+
+* **Limitare i dati sensibili:** il campo `aggregator.summary` contiene solo roll-up stabili (medie, totali normalizzati, rapporti), evitando di esporre misure grezze per device o informazioni identificative.
+* **Stabilizzare il contratto:** mantenendo un dizionario di metriche aggregate, l'evoluzione diventa puramente additiva. I consumatori (Gamification in primis) possono negoziare nuove chiavi senza dover riconciliare payload profondi.
+* **Collegare al ledger v2:** i metadati `block.height`, `headerHash` e `dataHash` consentono di risalire al blocco completo per audit o ricalcoli senza divulgare dati privati nello stream pubblico.
+
+### Semantica di consegna e idempotenza
+La pubblicazione Kafka del ledger è configurata in modalità *at-least-once*: il publisher attende gli ACK richiesti, ma in caso di retry una stessa epoca può essere spedita due volte. I consumatori devono quindi:
+
+* Conservare un archivio di chiavi idempotenti `zoneId:epochIndex` (ad esempio in memoria con TTL o su archivio persistente) e scartare le ripetizioni prima di aggiornare punteggi o dashboard.
+* Confermare l'offset del messaggio solo dopo che l'elaborazione è stata completata e il checkpoint/idempotency store è stato aggiornato, così da evitare perdite in caso di riavvio.
+* Valutare la partizione partendo dalla chiave `zoneId` (default del publisher) per preservare l'ordine relativo di ogni zona quando si distribuisce il carico su più worker.
 
 ## Assessment
 Segue un approccio pull dal ledger ogni qualvolta si vuole fare una verifica.
