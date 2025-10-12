@@ -1,4 +1,4 @@
-# v3
+# v4
 # file: README.md
 # NRG CHAMP Gamification Service — Leaderboard MVP
 
@@ -156,6 +156,22 @@ Go workspace and shared circuit breaker module already wired in.
    file or set `GAMIFICATION_LISTEN_ADDRESS=:8085` to align the bind address with
    the published port.
 3. Follow logs as needed with `docker compose logs -f gamification`.
+
+## Integration sanity check
+
+Run the lightweight integration harness to verify Kafka ingestion and the HTTP
+leaderboard end-to-end:
+
+```bash
+go run ./services/gamification/dev/integration_sanity
+```
+
+The command brings up Kafka, the ledger, and the gamification services, waits
+for readiness, publishes the canonical v1 epoch payload, and polls the
+`/leaderboard?window=24h` endpoint. The run fails if the response omits the
+global scope, the zone total for the sample payload, or if any container logs
+mention the `epoch field missing` warning. Structured output is mirrored to
+`logs/dev/gamification-integration.log` for later inspection.
 
 ## API reference
 
