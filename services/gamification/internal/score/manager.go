@@ -1,4 +1,4 @@
-// v2
+// v3
 // internal/score/manager.go
 package score
 
@@ -179,7 +179,7 @@ func (m *Manager) Refresh(at time.Time) {
 			var total float64
 			var inWindow bool
 			for _, epoch := range epochs {
-				if epoch.EventTime.Before(cutoff) || epoch.EventTime.After(now) {
+				if epoch.MatchedAt.Before(cutoff) || epoch.MatchedAt.After(now) {
 					continue
 				}
 				total += epoch.EnergyKWh

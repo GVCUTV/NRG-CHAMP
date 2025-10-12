@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/score/manager_test.go
 package score
 
@@ -15,8 +15,8 @@ func TestRefreshFiltersWindow(t *testing.T) {
 	store := ingest.NewZoneStore(10)
 	now := time.Date(2024, 7, 10, 12, 0, 0, 0, time.UTC)
 
-	store.Append("zone-a", ingest.EpochEnergy{ZoneID: "zone-a", EventTime: now.Add(-2 * time.Hour), EnergyKWh: 3})
-	store.Append("zone-a", ingest.EpochEnergy{ZoneID: "zone-a", EventTime: now.Add(-26 * time.Hour), EnergyKWh: 5})
+	store.Append("zone-a", ingest.EpochEnergy{ZoneID: "zone-a", MatchedAt: now.Add(-2 * time.Hour), EnergyKWh: 3})
+	store.Append("zone-a", ingest.EpochEnergy{ZoneID: "zone-a", MatchedAt: now.Add(-26 * time.Hour), EnergyKWh: 5})
 
 	mgr, err := NewManager(store, slog.New(slog.NewTextHandler(io.Discard, nil)), []WindowSpec{{Name: Window24hName}})
 	if err != nil {
@@ -41,9 +41,9 @@ func TestRefreshSortsAscending(t *testing.T) {
 	store := ingest.NewZoneStore(10)
 	now := time.Date(2024, 7, 10, 15, 0, 0, 0, time.UTC)
 
-	store.Append("zone-a", ingest.EpochEnergy{ZoneID: "zone-a", EventTime: now.Add(-time.Hour), EnergyKWh: 5})
-	store.Append("zone-b", ingest.EpochEnergy{ZoneID: "zone-b", EventTime: now.Add(-30 * time.Minute), EnergyKWh: 2})
-	store.Append("zone-c", ingest.EpochEnergy{ZoneID: "zone-c", EventTime: now.Add(-45 * time.Minute), EnergyKWh: 7})
+	store.Append("zone-a", ingest.EpochEnergy{ZoneID: "zone-a", MatchedAt: now.Add(-time.Hour), EnergyKWh: 5})
+	store.Append("zone-b", ingest.EpochEnergy{ZoneID: "zone-b", MatchedAt: now.Add(-30 * time.Minute), EnergyKWh: 2})
+	store.Append("zone-c", ingest.EpochEnergy{ZoneID: "zone-c", MatchedAt: now.Add(-45 * time.Minute), EnergyKWh: 7})
 
 	mgr, err := NewManager(store, slog.New(slog.NewTextHandler(io.Discard, nil)), []WindowSpec{{Name: Window24hName}})
 	if err != nil {
@@ -70,9 +70,9 @@ func TestRefreshStableOnEqualTotals(t *testing.T) {
 	store := ingest.NewZoneStore(10)
 	now := time.Date(2024, 7, 11, 9, 0, 0, 0, time.UTC)
 
-	store.Append("zone-a", ingest.EpochEnergy{ZoneID: "zone-a", EventTime: now.Add(-15 * time.Minute), EnergyKWh: 4})
-	store.Append("zone-b", ingest.EpochEnergy{ZoneID: "zone-b", EventTime: now.Add(-10 * time.Minute), EnergyKWh: 4})
-	store.Append("zone-c", ingest.EpochEnergy{ZoneID: "zone-c", EventTime: now.Add(-5 * time.Minute), EnergyKWh: 4})
+	store.Append("zone-a", ingest.EpochEnergy{ZoneID: "zone-a", MatchedAt: now.Add(-15 * time.Minute), EnergyKWh: 4})
+	store.Append("zone-b", ingest.EpochEnergy{ZoneID: "zone-b", MatchedAt: now.Add(-10 * time.Minute), EnergyKWh: 4})
+	store.Append("zone-c", ingest.EpochEnergy{ZoneID: "zone-c", MatchedAt: now.Add(-5 * time.Minute), EnergyKWh: 4})
 
 	mgr, err := NewManager(store, slog.New(slog.NewTextHandler(io.Discard, nil)), []WindowSpec{{Name: Window24hName}})
 	if err != nil {
@@ -112,5 +112,31 @@ func TestRefreshHandlesEmptyWindow(t *testing.T) {
 	}
 	if len(board.Entries) != 0 {
 		t.Fatalf("expected zero entries, got %d", len(board.Entries))
+	}
+}
+
+func TestRefreshSumsMultipleEpochs(t *testing.T) {
+	store := ingest.NewZoneStore(10)
+	now := time.Date(2024, 7, 13, 14, 0, 0, 0, time.UTC)
+
+	store.Append("zone-a", ingest.EpochEnergy{ZoneID: "zone-a", MatchedAt: now.Add(-2 * time.Hour), EnergyKWh: 1.5})
+	store.Append("zone-a", ingest.EpochEnergy{ZoneID: "zone-a", MatchedAt: now.Add(-time.Hour), EnergyKWh: 2.25})
+
+	mgr, err := NewManager(store, slog.New(slog.NewTextHandler(io.Discard, nil)), []WindowSpec{{Name: Window24hName}})
+	if err != nil {
+		t.Fatalf("manager init failed: %v", err)
+	}
+
+	mgr.Refresh(now)
+
+	board, ok := mgr.Snapshot(Window24hName)
+	if !ok {
+		t.Fatalf("expected leaderboard for window %s", Window24hName)
+	}
+	if len(board.Entries) != 1 {
+		t.Fatalf("expected one entry, got %d", len(board.Entries))
+	}
+	if got := board.Entries[0].EnergyKWh; got != 3.75 {
+		t.Fatalf("expected summed energy 3.75, got %.2f", got)
 	}
 }

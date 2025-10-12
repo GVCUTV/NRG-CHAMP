@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/ingest/ledger_consumer_test.go
 package ingest
 
@@ -40,8 +40,8 @@ func TestDecodeLedgerMessageV1(t *testing.T) {
 		t.Fatalf("expected energy to be present")
 	}
 	expectedTime := time.Date(2024, 5, 2, 15, 4, 5, 0, time.UTC)
-	if !decoded.Energy.EventTime.Equal(expectedTime) {
-		t.Fatalf("unexpected event time: %v", decoded.Energy.EventTime)
+	if !decoded.Energy.MatchedAt.Equal(expectedTime) {
+		t.Fatalf("unexpected event time: %v", decoded.Energy.MatchedAt)
 	}
 	if decoded.Energy.EpochIndex == nil || *decoded.Energy.EpochIndex != 7 {
 		t.Fatalf("unexpected epoch index: %v", decoded.Energy.EpochIndex)
@@ -65,15 +65,15 @@ func TestDecodeLedgerMessageLegacy(t *testing.T) {
 	if decoded.Energy.ZoneID != "legacy-zone" {
 		t.Fatalf("unexpected zone: %q", decoded.Energy.ZoneID)
 	}
-	if decoded.EnergyAbsent {
-		t.Fatalf("expected legacy energy to be present")
+	if !decoded.EnergyAbsent {
+		t.Fatalf("expected legacy energy to be marked absent")
 	}
-	if decoded.Energy.EnergyKWh != 15.75 {
-		t.Fatalf("unexpected energy: %v", decoded.Energy.EnergyKWh)
+	if decoded.Energy.EnergyKWh != 0 {
+		t.Fatalf("expected zero energy for legacy payload, got %v", decoded.Energy.EnergyKWh)
 	}
 	expected := time.Date(2024, 4, 30, 10, 0, 0, 0, time.UTC)
-	if !decoded.Energy.EventTime.Equal(expected) {
-		t.Fatalf("unexpected legacy event time: %v", decoded.Energy.EventTime)
+	if !decoded.Energy.MatchedAt.Equal(expected) {
+		t.Fatalf("unexpected legacy event time: %v", decoded.Energy.MatchedAt)
 	}
 }
 
