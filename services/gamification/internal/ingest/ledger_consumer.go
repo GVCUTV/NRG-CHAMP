@@ -1,4 +1,4 @@
-// v4
+// v5
 // internal/ingest/ledger_consumer.go
 package ingest
 
@@ -29,6 +29,7 @@ type LedgerConsumerConfig struct {
 	GroupID          string
 	MaxEpochsPerZone int
 	PollTimeout      time.Duration
+	AcceptedSchemas  []string
 }
 
 // EpochEnergy stores the minimal information about a finalized epoch required
@@ -56,6 +57,38 @@ func NewZoneStore(max int) *ZoneStore {
 		max = 1000
 	}
 	return &ZoneStore{maxSize: max, zones: make(map[string][]EpochEnergy)}
+}
+
+// logSampler deduplicates repeated log statements so noisy upstream failures do
+// not flood operators. The sampler tracks the last emission per key and allows a
+// new log once the configured window has elapsed.
+type logSampler struct {
+	mu     sync.Mutex
+	last   map[string]time.Time
+	window time.Duration
+}
+
+func newLogSampler(window time.Duration) *logSampler {
+	if window <= 0 {
+		window = time.Minute
+	}
+	return &logSampler{last: make(map[string]time.Time), window: window}
+}
+
+func (s *logSampler) Allow(key string) bool {
+	if s == nil {
+		return true
+	}
+	now := time.Now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if prev, ok := s.last[key]; ok {
+		if now.Sub(prev) < s.window {
+			return false
+		}
+	}
+	s.last[key] = now
+	return true
 }
 
 // Append registers a new epoch for the supplied zone, optionally evicting the
@@ -135,12 +168,15 @@ type kafkaMessageFetcher interface {
 // LedgerConsumer streams epochs from Kafka and keeps them in an in-memory
 // store for later aggregation.
 type LedgerConsumer struct {
-	cfg     LedgerConsumerConfig
-	reader  *kafka.Reader
-	fetcher kafkaMessageFetcher
-	store   *ZoneStore
-	log     *slog.Logger
-	poll    time.Duration
+	cfg           LedgerConsumerConfig
+	reader        *kafka.Reader
+	fetcher       kafkaMessageFetcher
+	store         *ZoneStore
+	log           *slog.Logger
+	poll          time.Duration
+	schemas       map[string]struct{}
+	schemaDisplay string
+	schemaSampler *logSampler
 }
 
 // NewLedgerConsumer builds a Kafka reader wrapped by the shared circuit breaker
@@ -203,9 +239,23 @@ func NewLedgerConsumer(cfg LedgerConsumerConfig, log *slog.Logger) (*LedgerConsu
 		fetcher = wrapped
 	}
 
+	schemas := make(map[string]struct{})
+	display := make([]string, 0, len(cfg.AcceptedSchemas))
+	for _, schema := range cfg.AcceptedSchemas {
+		trimmed := strings.TrimSpace(schema)
+		if trimmed == "" {
+			continue
+		}
+		display = append(display, trimmed)
+		schemas[strings.ToLower(trimmed)] = struct{}{}
+	}
+	if len(schemas) == 0 {
+		return nil, errors.New("at least one accepted ledger schema is required")
+	}
+
 	store := NewZoneStore(cfg.MaxEpochsPerZone)
 
-	return &LedgerConsumer{cfg: cfg, reader: reader, fetcher: fetcher, store: store, log: log, poll: poll}, nil
+	return &LedgerConsumer{cfg: cfg, reader: reader, fetcher: fetcher, store: store, log: log, poll: poll, schemas: schemas, schemaDisplay: strings.Join(display, ","), schemaSampler: newLogSampler(30 * time.Second)}, nil
 }
 
 // Store exposes the backing ZoneStore so callers can query buffered epochs.
@@ -238,6 +288,7 @@ func (c *LedgerConsumer) Run(ctx context.Context) error {
 		slog.String("brokers", brokerList),
 		slog.Duration("pollTimeout", c.poll),
 		slog.Int("maxEpochsPerZone", c.store.maxSize),
+		slog.String("acceptedSchemas", c.schemaDisplay),
 	)
 	defer c.log.Info("ledger_consumer_stopped")
 
@@ -291,11 +342,20 @@ func (c *LedgerConsumer) Run(ctx context.Context) error {
 
 		metrics.IncLedgerMessage()
 		decoded, decodeErr := decodeLedgerMessage(msg.Value)
+
+		dropReason := ""
 		if decodeErr != nil {
+			reason := metrics.DropReasonJSONError
+			if errors.Is(decodeErr, errMatchedAtMissing) {
+				reason = metrics.DropReasonMissingMatchedAt
+			}
+			dropReason = reason
+
 			attrs := []slog.Attr{
 				slog.Any("err", decodeErr),
 				slog.Int64("offset", msg.Offset),
 				slog.Int("partition", msg.Partition),
+				slog.String("drop_reason", reason),
 			}
 			if decoded.Type != "" {
 				attrs = append(attrs, slog.String("type", decoded.Type))
@@ -309,6 +369,36 @@ func (c *LedgerConsumer) Run(ctx context.Context) error {
 			}
 			c.log.Warn("ledger_consumer_decode_error", args...)
 		} else {
+			normalized, schemaOK := normalizeLedgerSchema(decoded.Type, decoded.Schema)
+			if !schemaOK || !c.schemaAllowed(normalized) {
+				dropReason = metrics.DropReasonSchemaReject
+				key := decoded.Type + "|" + normalized
+				if c.schemaSampler.Allow(key) {
+					attrs := []slog.Attr{
+						slog.Int("ledger_consumer_schema_reject", 1),
+						slog.Int64("offset", msg.Offset),
+						slog.Int("partition", msg.Partition),
+						slog.String("type", decoded.Type),
+						slog.String("schemaVersion", decoded.Schema),
+						slog.String("normalizedSchema", normalized),
+						slog.String("acceptedSchemas", c.schemaDisplay),
+						slog.String("drop_reason", metrics.DropReasonSchemaReject),
+					}
+					args := make([]any, 0, len(attrs))
+					for _, attr := range attrs {
+						args = append(args, attr)
+					}
+					c.log.Warn("ledger_consumer_schema_reject", args...)
+				}
+			}
+		}
+
+		if dropReason != "" {
+			metrics.IncLedgerDecodeDrop(dropReason)
+		}
+
+		if decodeErr == nil && dropReason == "" {
+			metrics.IncLedgerDecodeOK()
 			record := decoded.Energy
 			if record.ZoneID == "" {
 				attrs := []slog.Attr{
@@ -328,6 +418,7 @@ func (c *LedgerConsumer) Run(ctx context.Context) error {
 				c.log.Warn("ledger_consumer_missing_zone", args...)
 			} else {
 				if decoded.EnergyAbsent {
+					metrics.IncLedgerEnergyMissing()
 					attrs := []slog.Attr{
 						slog.Int64("offset", msg.Offset),
 						slog.Int("partition", msg.Partition),
@@ -394,6 +485,15 @@ func (c *LedgerConsumer) updateLagMetric() {
 	metrics.SetLedgerLag(float64(stats.Lag))
 }
 
+func (c *LedgerConsumer) schemaAllowed(schema string) bool {
+	if c == nil || len(c.schemas) == 0 {
+		return false
+	}
+	normalized := strings.ToLower(strings.TrimSpace(schema))
+	_, ok := c.schemas[normalized]
+	return ok
+}
+
 // ledgerEnvelope mirrors the minimal fields required from the public ledger
 // stream while ignoring future extensions.
 type ledgerEnvelope struct {
@@ -415,6 +515,31 @@ type ledgerRecord struct {
 	Schema       string
 	Type         string
 	EnergyAbsent bool
+}
+
+var errMatchedAtMissing = errors.New("matchedAt missing")
+
+func normalizeLedgerSchema(messageType, schema string) (string, bool) {
+	typ := strings.TrimSpace(messageType)
+	sch := strings.TrimSpace(schema)
+	normalizedSchema := strings.ToLower(sch)
+
+	if typ == "" && sch == "" {
+		return "legacy", true
+	}
+	if typ == "" && sch != "" {
+		return normalizedSchema, false
+	}
+	if !strings.EqualFold(typ, "epoch.public") {
+		return normalizedSchema, false
+	}
+	if sch == "" {
+		return "legacy", true
+	}
+	if normalizedSchema == "" {
+		return "", false
+	}
+	return normalizedSchema, true
 }
 
 // decodeLedgerMessage extracts the required fields from a Kafka message value,
@@ -447,7 +572,7 @@ func decodeLedgerMessage(raw []byte) (ledgerRecord, error) {
 	if len(env.MatchedAt) > 0 {
 		event, err = parseMatchedAt(env.MatchedAt)
 	} else if requireMatchedAt {
-		err = errors.New("matchedAt missing")
+		err = errMatchedAtMissing
 	} else {
 		event, err = parseEpoch(env.Epoch)
 	}
@@ -517,7 +642,7 @@ func parseEpoch(raw json.RawMessage) (time.Time, error) {
 
 func parseMatchedAt(raw json.RawMessage) (time.Time, error) {
 	if len(raw) == 0 {
-		return time.Time{}, errors.New("matchedAt missing")
+		return time.Time{}, errMatchedAtMissing
 	}
 
 	var asString string
