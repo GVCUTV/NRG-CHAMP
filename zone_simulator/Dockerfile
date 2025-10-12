@@ -10,7 +10,7 @@ COPY circuit_breaker ./circuit_breaker
 RUN go -C zone_simulator mod download
 
 COPY zone_simulator ./zone_simulator
-RUN mkdir -p /out && CGO_ENABLED=0 GOOS=linux go -C zone_simulator build -o /out/zone-simulator ./cmd/zone-simulator
+RUN mkdir -p /out && CGO_ENABLED=0 GOOS=linux go -C zone_simulator build -o /out/zone-simulator .
 
 FROM alpine:3.20 AS zs_runtime
 WORKDIR /app
