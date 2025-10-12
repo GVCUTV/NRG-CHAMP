@@ -120,6 +120,9 @@ The ledger exposes a pared-down **public epoch** document intended for gamificat
 
 #### Sample payloads (validated against the publisher structs)
 
+For downstream processing expectations and troubleshooting guidance see the
+[Gamification service README](../services/gamification/README.md).
+
 Cooling decision (Gamification will interpret a negative `deltaC` as a cooling pull against the target):
 
 ```json
