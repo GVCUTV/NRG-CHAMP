@@ -1,4 +1,4 @@
-// v6
+// v7
 // services/ledger/internal/ingest/kafka.go
 // Package ingest coordinates the Kafka pipelines that populate the ledger storage.
 package ingest
@@ -34,6 +34,12 @@ type Config struct {
 	BufferMaxEpochs     int
 }
 
+// EpochFinalizedHook receives a callback each time an epoch is durably
+// committed to storage.
+type EpochFinalizedHook interface {
+	OnEpochFinalized(tx *models.Transaction, meta storage.BlockMetadata)
+}
+
 const schemaVersionV1 = "v1"
 
 // Manager tracks the lifecycle of all background consumers.
@@ -43,7 +49,8 @@ type Manager struct {
 }
 
 // Start wires Kafka readers for each configured zone and begins ingestion.
-func Start(ctx context.Context, cfg Config, st *storage.FileLedger, log *slog.Logger) (*Manager, error) {
+// The optional hook is invoked after every successful epoch finalization.
+func Start(ctx context.Context, cfg Config, st *storage.FileLedger, log *slog.Logger, hook EpochFinalizedHook) (*Manager, error) {
 	if st == nil {
 		return nil, fmt.Errorf("storage must not be nil")
 	}
@@ -91,7 +98,7 @@ func Start(ctx context.Context, cfg Config, st *storage.FileLedger, log *slog.Lo
 			MaxBytes:    10e6,
 		})
 		wrappedReader := circuitbreaker.NewCBKafkaReader(reader, readerBreaker)
-		consumer := newZoneConsumer(zone, topic, reader, wrappedReader, st, log.With(slog.String("zone", zone)), cfg.PartitionAggregator, cfg.PartitionMAPE, grace, bufferMax)
+		consumer := newZoneConsumer(zone, topic, reader, wrappedReader, st, log.With(slog.String("zone", zone)), cfg.PartitionAggregator, cfg.PartitionMAPE, grace, bufferMax, hook)
 		mgr.consumers = append(mgr.consumers, consumer)
 		mgr.wg.Add(1)
 		go func(zc *zoneConsumer) {
@@ -120,6 +127,7 @@ type zoneConsumer struct {
 	fetcher kafkaMessageFetcher
 	storage *storage.FileLedger
 	log     *slog.Logger
+	hook    EpochFinalizedHook
 
 	partAgg  int
 	partMape int
@@ -160,7 +168,7 @@ type pendingFinalize struct {
 	state *matchState
 }
 
-func newZoneConsumer(zone, topic string, reader *kafka.Reader, fetcher kafkaMessageFetcher, st *storage.FileLedger, log *slog.Logger, partAgg, partMape int, grace time.Duration, buffer int) *zoneConsumer {
+func newZoneConsumer(zone, topic string, reader *kafka.Reader, fetcher kafkaMessageFetcher, st *storage.FileLedger, log *slog.Logger, partAgg, partMape int, grace time.Duration, buffer int, hook EpochFinalizedHook) *zoneConsumer {
 	return &zoneConsumer{
 		zone:      zone,
 		topic:     topic,
@@ -168,6 +176,7 @@ func newZoneConsumer(zone, topic string, reader *kafka.Reader, fetcher kafkaMess
 		fetcher:   fetcher,
 		storage:   st,
 		log:       log,
+		hook:      hook,
 		partAgg:   partAgg,
 		partMape:  partMape,
 		grace:     grace,
@@ -368,9 +377,11 @@ func (zc *zoneConsumer) finalize(epoch int64, state *matchState, allowImpute boo
 		return nil, fmt.Errorf("imputation not allowed for epoch %d", epoch)
 	}
 
-	if err := zc.persistMatch(epoch, aggData, aggReceived, mapeData, mapeReceived); err != nil {
+	storedTx, blockMeta, err := zc.persistMatch(epoch, aggData, aggReceived, mapeData, mapeReceived)
+	if err != nil {
 		return nil, err
 	}
+	zc.invokeFinalizedHook(storedTx, blockMeta)
 
 	if haveLatency {
 		metrics.ObserveMatchLatency(latencySeconds)
@@ -389,7 +400,7 @@ func (zc *zoneConsumer) finalize(epoch int64, state *matchState, allowImpute boo
 	return zc.messagesForCommit(state), nil
 }
 
-func (zc *zoneConsumer) persistMatch(epoch int64, agg aggregatedEpoch, aggReceived time.Time, led mapeLedgerEvent, ledReceived time.Time) error {
+func (zc *zoneConsumer) persistMatch(epoch int64, agg aggregatedEpoch, aggReceived time.Time, led mapeLedgerEvent, ledReceived time.Time) (*models.Transaction, storage.BlockMetadata, error) {
 	matchedAt := time.Now().UTC()
 	tx := &models.Transaction{
 		Type:                 "epoch.match",
@@ -402,10 +413,23 @@ func (zc *zoneConsumer) persistMatch(epoch int64, agg aggregatedEpoch, aggReceiv
 		MAPEReceivedAt:       ledReceived.UTC(),
 		MatchedAt:            matchedAt,
 	}
-	if _, err := zc.storage.Append(tx); err != nil {
-		return fmt.Errorf("append ledger: %w", err)
+	stored, meta, err := zc.storage.Append(tx)
+	if err != nil {
+		return nil, storage.BlockMetadata{}, fmt.Errorf("append ledger: %w", err)
 	}
-	return nil
+	return stored, meta, nil
+}
+
+func (zc *zoneConsumer) invokeFinalizedHook(tx *models.Transaction, meta storage.BlockMetadata) {
+	if zc.hook == nil || tx == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			zc.log.Error("finalized_hook_panic", slog.Any("panic", r), slog.String("zone", zc.zone), slog.Int64("epoch", tx.EpochIndex))
+		}
+	}()
+	zc.hook.OnEpochFinalized(tx, meta)
 }
 
 // getOrCreateLocked fetches an existing matchState for epoch or creates a new one while the mutex is held.

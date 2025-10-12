@@ -1,4 +1,4 @@
-// v3
+// v4
 // internal/storage/file_ledger.go
 package storage
 
@@ -37,6 +37,14 @@ type FileLedger struct {
 	lastHeaderHash string
 	events         []*models.Event
 	transactions   []*models.Transaction
+}
+
+// BlockMetadata captures the minimal block header attributes required for
+// downstream notifications once the block has been committed to disk.
+type BlockMetadata struct {
+	Height     int64
+	HeaderHash string
+	DataHash   string
 }
 
 func NewFileLedger(path string, log *slog.Logger) (*FileLedger, error) {
@@ -142,14 +150,14 @@ func (fl *FileLedger) load() error {
 	return nil
 }
 
-func (fl *FileLedger) Append(tx *models.Transaction) (*models.Transaction, error) {
+func (fl *FileLedger) Append(tx *models.Transaction) (*models.Transaction, BlockMetadata, error) {
 	fl.mu.Lock()
 	defer fl.mu.Unlock()
 	if tx == nil {
-		return nil, fmt.Errorf("transaction must not be nil")
+		return nil, BlockMetadata{}, fmt.Errorf("transaction must not be nil")
 	}
 	if tx.SchemaVersion != models.TransactionSchemaVersionV1 {
-		return nil, fmt.Errorf("unsupported transaction schema version %q", tx.SchemaVersion)
+		return nil, BlockMetadata{}, fmt.Errorf("unsupported transaction schema version %q", tx.SchemaVersion)
 	}
 	fl.lastID++
 	tx.ID = fl.lastID
@@ -163,12 +171,12 @@ func (fl *FileLedger) Append(tx *models.Transaction) (*models.Transaction, error
 	tx.PrevHash = fl.lastHash
 	hash, err := tx.ComputeHash()
 	if err != nil {
-		return nil, err
+		return nil, BlockMetadata{}, err
 	}
 	tx.Hash = hash
 	stored := tx.Clone()
 	if stored == nil {
-		return nil, fmt.Errorf("failed to clone transaction")
+		return nil, BlockMetadata{}, fmt.Errorf("failed to clone transaction")
 	}
 	block := models.BlockV2{
 		Header: models.BlockHeaderV2{
@@ -182,33 +190,33 @@ func (fl *FileLedger) Append(tx *models.Transaction) (*models.Transaction, error
 	}
 	dataHash, err := models.ComputeDataHashV2(block.Data.Transactions)
 	if err != nil {
-		return nil, err
+		return nil, BlockMetadata{}, err
 	}
 	block.Header.DataHash = dataHash
 	nonce, err := newNonce()
 	if err != nil {
-		return nil, err
+		return nil, BlockMetadata{}, err
 	}
 	block.Header.Nonce = nonce
 	payload, err := finalizeBlock(&block)
 	if err != nil {
-		return nil, err
+		return nil, BlockMetadata{}, err
 	}
 	if _, err := fl.writer.Write(payload); err != nil {
-		return nil, err
+		return nil, BlockMetadata{}, err
 	}
 	if err := fl.writer.WriteByte('\n'); err != nil {
-		return nil, err
+		return nil, BlockMetadata{}, err
 	}
 	if err := fl.writer.Flush(); err != nil {
-		return nil, err
+		return nil, BlockMetadata{}, err
 	}
 	if err := fl.file.Sync(); err != nil {
-		return nil, err
+		return nil, BlockMetadata{}, err
 	}
 	ev, err := transactionToEvent(stored)
 	if err != nil {
-		return nil, err
+		return nil, BlockMetadata{}, err
 	}
 	fl.lastHash = stored.Hash
 	fl.lastHeaderHash = block.Header.HeaderHash
@@ -216,7 +224,12 @@ func (fl *FileLedger) Append(tx *models.Transaction) (*models.Transaction, error
 	fl.transactions = append(fl.transactions, stored)
 	fl.events = append(fl.events, cloneEvent(ev))
 	fl.log.Info("appended block", slog.Int64("height", block.Header.Height), slog.String("headerHash", block.Header.HeaderHash), slog.Int64("transactionID", stored.ID))
-	return stored.Clone(), nil
+	meta := BlockMetadata{Height: block.Header.Height, HeaderHash: block.Header.HeaderHash, DataHash: block.Header.DataHash}
+	storedClone := stored.Clone()
+	if storedClone == nil {
+		return nil, BlockMetadata{}, fmt.Errorf("failed to clone stored transaction")
+	}
+	return storedClone, meta, nil
 }
 
 func (fl *FileLedger) GetByID(id int64) (*models.Event, error) {
