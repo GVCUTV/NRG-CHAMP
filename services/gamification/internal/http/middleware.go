@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/http/middleware.go
 package httpserver
 
@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"nrgchamp/gamification/internal/metrics"
 )
 
 // WrapWithLogging decorates the provided handler to record structured
@@ -17,12 +19,16 @@ func WrapWithLogging(logger *slog.Logger, next http.Handler) http.Handler {
 		start := time.Now()
 		rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(rw, r)
+		duration := time.Since(start)
 		logger.Info("http_request",
 			slog.String("method", r.Method),
 			slog.String("path", r.URL.Path),
 			slog.Int("status", rw.status),
-			slog.String("duration", time.Since(start).String()),
+			slog.String("duration", duration.String()),
 		)
+		if r.URL.Path == "/leaderboard" {
+			metrics.ObserveLeaderboardRequest(rw.status, duration)
+		}
 	})
 }
 

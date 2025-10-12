@@ -1,4 +1,4 @@
-// v1
+// v2
 // internal/ingest/ledger_consumer.go
 package ingest
 
@@ -17,6 +17,8 @@ import (
 
 	circuitbreaker "github.com/nrg-champ/circuitbreaker"
 	"github.com/segmentio/kafka-go"
+
+	"nrgchamp/gamification/internal/metrics"
 )
 
 // LedgerConsumerConfig captures the runtime tunables required to consume the
@@ -182,6 +184,21 @@ func NewLedgerConsumer(cfg LedgerConsumerConfig, log *slog.Logger) (*LedgerConsu
 		} else {
 			log.Info("ledger_consumer_cb_disabled", slog.String("name", "gamification-ledger-consumer"))
 		}
+		if inner := breaker.Breaker(); inner != nil {
+			cbLogger := log.With(slog.String("component", "ledger_consumer_cb"))
+			inner.SetStateChangeHook(func(state circuitbreaker.State) {
+				switch state {
+				case circuitbreaker.Open:
+					cbLogger.Warn("ledger_consumer_cb_state", slog.String("state", "open"))
+				case circuitbreaker.HalfOpen:
+					cbLogger.Info("ledger_consumer_cb_state", slog.String("state", "half_open"))
+				case circuitbreaker.Closed:
+					cbLogger.Info("ledger_consumer_cb_state", slog.String("state", "closed"))
+				default:
+					cbLogger.Info("ledger_consumer_cb_state", slog.String("state", fmt.Sprintf("%d", state)))
+				}
+			})
+		}
 		fetcher = wrapped
 	}
 
@@ -233,21 +250,45 @@ func (c *LedgerConsumer) Run(ctx context.Context) error {
 		cancel()
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) {
+				c.updateLagMetric()
+				continue
+			}
+			if errors.Is(err, circuitbreaker.ErrOpen) {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				sleep := c.poll
+				if sleep <= 0 {
+					sleep = time.Second
+				}
+				c.log.Warn("ledger_consumer_cb_fast_fail", slog.Duration("backoff", sleep))
+				c.updateLagMetric()
+				timer := time.NewTimer(sleep)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return ctx.Err()
+				case <-timer.C:
+				}
 				continue
 			}
 			if errors.Is(err, context.Canceled) {
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
+				c.updateLagMetric()
 				continue
 			}
 			if errors.Is(err, io.ErrClosedPipe) || errors.Is(err, kafka.ErrGroupClosed) {
+				c.updateLagMetric()
 				return nil
 			}
 			c.log.Error("ledger_consumer_fetch_error", slog.Any("err", err))
+			c.updateLagMetric()
 			continue
 		}
 
+		metrics.IncLedgerMessage()
 		record, decodeErr := decodeLedgerMessage(msg.Value)
 		if decodeErr != nil {
 			c.log.Warn("ledger_consumer_decode_error", slog.Any("err", decodeErr), slog.Int64("offset", msg.Offset))
@@ -280,7 +321,16 @@ func (c *LedgerConsumer) Run(ctx context.Context) error {
 			}
 		}
 		commitCancel()
+		c.updateLagMetric()
 	}
+}
+
+func (c *LedgerConsumer) updateLagMetric() {
+	if c == nil || c.reader == nil {
+		return
+	}
+	stats := c.reader.Stats()
+	metrics.SetLedgerLag(float64(stats.Lag))
 }
 
 // ledgerEnvelope mirrors the minimal fields required from the public ledger
