@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/api/server.go
 package api
 
@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/your-org/assessment/internal/observability"
 )
 
 type Server struct {
@@ -14,11 +16,12 @@ type Server struct {
 	Log  *slog.Logger
 }
 
-func NewServer(addr string, log *slog.Logger, h *Handlers) *Server {
+func NewServer(addr string, log *slog.Logger, h *Handlers, metrics *observability.Metrics) *Server {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", h.Health)
-	mux.HandleFunc("GET /kpi/summary", h.Summary)
-	mux.HandleFunc("GET /kpi/series", h.Series)
+	mux.Handle("GET /health", metrics.WrapHandler("/health", http.HandlerFunc(h.Health)))
+	mux.Handle("GET /kpi/summary", metrics.WrapHandler("/kpi/summary", http.HandlerFunc(h.Summary)))
+	mux.Handle("GET /kpi/series", metrics.WrapHandler("/kpi/series", http.HandlerFunc(h.Series)))
+	mux.Handle("GET /metrics", metrics.WrapHandler("/metrics", metrics.Handler()))
 
 	hs := &http.Server{
 		Addr:              addr,

@@ -1,4 +1,4 @@
-// v0
+// v1
 // README.md
 # Assessment Service (Service 5)
 
@@ -50,3 +50,28 @@ kubectl apply -k assessment/k8s/assessment
 
 ## Logging
 All operations are logged to stdout and to the logfile via `log/slog`.
+
+## Observability
+Metrics are exposed in Prometheus text format at `GET /metrics`. Standard counters, histograms, and gauges cover HTTP traffic, cache behaviour, and upstream Ledger availability. Examples:
+
+```
+# HELP http_requests_total Total count of HTTP requests processed by route and status.
+# TYPE http_requests_total counter
+http_requests_total{route="/kpi/summary",status="200"} 42
+
+# HELP cache_hits_total Total cache hits observed.
+# TYPE cache_hits_total counter
+cache_hits_total 17
+
+# HELP ledger_http_duration_seconds Histogram of Ledger HTTP request durations.
+# TYPE ledger_http_duration_seconds histogram
+ledger_http_duration_seconds_bucket{le="0.1"} 3
+ledger_http_duration_seconds_bucket{le="0.25"} 7
+ledger_http_duration_seconds_bucket{le="+Inf"} 9
+ledger_http_duration_seconds_sum 1.82
+ledger_http_duration_seconds_count 9
+
+# HELP cb_state Circuit breaker state gauge (0 closed, 1 half, 2 open).
+# TYPE cb_state gauge
+cb_state{target="ledger"} 0
+```

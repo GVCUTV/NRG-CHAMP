@@ -1,4 +1,4 @@
-// v0
+// v1
 // cmd/assessment/main.go
 package main
 
@@ -16,6 +16,7 @@ import (
 	"github.com/your-org/assessment/internal/config"
 	"github.com/your-org/assessment/internal/ledger"
 	"github.com/your-org/assessment/internal/logging"
+	"github.com/your-org/assessment/internal/observability"
 )
 
 func main() {
@@ -42,8 +43,12 @@ func main() {
 		}
 	}
 
-	cli := ledger.New(cfg.LedgerBaseURL)
-	c := cache.New[any](cfg.CacheTTL)
+	metrics := observability.NewMetrics()
+	log.Info("observability metrics registered")
+	metrics.SetCircuitBreakerState("ledger", 0)
+
+	cli := ledger.New(cfg.LedgerBaseURL, metrics)
+	c := cache.New[any](cfg.CacheTTL, metrics)
 	h := &api.Handlers{
 		Log:    log,
 		Client: cli,
@@ -52,7 +57,7 @@ func main() {
 		Tol:    tol,
 	}
 
-	srv := api.NewServer(cfg.BindAddr, log, h)
+	srv := api.NewServer(cfg.BindAddr, log, h, metrics)
 
 	// Graceful shutdown
 	go func() {

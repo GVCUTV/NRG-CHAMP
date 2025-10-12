@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/ledger/client.go
 package ledger
 
@@ -11,6 +11,10 @@ import (
 	"net/url"
 	"time"
 )
+
+type Observer interface {
+	LedgerRequest(duration time.Duration, success bool)
+}
 
 // Event represents a generic ledger event we expect from the Ledger service.
 // We keep the structure permissive to tolerate upstream changes.
@@ -26,12 +30,14 @@ type Event struct {
 type Client struct {
 	base string
 	h    *http.Client
+	obs  Observer
 }
 
-func New(base string) *Client {
+func New(base string, obs Observer) *Client {
 	return &Client{
 		base: base,
 		h:    &http.Client{Timeout: 10 * time.Second},
+		obs:  obs,
 	}
 }
 
@@ -75,19 +81,25 @@ func (c *Client) FetchEvents(ctx context.Context, typ, zoneID string, from, to t
 		if err != nil {
 			return nil, err
 		}
+		start := time.Now()
 		resp, err := c.h.Do(req)
 		if err != nil {
+			c.observe(time.Since(start), false)
 			return nil, err
 		}
+		duration := time.Since(start)
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			b, _ := io.ReadAll(resp.Body)
+			c.observe(duration, false)
 			return nil, fmt.Errorf("ledger %s returned %d: %s", u.String(), resp.StatusCode, string(b))
 		}
 		var decoded eventsPage
 		if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+			c.observe(duration, false)
 			return nil, err
 		}
+		c.observe(duration, true)
 		if decoded.Size > 0 {
 			size = decoded.Size
 		}
@@ -111,4 +123,11 @@ func (c *Client) FetchEvents(ctx context.Context, typ, zoneID string, from, to t
 		page++
 	}
 	return out, nil
+}
+
+func (c *Client) observe(duration time.Duration, success bool) {
+	if c.obs == nil {
+		return
+	}
+	c.obs.LedgerRequest(duration, success)
 }

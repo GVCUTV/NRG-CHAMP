@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/ledger/client_test.go
 package ledger
 
@@ -26,7 +26,7 @@ func TestFetchEventsSinglePage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := New(srv.URL)
+	client := New(srv.URL, nil)
 	events, err := client.FetchEvents(context.Background(), "", "", time.Time{}, time.Time{})
 	if err != nil {
 		t.Fatalf("FetchEvents returned error: %v", err)
@@ -70,7 +70,7 @@ func TestFetchEventsMultiPage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := New(srv.URL)
+	client := New(srv.URL, nil)
 	events, err := client.FetchEvents(context.Background(), "", "", time.Time{}, time.Time{})
 	if err != nil {
 		t.Fatalf("FetchEvents returned error: %v", err)
@@ -95,7 +95,7 @@ func TestFetchEventsEmpty(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := New(srv.URL)
+	client := New(srv.URL, nil)
 	events, err := client.FetchEvents(context.Background(), "", "", time.Time{}, time.Time{})
 	if err != nil {
 		t.Fatalf("FetchEvents returned error: %v", err)
@@ -112,7 +112,7 @@ func TestFetchEventsMalformed(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	client := New(srv.URL)
+	client := New(srv.URL, nil)
 	_, err := client.FetchEvents(context.Background(), "", "", time.Time{}, time.Time{})
 	if err == nil {
 		t.Fatalf("expected error for malformed response, got nil")
