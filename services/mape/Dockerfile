@@ -1,24 +1,23 @@
-# // v11
+# // v12
 # // file: services/mape/Dockerfile
 FROM golang:1.23-alpine AS mape_build
-WORKDIR /app
 RUN apk add --no-cache git ca-certificates
+WORKDIR /src
 COPY go.work go.work.sum ./
-COPY services/mape/go.mod services/mape/go.sum ./services/mape/
+COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     go -C services/mape mod download
-
-COPY . .
+RUN mkdir -p /out
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=0 GOOS=linux go -C services/mape build -o /mape ./cmd/mape
+    CGO_ENABLED=0 GOOS=linux go -C services/mape build -o /out/mape ./cmd/mape
 
 FROM alpine:3.20 AS mape_runtime
 WORKDIR /app
 RUN adduser -D -u 10001 appuser
 USER appuser
-COPY --from=mape_build /mape /app/mape
-COPY --from=mape_build /app/mape.properties /app/config/mape.properties
+COPY --from=mape_build /out/mape /app/mape
+COPY --from=mape_build /src/services/mape/mape.properties /app/config/mape.properties
 ENV HTTP_BIND=:8080
 ENV LOG_DIR=/app/logs
 ENV KAFKA_BROKERS=localhost:9092

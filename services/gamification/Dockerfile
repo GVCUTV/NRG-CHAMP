@@ -1,16 +1,16 @@
-# // v5
+# // v6
 # // file: services/gamification/Dockerfile
 FROM golang:1.23-alpine AS gamification_build_stage
-WORKDIR /src
 RUN apk add --no-cache git ca-certificates
+WORKDIR /src
 COPY go.work go.work.sum ./
-COPY services/gamification/go.mod services/gamification/go.sum ./services/gamification/
+COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     go -C services/gamification mod download
-COPY . .
+RUN mkdir -p /out
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=0 GOOS=linux go -C services/gamification/cmd/gamification build -o /out/gamification
+    CGO_ENABLED=0 GOOS=linux go -C services/gamification build -o /out/gamification ./cmd/gamification
 
 FROM alpine:3.20 AS gamification_runtime_stage
 WORKDIR /srv

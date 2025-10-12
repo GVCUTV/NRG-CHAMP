@@ -1,16 +1,15 @@
-# // v6
+# // v7
 # // file: services/ledger/Dockerfile
 FROM golang:1.23-alpine AS ledger_build
-WORKDIR /src
 RUN apk add --no-cache git ca-certificates
+WORKDIR /src
 COPY go.work go.work.sum ./
-COPY services/ledger/go.mod services/ledger/go.sum ./services/ledger/
-RUN --mount=type=cache,target=/go/pkg/mod \
-    go -C services/ledger mod download
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
+    go -C services/ledger mod download
+RUN mkdir -p /out
+RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    mkdir -p /out && \
     CGO_ENABLED=0 GOOS=linux go -C services/ledger build -trimpath -ldflags="-s -w" -o /out/ledger .
 
 FROM alpine:3.20 AS ledger_runtime

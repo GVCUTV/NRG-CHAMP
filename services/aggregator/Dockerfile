@@ -1,22 +1,22 @@
-# // v7
+# // v8
 # // file: services/aggregator/Dockerfile
 FROM golang:1.23-alpine AS aggregator_build
-WORKDIR /app
 RUN apk add --no-cache git ca-certificates
+WORKDIR /src
 COPY go.work go.work.sum ./
-COPY services/aggregator/go.mod services/aggregator/go.sum ./services/aggregator/
+COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     go -C services/aggregator mod download
-COPY . .
+RUN mkdir -p /out
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=0 GOOS=linux go -C services/aggregator build -o /aggregator ./cmd/server
+    CGO_ENABLED=0 GOOS=linux go -C services/aggregator build -o /out/aggregator ./cmd/server
 
 FROM alpine:3.20 AS aggregator_runtime
 WORKDIR /app
 RUN adduser -D -H appuser
-COPY --from=aggregator_build /aggregator /app/aggregator
-COPY --from=aggregator_build /app/services/aggregator/aggregator.properties /app/aggregator.properties
+COPY --from=aggregator_build /out/aggregator /app/aggregator
+COPY --from=aggregator_build /src/services/aggregator/aggregator.properties /app/aggregator.properties
 ENV AGG_PROPERTIES=/app/aggregator.properties
 USER appuser
 EXPOSE 8080
