@@ -1,4 +1,4 @@
-// v6
+// v8
 // file: services/aggregator/go.mod
 module NRG-CHAMP/aggregator
 

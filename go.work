@@ -1,16 +1,14 @@
-// v0
+// v2
 // go.work
-go 1.23.9
+go 1.23.0
 
 use (
-	./circuit_breaker
-	./services/aggregator
-	./services/assessment
-	./services/gamification
-	./services/ledger
-	./services/mape
-	./services/topic-init
-	./zone_simulator
+./circuit_breaker
+./services/aggregator
+./services/assessment
+./services/gamification
+./services/ledger
+./services/mape
+./services/topic-init
+./zone_simulator
 )
-
-replace github.com/nrg-champ/circuitbreaker v0.0.0 => ./circuit_breaker
