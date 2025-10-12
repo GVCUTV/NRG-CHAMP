@@ -1,5 +1,4 @@
 go 1.23.9
-
 use (
 	./circuit_breaker
 	./services/aggregator
