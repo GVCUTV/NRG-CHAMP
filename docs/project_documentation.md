@@ -1,4 +1,4 @@
-// v10
+// v11
 // docs/project_documentation.md
 # NRG CHAMP
 
@@ -1764,6 +1764,8 @@ This prevents cascading failures and thundering herds while standardizing resili
 - **Indexing:** a **zone → blocks** mapping is maintained to accelerate queries (policy under refinement).
 
 ## 8.5. Assessment (Pull) & 8.6. Gamification (Push)
+
+- **Assessment KPI policy:** See [services/assessment/README.md](../services/assessment/README.md#kpi-specification-authoritative) for the normative formulas governing comfort_time_pct, mean_dev, actuator_on_pct, and anomaly_count.
 
 - **Assessment:** follows a **pull approach**, querying the ledger **on demand** when verification is needed.
 - **Gamification:** follows a **push approach**; whenever the ledger **commits**, it **forwards data** to the gamification service which computes **peer‑relative averages** and awards **points** to entities that **lower** the average consumption (penalties for increases).
