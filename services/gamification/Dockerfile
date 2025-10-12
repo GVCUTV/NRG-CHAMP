@@ -2,11 +2,11 @@
 # // file: services/gamification/Dockerfile
 FROM golang:1.23-alpine AS gamification_build_stage
 WORKDIR /src
-COPY go.work go.work.sum ./
-COPY circuit_breaker /src/circuit_breaker
+COPY circuit_breaker /circuit_breaker
 COPY services/gamification/go.mod services/gamification/go.sum ./services/gamification/
-RUN --mount=type=cache,target=/go/pkg/mod go work sync
 COPY services/gamification/ ./services/gamification/
+RUN --mount=type=cache,target=/go/pkg/mod \
+    cd services/gamification && go mod tidy && go mod download
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     cd services/gamification/cmd/gamification && go build -o /out/gamification
