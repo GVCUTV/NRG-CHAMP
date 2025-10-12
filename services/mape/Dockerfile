@@ -1,21 +1,24 @@
-# // v9
+# // v10
 # // file: services/mape/Dockerfile
 FROM golang:1.23-alpine AS mape_build
-WORKDIR /app
+WORKDIR /src
 
-COPY services/mape/go.mod services/mape/go.sum ./
-COPY circuit_breaker /circuit_breaker
-RUN go mod download
+ENV GOWORK=off
 
-COPY services/mape/ ./
-RUN CGO_ENABLED=0 go build -o /mape ./cmd/mape
+COPY services/mape/go.mod services/mape/go.sum services/mape/
+COPY circuit_breaker /src/circuit_breaker
+RUN go -C services/mape mod download
+
+COPY services/mape/ services/mape/
+RUN mkdir -p /out \
+    && CGO_ENABLED=0 go -C services/mape build -o /out/mape ./cmd/mape
 
 FROM alpine:3.20 AS mape_runtime
 WORKDIR /app
 RUN adduser -D -u 10001 appuser
 USER appuser
-COPY --from=mape_build /mape /app/mape
-COPY --from=mape_build /app/mape.properties /app/config/mape.properties
+COPY --from=mape_build /out/mape /app/mape
+COPY --from=mape_build /src/services/mape/mape.properties /app/config/mape.properties
 ENV HTTP_BIND=:8080
 ENV LOG_DIR=/app/logs
 ENV KAFKA_BROKERS=localhost:9092
