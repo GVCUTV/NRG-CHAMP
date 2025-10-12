@@ -1,4 +1,4 @@
-// v8
+// v9
 // docs/project_documentation.md
 # NRG CHAMP
 
@@ -104,6 +104,39 @@ In summary, NRG CHAMP provides a holistic and innovative approach to energy mana
     * The ledger service accepts and processes only known schema versions. Messages carrying unknown non-empty versions are logged, counted, and rejected for safety, while empty `schemaVersion` fields are promoted to `"v1"` and tracked via the `ledger_load_tx_schema_empty_total` metric for auditing.
   * **Future Evolution:**
   * New schema revisions will increment the version string (e.g., `"v2"`) and require corresponding decoder updates before deployment.
+
+### 2.1.8. Public Epoch Events
+
+The ledger exposes a pared-down **public epoch** document intended for gamification insights and other non-PII consumers. Version `v1` is defined as follows:
+
+```
+{
+  "type": "epoch.public",
+  "schemaVersion": "v1",
+  "zoneId": "<string>",
+  "epochIndex": <int>,
+  "matchedAt": "<RFC3339Nano UTC>",
+  "block": {
+    "height": <int>,
+    "headerHash": "<hex>",
+    "dataHash": "<hex>"
+  },
+  "aggregator": { "summary": { ... } },
+  "mape": {
+    "planned": "heat|cool|hold",
+    "targetC": <float>,
+    "deltaC": <float>,
+    "fan": <int>
+  }
+}
+```
+
+**Evolution policy:**
+
+* Schema evolution is **additive only**. New fields must be optional and default-safe so existing consumers continue to parse prior payloads.
+* Hash fields remain lowercase hexadecimal strings and timestamps are normalized to UTC prior to publication.
+* Aggregator summaries contain only stable roll-ups (no device-level arrays or PII). Any new summary metrics must follow the additive rule above.
+* Publishing is disabled by default. Operators enable it via `LEDGER_PUBLIC_ENABLE` or `--public-enable`, with additional knobs for topic, brokers, acknowledgements, partitioner, key mode, and schema version.
 
 ### Ledger Blocks (v2, NIST-style)
 
