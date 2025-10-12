@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/ingest/ledger_consumer.go
 package ingest
 
@@ -43,6 +43,7 @@ type ZoneStore struct {
 	mu      sync.RWMutex
 	maxSize int
 	zones   map[string][]EpochEnergy
+	order   []string
 }
 
 // NewZoneStore initializes a bounded store using the provided capacity. Values
@@ -66,7 +67,10 @@ func (s *ZoneStore) Append(zone string, rec EpochEnergy) (count int, evicted *Ep
 		return 0, nil
 	}
 
-	buf := s.zones[zone]
+	buf, exists := s.zones[zone]
+	if !exists {
+		s.order = append(s.order, zone)
+	}
 	if len(buf) >= s.maxSize {
 		removed := buf[0]
 		buf = append(buf[1:], rec)
@@ -90,6 +94,33 @@ func (s *ZoneStore) Snapshot(zone string) []EpochEnergy {
 	out := make([]EpochEnergy, len(buf))
 	copy(out, buf)
 	return out
+}
+
+// SnapshotAll returns defensive copies of all buffered epochs grouped by zone
+// together with the current zone ordering. The order preserves the first-seen
+// sequence so aggregations can provide stable rankings when totals match.
+func (s *ZoneStore) SnapshotAll() (map[string][]EpochEnergy, []string) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if len(s.zones) == 0 {
+		return map[string][]EpochEnergy{}, nil
+	}
+
+	clones := make(map[string][]EpochEnergy, len(s.zones))
+	for zone, epochs := range s.zones {
+		if len(epochs) == 0 {
+			clones[zone] = nil
+			continue
+		}
+		copied := make([]EpochEnergy, len(epochs))
+		copy(copied, epochs)
+		clones[zone] = copied
+	}
+
+	order := make([]string, len(s.order))
+	copy(order, s.order)
+	return clones, order
 }
 
 // kafkaMessageFetcher captures the read capability shared by the raw Kafka
