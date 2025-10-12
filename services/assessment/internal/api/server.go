@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/api/server.go
 package api
 
@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/your-org/assessment/internal/metrics"
 )
 
 type Server struct {
@@ -19,6 +21,7 @@ func NewServer(addr string, log *slog.Logger, h *Handlers) *Server {
 	mux.HandleFunc("GET /health", h.Health)
 	mux.HandleFunc("GET /kpi/summary", h.Summary)
 	mux.HandleFunc("GET /kpi/series", h.Series)
+	mux.HandleFunc("GET /metrics", metricsHandler(log))
 
 	hs := &http.Server{
 		Addr:              addr,
@@ -39,4 +42,20 @@ func (s *Server) Start() error {
 func (s *Server) Stop(ctx context.Context) error {
 	s.Log.Info("http server stopping")
 	return s.HTTP.Shutdown(ctx)
+}
+
+func metricsHandler(log *slog.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		body := metrics.Render()
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte(body)); err != nil {
+			log.Error("metrics write failed", "err", err)
+		}
+	}
 }

@@ -1,4 +1,4 @@
-# v0
+# v1
 # k8s/assessment/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -43,6 +43,16 @@ spec:
                 configMapKeyRef:
                   name: assessment-config
                   key: CACHE_TTL
+            - name: SUMMARY_CACHE_TTL
+              valueFrom:
+                configMapKeyRef:
+                  name: assessment-config
+                  key: SUMMARY_CACHE_TTL
+            - name: SERIES_CACHE_TTL
+              valueFrom:
+                configMapKeyRef:
+                  name: assessment-config
+                  key: SERIES_CACHE_TTL
             - name: ASSESSMENT_BIND_ADDR
               value: ":8085"
             - name: ASSESSMENT_LOGFILE

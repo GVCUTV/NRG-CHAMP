@@ -1,4 +1,4 @@
-# v0
+# v1
 # k8s/assessment/configmap.yaml
 apiVersion: v1
 kind: ConfigMap
@@ -9,3 +9,5 @@ data:
   TARGET_TEMP_C: "22"
   COMFORT_TOLERANCE_C: "0.5"
   CACHE_TTL: "30s"
+  SUMMARY_CACHE_TTL: "30s"
+  SERIES_CACHE_TTL: "30s"

@@ -1,4 +1,4 @@
-// v0
+// v1
 // README.md
 # Assessment Service (Service 5)
 
@@ -18,12 +18,25 @@
 Times are RFC3339. If `from/to` omitted: last hour until now. Default bucket: 5m.
 
 ## Environment
-- `LEDGER_BASE_URL` (default `http://ledger:8084`)
-- `TARGET_TEMP_C` (default `22`)
-- `COMFORT_TOLERANCE_C` (default `0.5`)
-- `CACHE_TTL` (default `30s`)
-- `ASSESSMENT_BIND_ADDR` (default `:8085`)
-- `ASSESSMENT_LOGFILE` (default `./assessment.log`)
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `LEDGER_BASE_URL` | `http://ledger:8084` | Ledger base URL for sourcing events. |
+| `TARGET_TEMP_C` | `22` | Desired comfort temperature in Celsius. |
+| `COMFORT_TOLERANCE_C` | `0.5` | Allowed deviation from the target temperature. |
+| `CACHE_TTL` | `30s` | Legacy fallback applied when per-endpoint TTLs are unset. |
+| `SUMMARY_CACHE_TTL` | inherits `CACHE_TTL` | TTL for summary endpoint cache entries. |
+| `SERIES_CACHE_TTL` | inherits `CACHE_TTL` | TTL for series endpoint cache entries. |
+| `ASSESSMENT_BIND_ADDR` | `:8085` | HTTP listen address. |
+| `ASSESSMENT_LOGFILE` | `./assessment.log` | File sink for slog dual logging. |
+
+### TTL configuration examples
+
+```bash
+export CACHE_TTL=1m           # default fallback
+export SUMMARY_CACHE_TTL=15s  # short-lived summaries
+export SERIES_CACHE_TTL=45s   # longer series cache
+```
 
 ## Run locally
 ```bash

@@ -1,9 +1,8 @@
-// v0
+// v1
 // internal/api/handlers.go
 package api
 
 import (
-	"strings"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -11,20 +10,20 @@ import (
 	"strconv"
 	"time"
 
-	"crypto/sha1"
-	"encoding/hex"
-
 	"github.com/your-org/assessment/internal/cache"
 	"github.com/your-org/assessment/internal/kpi"
 	"github.com/your-org/assessment/internal/ledger"
+	"github.com/your-org/assessment/internal/metrics"
 )
 
 type Handlers struct {
-	Log     *slog.Logger
-	Client  *ledger.Client
-	Cache   *cache.Cache[any]
-	Target  float64 // target temperature °C
-	Tol     float64 // comfort tolerance °C
+	Log        *slog.Logger
+	Client     *ledger.Client
+	Cache      *cache.Cache[any]
+	Target     float64       // target temperature °C
+	Tol        float64       // comfort tolerance °C
+	SummaryTTL time.Duration // cache TTL for summary endpoint
+	SeriesTTL  time.Duration // cache TTL for series endpoint
 }
 
 // parseWindow extracts zoneId, from, to.
@@ -34,76 +33,103 @@ func parseWindow(r *http.Request) (zone string, from, to time.Time, err error) {
 	ts := r.URL.Query().Get("to")
 	if fs != "" {
 		from, err = time.Parse(time.RFC3339, fs)
-		if err != nil { return }
+		if err != nil {
+			return
+		}
 	}
 	if ts != "" {
 		to, err = time.Parse(time.RFC3339, ts)
-		if err != nil { return }
+		if err != nil {
+			return
+		}
 	}
-	if to.IsZero() { to = time.Now().UTC() }
-	if from.IsZero() { from = to.Add(-1 * time.Hour) }
+	if to.IsZero() {
+		to = time.Now().UTC()
+	}
+	if from.IsZero() {
+		from = to.Add(-1 * time.Hour)
+	}
+	from = from.UTC()
+	to = to.UTC()
 	return
 }
 
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		h.methodNotAllowed(w, http.MethodGet); return
+		h.methodNotAllowed(w, http.MethodGet)
+		return
 	}
 	h.Log.Info("health check", "path", "/health")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]any{"status":"ok","ts": time.Now().UTC()})
-}
-
-func cacheKey(parts ...string) string {
-	h := sha1.Sum([]byte(strings.Join(parts, "|")))
-	return hex.EncodeToString(h[:])
-}
-
-func strings.Join(a []string, sep string) string {
-	if len(a) == 0 { return "" }
-	out := a[0]
-	for i := 1; i < len(a); i++ { out += sep + a[i] }
-	return out
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "ts": time.Now().UTC()})
 }
 
 func (h *Handlers) Summary(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		h.methodNotAllowed(w, http.MethodGet); return
+		h.methodNotAllowed(w, http.MethodGet)
+		return
 	}
 	zone, from, to, err := parseWindow(r)
-	if err != nil { h.badRequest(w, "invalid time window"); return }
-
-	key := cacheKey("summary", zone, from.Format(time.RFC3339), to.Format(time.RFC3339))
-	if v, ok := h.Cache.Get(key); ok {
-		h.Log.Info("cache hit", "endpoint", "summary", "zoneId", zone)
-		writeJSON(w, http.StatusOK, v); return
+	if err != nil {
+		h.badRequest(w, "invalid time window")
+		return
 	}
+
+	dims := map[string]string{
+		"zoneId":    zone,
+		"from":      from.Format(time.RFC3339Nano),
+		"to":        to.Format(time.RFC3339Nano),
+		"target":    strconv.FormatFloat(h.Target, 'f', -1, 64),
+		"tolerance": strconv.FormatFloat(h.Tol, 'f', -1, 64),
+	}
+	key := cache.BuildKey("summary", dims)
+	if v, ok := h.Cache.Get(key); ok {
+		metrics.IncCacheHit("summary")
+		h.Log.Info("cache hit", "endpoint", "summary", "zoneId", zone)
+		writeJSON(w, http.StatusOK, v)
+		return
+	}
+	metrics.IncCacheMiss("summary")
 
 	ctx := r.Context()
 	readings, err := h.Client.FetchEvents(ctx, "reading", zone, from, to)
-	if err != nil { h.upstreamError(w, err); return }
+	if err != nil {
+		h.upstreamError(w, err)
+		return
+	}
 	actions, err := h.Client.FetchEvents(ctx, "action", zone, from, to)
-	if err != nil { h.upstreamError(w, err); return }
+	if err != nil {
+		h.upstreamError(w, err)
+		return
+	}
 	anoms, err := h.Client.FetchEvents(ctx, "anomaly", zone, from, to)
-	if err != nil { h.upstreamError(w, err); return }
+	if err != nil {
+		h.upstreamError(w, err)
+		return
+	}
 
 	s := kpi.ComputeSummary(zone, from, to, readings, actions, anoms, h.Target, h.Tol)
-	h.Cache.Set(key, s)
+	h.Cache.SetWithTTL(key, s, h.SummaryTTL)
 	h.Log.Info("computed summary", "zoneId", zone, "from", from, "to", to)
 	writeJSON(w, http.StatusOK, s)
 }
 
 func (h *Handlers) Series(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		h.methodNotAllowed(w, http.MethodGet); return
+		h.methodNotAllowed(w, http.MethodGet)
+		return
 	}
 	metric := r.URL.Query().Get("metric")
 	if metric == "" {
-		h.badRequest(w, "metric is required"); return
+		h.badRequest(w, "metric is required")
+		return
 	}
 	zone, from, to, err := parseWindow(r)
-	if err != nil { h.badRequest(w, "invalid time window"); return }
+	if err != nil {
+		h.badRequest(w, "invalid time window")
+		return
+	}
 
 	bucketDur := 5 * time.Minute
 	if bs := r.URL.Query().Get("bucket"); bs != "" {
@@ -112,11 +138,23 @@ func (h *Handlers) Series(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	key := cacheKey("series", metric, zone, from.Format(time.RFC3339), to.Format(time.RFC3339), bucketDur.String())
-	if v, ok := h.Cache.Get(key); ok {
-		h.Log.Info("cache hit", "endpoint", "series", "metric", metric, "zoneId", zone)
-		writeJSON(w, http.StatusOK, v); return
+	dims := map[string]string{
+		"metric":    metric,
+		"zoneId":    zone,
+		"from":      from.Format(time.RFC3339Nano),
+		"to":        to.Format(time.RFC3339Nano),
+		"bucket":    bucketDur.String(),
+		"target":    strconv.FormatFloat(h.Target, 'f', -1, 64),
+		"tolerance": strconv.FormatFloat(h.Tol, 'f', -1, 64),
 	}
+	key := cache.BuildKey("series", dims)
+	if v, ok := h.Cache.Get(key); ok {
+		metrics.IncCacheHit("series")
+		h.Log.Info("cache hit", "endpoint", "series", "metric", metric, "zoneId", zone)
+		writeJSON(w, http.StatusOK, v)
+		return
+	}
+	metrics.IncCacheMiss("series")
 
 	ctx := r.Context()
 	readings, _ := h.Client.FetchEvents(ctx, "reading", zone, from, to)
@@ -125,7 +163,7 @@ func (h *Handlers) Series(w http.ResponseWriter, r *http.Request) {
 
 	points := computeSeries(metric, from, to, bucketDur, readings, actions, anoms, h.Target, h.Tol)
 
-	h.Cache.Set(key, points)
+	h.Cache.SetWithTTL(key, points, h.SeriesTTL)
 	h.Log.Info("computed series", "metric", metric, "zoneId", zone, "from", from, "to", to, "bucket", bucketDur)
 	writeJSON(w, http.StatusOK, points)
 }
