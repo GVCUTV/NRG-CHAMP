@@ -5,11 +5,16 @@ package ledger
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/nrg-champ/circuitbreaker"
 )
 
 func TestFetchEventsSinglePage(t *testing.T) {
@@ -154,5 +159,186 @@ func TestFetchEventsMalformed(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "without items") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestFetchEventsBreakerOpensAndRecovers(t *testing.T) {
+	origCfg := defaultBreakerConfig
+	defaultBreakerConfig = origCfg
+	defaultBreakerConfig.MaxFailures = 2
+	defaultBreakerConfig.ResetTimeout = 25 * time.Millisecond
+	defaultBreakerConfig.SuccessesToClose = 1
+	defer func() { defaultBreakerConfig = origCfg }()
+
+	var (
+		eventsCalls  atomic.Int32
+		healthCalls  atomic.Int32
+		allowSuccess atomic.Bool
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/events":
+			eventsCalls.Add(1)
+			if !allowSuccess.Load() {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, "boom")
+				return
+			}
+			resp := paginatedResponse{
+				Total: 1,
+				Page:  1,
+				Size:  1,
+				Items: []Event{{ID: "ok", Type: "reading", ZoneID: "zone", Ts: time.Unix(0, 0)}},
+			}
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				t.Fatalf("encode response: %v", err)
+			}
+		case "/health":
+			healthCalls.Add(1)
+			if allowSuccess.Load() {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, "up")
+				return
+			}
+			w.WriteHeader(http.StatusServiceUnavailable)
+			fmt.Fprint(w, "down")
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	client := New(srv.URL)
+	ctx := context.Background()
+
+	for i := 0; i < 2; i++ {
+		_, err := client.FetchEvents(ctx, "", "", time.Time{}, time.Time{})
+		if err == nil {
+			t.Fatalf("expected error on failure %d", i)
+		}
+		if !strings.Contains(err.Error(), "returned 500") {
+			t.Fatalf("expected upstream 500 error, got %v", err)
+		}
+	}
+
+	if got := eventsCalls.Load(); got != 2 {
+		t.Fatalf("expected 2 ledger calls, got %d", got)
+	}
+
+	_, err := client.FetchEvents(ctx, "", "", time.Time{}, time.Time{})
+	if !errors.Is(err, circuitbreaker.ErrOpen) {
+		t.Fatalf("expected ErrOpen, got %v", err)
+	}
+	if got := eventsCalls.Load(); got != 2 {
+		t.Fatalf("expected no additional ledger calls while open, got %d", got)
+	}
+
+	allowSuccess.Store(true)
+	time.Sleep(defaultBreakerConfig.ResetTimeout + 10*time.Millisecond)
+
+	out, err := client.FetchEvents(ctx, "", "", time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatalf("expected success after recovery, got %v", err)
+	}
+	if len(out) != 1 || out[0].ID != "ok" {
+		t.Fatalf("unexpected events: %+v", out)
+	}
+	if got := eventsCalls.Load(); got != 3 {
+		t.Fatalf("expected exactly one more ledger call after recovery, got %d", got)
+	}
+	if got := healthCalls.Load(); got == 0 {
+		t.Fatalf("expected probe call before recovery")
+	}
+}
+
+func TestFetchEventsBreakerProbeFailureKeepsOpen(t *testing.T) {
+	origCfg := defaultBreakerConfig
+	defaultBreakerConfig = origCfg
+	defaultBreakerConfig.MaxFailures = 1
+	defaultBreakerConfig.ResetTimeout = 20 * time.Millisecond
+	defaultBreakerConfig.SuccessesToClose = 1
+	defer func() { defaultBreakerConfig = origCfg }()
+
+	var (
+		eventsCalls  atomic.Int32
+		healthCalls  atomic.Int32
+		allowSuccess atomic.Bool
+	)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/events":
+			eventsCalls.Add(1)
+			if !allowSuccess.Load() {
+				w.WriteHeader(http.StatusInternalServerError)
+				fmt.Fprint(w, "boom")
+				return
+			}
+			resp := paginatedResponse{
+				Total: 1,
+				Page:  1,
+				Size:  1,
+				Items: []Event{{ID: "ok", Type: "reading", ZoneID: "zone", Ts: time.Unix(0, 0)}},
+			}
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				t.Fatalf("encode response: %v", err)
+			}
+		case "/health":
+			healthCalls.Add(1)
+			if allowSuccess.Load() {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, "up")
+				return
+			}
+			w.WriteHeader(http.StatusServiceUnavailable)
+			fmt.Fprint(w, "still down")
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	client := New(srv.URL)
+	ctx := context.Background()
+
+	_, err := client.FetchEvents(ctx, "", "", time.Time{}, time.Time{})
+	if err == nil {
+		t.Fatalf("expected error on initial failure")
+	}
+
+	_, err = client.FetchEvents(ctx, "", "", time.Time{}, time.Time{})
+	if !errors.Is(err, circuitbreaker.ErrOpen) {
+		t.Fatalf("expected ErrOpen after breaker trips, got %v", err)
+	}
+
+	time.Sleep(defaultBreakerConfig.ResetTimeout + 10*time.Millisecond)
+
+	_, err = client.FetchEvents(ctx, "", "", time.Time{}, time.Time{})
+	if !errors.Is(err, circuitbreaker.ErrOpen) {
+		t.Fatalf("expected ErrOpen after failed probe, got %v", err)
+	}
+	if got := eventsCalls.Load(); got != 1 {
+		t.Fatalf("expected no new ledger calls while probe fails, got %d", got)
+	}
+	if got := healthCalls.Load(); got == 0 {
+		t.Fatalf("expected probe attempt when half-open")
+	}
+
+	allowSuccess.Store(true)
+	time.Sleep(defaultBreakerConfig.ResetTimeout + 10*time.Millisecond)
+
+	out, err := client.FetchEvents(ctx, "", "", time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatalf("expected success after recovery, got %v", err)
+	}
+	if len(out) != 1 || out[0].ID != "ok" {
+		t.Fatalf("unexpected events after recovery: %+v", out)
+	}
+	if got := eventsCalls.Load(); got != 2 {
+		t.Fatalf("expected a second ledger call after recovery, got %d", got)
+	}
+	if got := healthCalls.Load(); got < 2 {
+		t.Fatalf("expected another probe before closing, got %d", got)
 	}
 }
