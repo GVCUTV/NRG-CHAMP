@@ -1,4 +1,4 @@
-// v0
+// v1
 // internal/kpi/compute.go
 package kpi
 
@@ -12,7 +12,26 @@ import (
 	"github.com/your-org/assessment/internal/ledger"
 )
 
-// ComputeSummary computes KPIs from ledger events in [from, to] for a zone.
+// ComputeSummary computes KPIs from ledger events in [from, to) for a zone.
+//
+// ComfortTimePct is the time-weighted percentage of the evaluation window during
+// which the absolute temperature error |temp-target| is less than or equal to
+// the supplied tolerance. The weighting follows the duration between readings
+// within [from, to), so the numerator and denominator exclude spans without
+// telemetry.
+//
+// MeanDeviation is the mean absolute deviation in °C between each temperature
+// reading and the target temperature. Every sample contributes equally (sample
+// weighted, not time weighted), regardless of the spacing between readings.
+//
+// ActuatorOnPct reports the percentage of the window duration, in seconds,
+// where at least one actuator is ON. It is computed as the overlap between all
+// ON intervals and [from, to) divided by the window length (falling back to one
+// second if to <= from to avoid division by zero).
+//
+// AnomalyCount is the total number of anomaly events supplied for timestamps in
+// [from, to). The anomalies slice is expected to already be filtered by the
+// caller according to that window.
 func ComputeSummary(zoneID string, from, to time.Time, readings, actions, anomalies []ledger.Event, targetTemp float64, tolerance float64) Summary {
 	// Build time-aligned series of temperatures and actuator states
 	rTemps := extractTemps(readings)
