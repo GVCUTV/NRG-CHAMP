@@ -1,4 +1,4 @@
-// v1
+// v2
 // internal/ledger/client.go
 package ledger
 
@@ -9,7 +9,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
+
+	"github.com/nrg-champ/circuitbreaker"
 )
 
 // Event represents a generic ledger event we expect from the Ledger service.
@@ -31,15 +34,90 @@ type paginatedResponse struct {
 }
 
 type Client struct {
-	base string
-	h    *http.Client
+	base    string
+	h       *http.Client
+	breaker *circuitbreaker.Breaker
 }
 
-func New(base string) *Client {
-	return &Client{
-		base: base,
-		h:    &http.Client{Timeout: 10 * time.Second},
+var (
+	defaultBreakerConfig = circuitbreaker.Config{
+		MaxFailures:      3,
+		ResetTimeout:     5 * time.Second,
+		SuccessesToClose: 1,
 	}
+	defaultBreakerName = "assessment-ledger"
+	defaultProbePath   = "/health"
+)
+
+func New(base string) *Client {
+	httpClient := &http.Client{Timeout: 10 * time.Second}
+	trimmedBase := strings.TrimRight(base, "/")
+	probeURL := ""
+	if trimmedBase != "" {
+		probeURL = trimmedBase + defaultProbePath
+	}
+	probe := func(ctx context.Context) error {
+		if probeURL == "" {
+			return nil
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, nil)
+		if err != nil {
+			return err
+		}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusInternalServerError {
+			return nil
+		}
+		return fmt.Errorf("probe_bad_status: %d", resp.StatusCode)
+	}
+	breaker := circuitbreaker.New(defaultBreakerName, defaultBreakerConfig, probe)
+
+	return &Client{
+		base:    base,
+		h:       httpClient,
+		breaker: breaker,
+	}
+}
+
+func (c *Client) doRequest(ctx context.Context, req *http.Request) (*http.Response, error) {
+	var (
+		resp        *http.Response
+		upstreamErr error
+	)
+
+	err := c.breaker.Execute(ctx, func(cbCtx context.Context) error {
+		req = req.WithContext(cbCtx)
+		r, err := c.h.Do(req)
+		if err != nil {
+			return err
+		}
+		if r.StatusCode >= http.StatusInternalServerError {
+			body, readErr := io.ReadAll(r.Body)
+			r.Body.Close()
+			if readErr != nil {
+				upstreamErr = fmt.Errorf("ledger %s returned %d (read body: %v)", req.URL.String(), r.StatusCode, readErr)
+			} else {
+				upstreamErr = fmt.Errorf("ledger %s returned %d: %s", req.URL.String(), r.StatusCode, string(body))
+			}
+			return upstreamErr
+		}
+		resp = r
+		return nil
+	})
+	if err != nil {
+		if err == circuitbreaker.ErrOpen {
+			return nil, err
+		}
+		if upstreamErr != nil && err == upstreamErr {
+			return nil, err
+		}
+		return nil, err
+	}
+	return resp, nil
 }
 
 // FetchEvents calls the Ledger: GET /events?type=&zoneId=&from=&to=&page=&size=
@@ -75,7 +153,7 @@ func (c *Client) FetchEvents(ctx context.Context, typ, zoneID string, from, to t
 		if err != nil {
 			return nil, err
 		}
-		resp, err := c.h.Do(req)
+		resp, err := c.doRequest(ctx, req)
 		if err != nil {
 			return nil, err
 		}
