@@ -3,12 +3,14 @@
 package logging
 
 import (
+	"io"
 	"log/slog"
 	"os"
 )
 
 type DualLogger struct {
 	Logger *slog.Logger
+	file   *os.File
 }
 
 // New creates a slog logger that logs to both stdout and a rolling file.
@@ -18,14 +20,20 @@ func New() (*DualLogger, error) {
 	if logPath == "" {
 		logPath = "./assessment.log"
 	}
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return nil, err
-	}
-	// Two handlers: stdout and file
-	stdoutHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})
-	fileHandler := slog.NewTextHandler(file, &slog.HandlerOptions{Level: slog.LevelInfo})
 
-	multi := slog.New(slog.NewMultiHandler(stdoutHandler, fileHandler))
-	return &DualLogger{Logger: multi}, nil
+	writers := []io.Writer{os.Stdout}
+
+	var file *os.File
+	if logPath != "" {
+		var err error
+		file, err = os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return nil, err
+		}
+		writers = append(writers, file)
+	}
+
+	handler := slog.NewTextHandler(io.MultiWriter(writers...), &slog.HandlerOptions{Level: slog.LevelInfo})
+
+	return &DualLogger{Logger: slog.New(handler), file: file}, nil
 }
